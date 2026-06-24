@@ -248,6 +248,36 @@ def test_cst70_reducao_base_interna():
     assert r.memoria.icms_st_calculado == Decimal("48.00")
 
 
+def test_simples_interestadual_sem_ajuste_deducao_teorica():
+    """GABARITO (Simples CSOSN 201, SP->MG) — NÃO REGRIDIR.
+
+    Duas regras de ouro: (1) CRT=1 => MVA NÃO ajusta (Conv. 142/2018); (2)
+    dedução TEÓRICA = base × alíq. interestadual (12%), não a guia do DAS.
+    ICMS-ST esperado = 150,00.
+    """
+    engine = StAuditEngine(
+        MvaEmMemoria({("39173900", "1001100", "MG"): "50.00"}),
+        EnquadramentoEmMemoria(),
+        FcpEmMemoria(),
+    )
+    item = ItemFiscal(
+        numero_item=1, ncm="39173900", cest="1001100", cfop="6102", orig="0",
+        csosn="201", mod_bc_st=4, v_prod=Decimal("1000"), p_mva_st=Decimal("50.00"),
+        v_bc_st=Decimal("1500.00"), v_icms_st=Decimal("150.00"),
+    )
+    op = Operacao(uf_emit="SP", uf_dest="MG", crt=Crt.SIMPLES, data=DATA)
+
+    r = engine.auditar_item(item, op)
+
+    assert r.status == StatusAuditoria.OK
+    assert r.memoria.mva_foi_ajustada is False                # trava do Simples
+    assert round(r.memoria.mva_aplicada, 2) == Decimal("50.00")
+    assert r.memoria.deducao_tipo == "teorica"
+    assert r.memoria.deducao_aplicada == Decimal("120.00")    # 1000 × 12% (interestadual)
+    assert r.memoria.base_st_calculada == Decimal("1500.00")
+    assert r.memoria.icms_st_calculado == Decimal("150.00")
+
+
 @pytest.mark.parametrize(
     "inter, intra, espera_ajuste",
     [
