@@ -231,6 +231,15 @@ export const api = {
   },
   auditAcoes: () => request('GET', '/audit/acoes'),
 
+  // ── Auditoria de ICMS-ST (divergências) ──
+  stDivergencias: (empresaId, params = {}) => {
+    const q = new URLSearchParams(
+      Object.entries({ empresa_id: empresaId, ...params })
+        .filter(([, v]) => v !== null && v !== undefined && v !== '')
+    ).toString()
+    return request('GET', `/auditoria/st/divergencias${q ? `?${q}` : ''}`)
+  },
+
   // ── Recursos do V1 ainda sem endpoint no V2 (fase futura) ──
   certificado: NAO_IMPL('Certificado A1'),
   updateProfile: NAO_IMPL('Editar perfil'),
