@@ -154,6 +154,68 @@ def test_tolerancia_centavos_por_item():
     assert "ERRO_104_VALOR_ST_DIVERGENTE" in div.codigos_erro
 
 
+def test_gabarito_pneuagro_mg_mg_interna():
+    """GABARITO REAL (Pneuagro, saída MG->MG interna) — NÃO REGRIDIR.
+
+    vProd 3300, alíq interna 18%, NCM 40111000 (pneu), MVA original 42%.
+    Operação interna => MVA não ajusta. ICMS-ST esperado = 249,48.
+    """
+    engine = StAuditEngine(
+        MvaEmMemoria({("40111000", "0100500", "MG"): "42.00"}),
+        EnquadramentoEmMemoria(),
+        FcpEmMemoria(),
+    )
+    item = ItemFiscal(
+        numero_item=1, ncm="40111000", cest="0100500", cfop="5405", orig="0",
+        cst="10", mod_bc_st=4, v_prod=Decimal("3300"),
+        v_bc=Decimal("3300"), v_icms=Decimal("594.00"), p_icms=Decimal("18"),
+        p_mva_st=Decimal("42.00"), v_bc_st=Decimal("4686.00"), v_icms_st=Decimal("249.48"),
+    )
+    op = Operacao(uf_emit="MG", uf_dest="MG", crt=Crt.NORMAL, data=DATA)
+
+    r = engine.auditar_item(item, op)
+
+    assert r.status == StatusAuditoria.OK
+    assert r.memoria.mva_foi_ajustada is False
+    assert r.memoria.base_st_calculada == Decimal("4686.00")  # 3300 × 1,42
+    assert r.memoria.deducao_aplicada == Decimal("594.00")    # ICMS próprio real
+    assert r.memoria.icms_st_calculado == Decimal("249.48")   # 843,48 − 594,00
+
+
+def test_antecipacao_interestadual_com_frete_rateado():
+    """GABARITO REAL (autopeça SP->MG, antecipação) — NÃO REGRIDIR.
+
+    Remetente Regime Normal não destacou ST -> antecipação do destinatário (MG).
+    vProd 731,35 + frete rateado de CT-e 68,05 (entra na base do ST, não no
+    próprio). NCM 87082919, CEST 01.075.00, MVA original 71,78%.
+    Interestadual 12%->18% => MVA ajusta para 84,35%. ICMS-ST devido = 177,50.
+    """
+    engine = StAuditEngine(
+        MvaEmMemoria({("87082919", "0107500", "MG"): "71.78"}),
+        EnquadramentoEmMemoria(),
+        FcpEmMemoria(),
+    )
+    item = ItemFiscal(
+        numero_item=1, ncm="87082919", cest="0107500", cfop="6102", orig="0",
+        cst="00", mod_bc_st=4,
+        v_prod=Decimal("731.35"), v_frete=Decimal("68.05"),   # 731,35 + 68,05 = 799,40
+        v_bc=Decimal("731.35"), v_icms=Decimal("87.76"), p_icms=Decimal("12"),
+        v_bc_st=Decimal("0"), v_icms_st=Decimal("0"),         # ST omitido pelo remetente
+    )
+    op = Operacao(uf_emit="SP", uf_dest="MG", crt=Crt.NORMAL, data=DATA)
+
+    r = engine.auditar_item(item, op)
+
+    assert r.memoria.mva_foi_ajustada is True
+    assert round(r.memoria.mva_aplicada, 2) == Decimal("84.35")
+    assert r.memoria.base_st_calculada == Decimal("1473.69")   # 799,40 × 1,843493
+    assert r.memoria.deducao_aplicada == Decimal("87.76")      # 731,35 × 12% (sem frete)
+    assert r.memoria.icms_st_calculado == Decimal("177.50")
+    # Remetente omitiu o ST: motor aponta a antecipação devida como divergência.
+    assert r.status == StatusAuditoria.DIVERGENTE
+    assert "ERRO_104_VALOR_ST_DIVERGENTE" in r.codigos_erro
+
+
 @pytest.mark.parametrize(
     "inter, intra, espera_ajuste",
     [
