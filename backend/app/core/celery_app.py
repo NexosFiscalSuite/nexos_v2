@@ -36,6 +36,7 @@ from app.modules.cfop_rules.infrastructure import models as _m_cfop_rules  # noq
 from app.modules.companies.infrastructure import models as _m_companies  # noqa: E402,F401
 from app.modules.compliance.infrastructure import models as _m_compliance  # noqa: E402,F401
 from app.modules.contrapartes.infrastructure import models as _m_contrapartes  # noqa: E402,F401
+from app.modules.fiscal.infrastructure import matrizes_models as _m_matrizes  # noqa: E402,F401
 from app.modules.fiscal.infrastructure import models as _m_fiscal  # noqa: E402,F401
 from app.modules.grupos.infrastructure import models as _m_grupos  # noqa: E402,F401
 from app.modules.identity.infrastructure import models as _m_identity  # noqa: E402,F401
