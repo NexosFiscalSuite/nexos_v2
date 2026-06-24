@@ -99,14 +99,46 @@ def test_icms_proprio_zerado_dispara_erro_107():
     assert r.memoria.deducao_aplicada == Decimal("120.00")
 
 
-def test_modbcst6_com_mva_dispara_erro_101():
+def test_modbcst6_com_mva_cadastrada_recalcula_e_marca_109():
+    """XML usou modBCST=6 (valor da operação) num produto que TEM MVA na matriz:
+    o motor recalcula com a MVA correta e marca ERRO_109 (base do emitente errada)."""
     op = Operacao(uf_emit="SP", uf_dest="MG", crt=Crt.NORMAL, data=DATA)
-    item = _item(mod_bc_st=6, p_mva_st=Decimal("10"),
-                 v_bc_st=Decimal("1000.00"), v_icms_st=Decimal("60.00"))
+    item = _item(mod_bc_st=6, v_bc_st=Decimal("1000.00"), v_icms_st=Decimal("60.00"))
 
     r = _engine().auditar_item(item, op)
 
-    assert "ERRO_101_MVA_AJUSTADA_INDEVIDA" in r.codigos_erro
+    assert r.status == StatusAuditoria.DIVERGENTE
+    assert "ERRO_109_MODBCST_INCOMPATIVEL" in r.codigos_erro
+    assert r.memoria.mva_aplicada > Decimal("0")   # usou a MVA da matriz, não 0
+
+
+def test_mva_exigida_e_ausente_trava_em_nao_auditavel():
+    """modBCST=4 mas a matriz não tem MVA p/ o NCM → NÃO calcula a seco:
+    classifica NAO_AUDITAVEL com ERRO_MVA_NAO_ENCONTRADA (trava de segurança)."""
+    engine = StAuditEngine(MvaEmMemoria(), EnquadramentoEmMemoria(), FcpEmMemoria())
+    op = Operacao(uf_emit="SP", uf_dest="MG", crt=Crt.NORMAL, data=DATA)
+    item = _item(ncm="99999999", cest="9999999", mod_bc_st=4)   # NCM fora da matriz
+
+    r = engine.auditar_item(item, op)
+
+    assert r.status == StatusAuditoria.NAO_AUDITAVEL
+    assert "ERRO_MVA_NAO_ENCONTRADA" in r.codigos_erro
+    assert "MVA" in (r.observacao or "")
+
+
+def test_modbcst6_sem_mva_e_legitimo():
+    """modBCST=6 e SEM MVA cadastrada = base 'valor da operação' (NT 2020.005),
+    legítimo: calcula sem MVA e sem ERRO_109."""
+    engine = StAuditEngine(MvaEmMemoria(), EnquadramentoEmMemoria(), FcpEmMemoria())
+    op = Operacao(uf_emit="SP", uf_dest="MG", crt=Crt.NORMAL, data=DATA)
+    item = _item(ncm="99999999", cest="9999999", mod_bc_st=6,
+                 v_bc_st=Decimal("1000.00"), v_icms_st=Decimal("60.00"))
+
+    r = engine.auditar_item(item, op)
+
+    assert r.status != StatusAuditoria.NAO_AUDITAVEL
+    assert "ERRO_109_MODBCST_INCOMPATIVEL" not in r.codigos_erro
+    assert r.memoria.mva_aplicada == Decimal("0")
 
 
 def test_fcp_st_omitido_dispara_erro_105():

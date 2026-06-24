@@ -180,7 +180,7 @@ async def test_query_divergencias_e_idempotencia(sessao):
     item = res["itens"][0]
     assert item["vicms_st_calculado"] == Decimal("177.50")
     assert item["vicms_st_xml"] == Decimal("0.00")
-    assert item["divergencia"] == Decimal("-177.50")     # rombo: XML − calculado
+    assert item["diferenca"] == Decimal("-177.50")       # XML − calculado
     assert item["fornecedor"] == "FORNECEDOR SP"
     assert item["memoria"]["mva_original"] == "71.78"    # memória exposta ao front
 

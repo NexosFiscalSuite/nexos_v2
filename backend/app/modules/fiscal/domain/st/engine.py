@@ -22,7 +22,7 @@ from .model import (
 from .money import ZERO, aplicar_percentual, centavos
 from .mva import calcular_mva
 from .ports import EnquadramentoRepository, FcpRepository, MvaRepository
-from .strategies import aplicar_reducao_base, base_strategy_for, calcular_deducao
+from .strategies import BaseMva, aplicar_reducao_base, base_strategy_for, calcular_deducao
 
 # Régua de centavos por item (Seção 6 do CALC_ICMS_Proprio).
 TOLERANCIA_ITEM = Decimal("0.02")
@@ -64,13 +64,20 @@ class StAuditEngine:
 
         erros: list[ErroST] = []
 
-        # 4. MVA (só quando a base é por MVA).
-        if base_strategy.espera_mva:
-            mva_info = self.mva_repo.buscar(
-                item.ncm, item.cest, operacao.uf_dest, operacao.data
-            )
-            if mva_info is None:
-                return self._nao_auditavel(item, "MVA não cadastrada para NCM/CEST/UF")
+        # 4. MVA. Regra de ouro: a MVA CADASTRADA define a modalidade da base —
+        #    não o modBCST do XML (que o emitente pode ter errado). Sem isso, uma
+        #    nota com modBCST=6 (valor da operação) num produto base-MVA seria
+        #    calculada a menor SILENCIOSAMENTE.
+        mva_info = self.mva_repo.buscar(item.ncm, item.cest, operacao.uf_dest, operacao.data)
+        tem_mva = mva_info is not None and mva_info.mva_original > ZERO
+        exige_mva = base_strategy.espera_mva   # XML declarou modBCST=4
+
+        if exige_mva and not tem_mva:
+            # TRAVA DE SEGURANÇA: base por MVA mas a matriz não tem MVA → não
+            # inventa um cálculo com MVA 0; classifica como não auditável.
+            return self._nao_auditavel(item, ErroST.MVA_NAO_ENCONTRADA)
+
+        if tem_mva:
             mva = calcular_mva(
                 mva_original=mva_info.mva_original,
                 alq_inter=alq_inter,
@@ -78,20 +85,24 @@ class StAuditEngine:
                 crt=operacao.crt,
                 interestadual=operacao.interestadual,
             )
-            mva_original = mva_info.mva_original
-            mva_aplicada = mva.mva_aplicada
-            # ERRO_101: não devíamos ajustar, mas o XML aplicou MVA maior que a original.
-            if not mva.ajustada and item.p_mva_st > mva_original + TOLERANCIA_MVA_PCT:
+            mva_original, mva_aplicada = mva_info.mva_original, mva.mva_aplicada
+            base_integral = BaseMva().base_integral(item, mva_aplicada)
+            if not exige_mva:
+                # Produto é base-MVA, mas o XML não usou modBCST=4: emitente errou
+                # a base. Recalculamos com a MVA correta e marcamos o erro.
+                erros.append(ErroST.MODBCST_INCOMPATIVEL)
+            elif not mva.ajustada and item.p_mva_st > mva_original + TOLERANCIA_MVA_PCT:
                 erros.append(ErroST.MVA_AJUSTADA_INDEVIDA)
         else:
-            mva_original = mva_aplicada = ZERO
+            # Sem MVA na matriz e modBCST≠4 → base = valor da operação (modBCST 6
+            # legítimo, NT 2020.005).
             mva = None
-            # ERRO_101: modBCST=6 não admite MVA.
+            mva_original = mva_aplicada = ZERO
+            base_integral = base_strategy.base_integral(item, mva_aplicada)
             if item.p_mva_st > ZERO:
                 erros.append(ErroST.MVA_AJUSTADA_INDEVIDA)
 
-        # 5. Base do ST (integral → com redução, Método A).
-        base_integral = base_strategy.base_integral(item, mva_aplicada)
+        # 5. Base do ST (com redução, Método A).
         base_st_calc = aplicar_reducao_base(base_integral, item.p_red_bc_st)
 
         # 6. Débito do ST pela carga interna modal do destino.
@@ -183,7 +194,16 @@ class StAuditEngine:
         return resultados
 
     @staticmethod
-    def _nao_auditavel(item: ItemFiscal, motivo: str) -> ResultadoAuditoria:
+    def _nao_auditavel(item: ItemFiscal, motivo: ErroST | str) -> ResultadoAuditoria:
+        """NAO_AUDITAVEL com motivo. Se vier um ErroST, expõe o código no erro
+        e a mensagem na observação (feedback claro, nunca silencioso)."""
+        if isinstance(motivo, ErroST):
+            return ResultadoAuditoria(
+                numero_item=item.numero_item,
+                status=StatusAuditoria.NAO_AUDITAVEL,
+                erros=(motivo,),
+                observacao=motivo.mensagem,
+            )
         return ResultadoAuditoria(
             numero_item=item.numero_item,
             status=StatusAuditoria.NAO_AUDITAVEL,

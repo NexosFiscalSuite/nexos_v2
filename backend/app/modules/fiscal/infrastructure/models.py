@@ -194,6 +194,7 @@ class AuditoriaIcmsSt(Base):
 
     status: Mapped[str] = mapped_column(String(14))            # OK|DIVERGENTE|NAO_AUDITAVEL
     codigo_erro: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    observacao: Mapped[str | None] = mapped_column(String(255), nullable=True)  # motivo p/ NAO_AUDITAVEL
     memoria: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # cálculo aberto
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

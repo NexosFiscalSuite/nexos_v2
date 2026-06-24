@@ -15,6 +15,7 @@ class DivergenciaStItem(BaseModel):
     uf_origem: str | None = None
     uf_destino: str | None = None
     data_emissao: str | None = None
+    fluxo: str | None = None
     cst_csosn: str | None = None
     mod_bc_st: int | None = None
     # MVA: declarada × calculada
@@ -23,16 +24,19 @@ class DivergenciaStItem(BaseModel):
     # Base do ST
     vbc_st_xml: Decimal
     vbc_st_calculado: Decimal
-    # ICMS-ST: declarado × calculado × rombo
+    # ICMS-ST: declarado × calculado × diferença
     vicms_st_xml: Decimal
     vicms_st_calculado: Decimal
-    divergencia: Decimal
+    diferenca: Decimal
     # FCP-ST
     vfcp_st_xml: Decimal
     vfcp_st_calculado: Decimal
-    # Diagnóstico + memória de cálculo aberta (modal de explicação no front)
+    # Status + diagnóstico + memória de cálculo aberta (modal de explicação)
+    status: str
     codigo_erro: str | None = None
+    observacao: str | None = None
     memoria: dict | None = None
+    ctes_vinculados: list[str] = []
 
 
 class DivergenciasStResponse(BaseModel):

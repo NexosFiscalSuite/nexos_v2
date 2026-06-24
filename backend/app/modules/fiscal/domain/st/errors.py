@@ -52,3 +52,15 @@ class ErroST(_Erro, Enum):
         "emissor que contamina a dedução do ST.",
         "Corrigir a operação própria na origem; dedução usa o ICMS próprio calculado.",
     )
+    MODBCST_INCOMPATIVEL = (
+        "ERRO_109_MODBCST_INCOMPATIVEL",
+        "O XML usou base sem MVA (ex.: modBCST=6, valor da operação), mas o "
+        "produto tem MVA cadastrada na matriz — base do ST subdimensionada.",
+        "Exigir NF-e com modBCST=4 (MVA) ou recolher o complemento do ST.",
+    )
+    MVA_NAO_ENCONTRADA = (
+        "ERRO_MVA_NAO_ENCONTRADA",
+        "Base por MVA (modBCST=4) mas não há MVA cadastrada na matriz para "
+        "NCM/CEST/UF na data — auditoria não confiável, não calculada.",
+        "Cadastrar a MVA (com vigência) na matriz e reauditar.",
+    )
