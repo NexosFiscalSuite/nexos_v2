@@ -1,10 +1,17 @@
 """Repositório de notas/itens/eventos."""
+from __future__ import annotations
+
 from uuid import UUID
 
 from sqlalchemy import BigInteger, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.fiscal.infrastructure.models import Nota, NotaEvento, NotaItem
+from app.modules.fiscal.infrastructure.models import (
+    NfeCteVinculo,
+    Nota,
+    NotaEvento,
+    NotaItem,
+)
 
 # Número como inteiro, robusto a não-dígitos/vazios (ordenação correta).
 _NUMERO_INT = cast(
@@ -116,3 +123,16 @@ class NotaRepository:
 
     def add_evento(self, evento: NotaEvento) -> None:
         self.session.add(evento)
+
+    def add_vinculo_cte(self, vinculo: NfeCteVinculo) -> None:
+        self.session.add(vinculo)
+
+    async def ctes_da_nfe(self, empresa_id: UUID, chave_nfe: str) -> list[NfeCteVinculo]:
+        """Vínculos de CT-e de uma NF-e (para a agregação de frete do ADR-0001)."""
+        res = await self.session.execute(
+            select(NfeCteVinculo).where(
+                NfeCteVinculo.empresa_id == empresa_id,
+                NfeCteVinculo.chave_nfe == chave_nfe,
+            )
+        )
+        return list(res.scalars().all())

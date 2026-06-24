@@ -20,6 +20,7 @@ from app.core.database import Base
 
 _MONEY = Numeric(15, 2)
 _QTY = Numeric(15, 4)
+_PCT = Numeric(5, 2)
 
 
 class Nota(Base):
@@ -99,9 +100,62 @@ class NotaItem(Base):
     valor_desconto: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
     valor_frete: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
     valor_seguro: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+    valor_outro: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+    valor_ipi: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
     base_calculo: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
     valor_icms: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
     valor_icms_st: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+
+    # --- tags de ST / FCP (insumos do motor de auditoria de Substituição Tributária) ---
+    cest: Mapped[str | None] = mapped_column(String(7), nullable=True)
+    orig: Mapped[str | None] = mapped_column(String(1), nullable=True)
+    cst: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    csosn: Mapped[str | None] = mapped_column(String(3), nullable=True)
+    mod_bc_st: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    p_icms: Mapped[Decimal] = mapped_column(_PCT, default=Decimal("0"))
+    p_red_bc: Mapped[Decimal] = mapped_column(_PCT, default=Decimal("0"))
+    p_mva_st: Mapped[Decimal] = mapped_column(_PCT, default=Decimal("0"))
+    p_red_bc_st: Mapped[Decimal] = mapped_column(_PCT, default=Decimal("0"))
+    p_icms_st: Mapped[Decimal] = mapped_column(_PCT, default=Decimal("0"))
+    v_bc_st: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+    # FCP (próprio e ST) — trilhas paralelas
+    v_fcp: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+    p_fcp: Mapped[Decimal] = mapped_column(_PCT, default=Decimal("0"))
+    v_bc_fcp: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+    v_fcp_st: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+    p_fcp_st: Mapped[Decimal] = mapped_column(_PCT, default=Decimal("0"))
+    v_bc_fcp_st: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+
+
+class NfeCteVinculo(Base):
+    """Vínculo N:N entre NF-e e CT-e (ADR-0001), por CHAVE — tolera órfão.
+
+    Uma NF-e pode ter N CT-e e um CT-e pode transportar N NF-e. Chaveado por
+    chave de acesso (não por FK de id) para suportar importação fora de ordem
+    (o CT-e pode chegar antes da NF-e), espelhando o padrão de NotaEvento.
+    """
+
+    __tablename__ = "nfe_cte_vinculo"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id", "empresa_id", "chave_nfe", "chave_cte", name="uq_nfe_cte"
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), index=True
+    )
+    empresa_id: Mapped[UUID] = mapped_column(
+        ForeignKey("empresas.id", ondelete="CASCADE"), index=True
+    )
+    chave_nfe: Mapped[str] = mapped_column(String(44), index=True)
+    chave_cte: Mapped[str] = mapped_column(String(44), index=True)
+    vtprest: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+    tp_cte: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
 
 class NotaEvento(Base):

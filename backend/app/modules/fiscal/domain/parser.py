@@ -251,13 +251,18 @@ def _parse_nfe(root) -> dict:
         prod = _find_local(det, "prod")
         if prod is None:
             continue
-        # Imposto/ICMS: vBC, vICMS, vICMSST ficam sob det/imposto/ICMS/ICMSxx.
+        # Imposto: tags de ICMS/FCP ficam sob det/imposto/ICMS/ICMSxx (ou ICMSSNxxx).
+        # Escopa ao grupo <ICMS> para não confundir o vBC do ICMS com o vBC do IPI.
         imposto = _find_local(det, "imposto")
+        icms = _find_local(imposto, "ICMS")
+        ipi = _find_local(imposto, "IPI")
+        modbcst = _g(icms, "modBCST")
         itens.append({
             "numero_item": nitem,
             "codigo": _g(prod, "cProd"),
             "descricao": _g(prod, "xProd"),
             "ncm": _g(prod, "NCM"),
+            "cest": _g(prod, "CEST"),
             "cfop": _g(prod, "CFOP"),
             "unidade": _g(prod, "uCom") or _g(prod, "uTrib"),
             "quantidade": _f(_g(prod, "qCom") or _g(prod, "qTrib")),
@@ -267,9 +272,31 @@ def _parse_nfe(root) -> dict:
             "valor_desconto": _f(_g(prod, "vDesc")),
             "valor_frete": _f(_g(prod, "vFrete")),
             "valor_seguro": _f(_g(prod, "vSeg")),
-            "base_calculo": _f(_g(imposto, "vBC")),
-            "valor_icms": _f(_g(imposto, "vICMS")),
-            "valor_icms_st": _f(_g(imposto, "vICMSST") or _g(imposto, "vBCST")),
+            "valor_outro": _f(_g(prod, "vOutro")),
+            "valor_ipi": _f(_g(ipi, "vIPI")),
+            # Situação tributária e origem
+            "orig": _g(icms, "orig"),
+            "cst": _g(icms, "CST"),
+            "csosn": _g(icms, "CSOSN"),
+            # ICMS próprio
+            "base_calculo": _f(_g(icms, "vBC")),
+            "valor_icms": _f(_g(icms, "vICMS")),
+            "p_icms": _f(_g(icms, "pICMS")),
+            "p_red_bc": _f(_g(icms, "pRedBC")),
+            # ICMS-ST
+            "mod_bc_st": _i(modbcst) if modbcst else None,
+            "p_mva_st": _f(_g(icms, "pMVAST")),
+            "p_red_bc_st": _f(_g(icms, "pRedBCST")),
+            "p_icms_st": _f(_g(icms, "pICMSST")),
+            "v_bc_st": _f(_g(icms, "vBCST")),
+            "valor_icms_st": _f(_g(icms, "vICMSST")),
+            # FCP (próprio e ST) — trilhas paralelas
+            "v_fcp": _f(_g(icms, "vFCP")),
+            "p_fcp": _f(_g(icms, "pFCP")),
+            "v_bc_fcp": _f(_g(icms, "vBCFCP")),
+            "v_fcp_st": _f(_g(icms, "vFCPST")),
+            "p_fcp_st": _f(_g(icms, "pFCPST")),
+            "v_bc_fcp_st": _f(_g(icms, "vBCFCPST")),
         })
 
     return {
@@ -349,6 +376,16 @@ def _parse_cte(root) -> dict:
                     break
 
     valor_total = _f(_g(v_prest, "vTPrest"))
+
+    # Chaves das NF-e transportadas (1..N) — base do ADR-0001 (cardinalidade N:N).
+    # Ficam em infCte/infCTeNorm/infDoc/infNFe/chave (uma por documento).
+    chaves_nfe = []
+    for infnfe in _findall_local(inf_cte, "infNFe"):
+        ch = re.sub(r"\D", "", _g(infnfe, "chave"))
+        if len(ch) == 44 and ch not in chaves_nfe:
+            chaves_nfe.append(ch)
+    tp_cte = _g(ide, "tpCTe")   # 0=normal, 1=complementar, 2=anulação, 3=substituto
+
     cfop = _g(ide, "CFOP") or _g(_find_local(inf_cte, "imp"), "CFOP")
     info_doc = _first_el(_find_local(inf_cte, "infCTeNorm"), inf_cte)
     obs = _g(info_doc, "infCarga") or _g(inf_cte, "xObs")
@@ -385,6 +422,9 @@ def _parse_cte(root) -> dict:
         "valor_total": valor_total,
         "protocolo": _g(root, "nProt"),
         "iss_retido": None,
+        "vtprest": valor_total,
+        "chaves_nfe": chaves_nfe,
+        "tp_cte": tp_cte,
         "itens": itens,
     }
 

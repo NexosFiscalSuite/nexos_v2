@@ -19,7 +19,12 @@ from app.modules.contrapartes.infrastructure.models import TIPO_CLIENTE, TIPO_FO
 from app.modules.fiscal.domain import parser as xmlparser
 from app.modules.fiscal.domain.cfop_sped import sugerir_tipo_sped
 from app.modules.fiscal.domain.flow import FlowRejected, classificar_fluxo
-from app.modules.fiscal.infrastructure.models import Nota, NotaEvento, NotaItem
+from app.modules.fiscal.infrastructure.models import (
+    NfeCteVinculo,
+    Nota,
+    NotaEvento,
+    NotaItem,
+)
 from app.modules.fiscal.infrastructure.repositories import NotaRepository
 
 
@@ -189,11 +194,47 @@ class ImportService:
                     valor_desconto=_dec(it.get("valor_desconto")),
                     valor_frete=_dec(it.get("valor_frete")),
                     valor_seguro=_dec(it.get("valor_seguro")),
+                    valor_outro=_dec(it.get("valor_outro")),
+                    valor_ipi=_dec(it.get("valor_ipi")),
                     base_calculo=_dec(it.get("base_calculo")),
                     valor_icms=_dec(it.get("valor_icms")),
                     valor_icms_st=_dec(it.get("valor_icms_st")),
+                    # tags de ST / FCP (insumos do motor de auditoria)
+                    cest=it.get("cest"),
+                    orig=it.get("orig"),
+                    cst=it.get("cst") or None,
+                    csosn=it.get("csosn") or None,
+                    mod_bc_st=it.get("mod_bc_st"),
+                    p_icms=_dec(it.get("p_icms")),
+                    p_red_bc=_dec(it.get("p_red_bc")),
+                    p_mva_st=_dec(it.get("p_mva_st")),
+                    p_red_bc_st=_dec(it.get("p_red_bc_st")),
+                    p_icms_st=_dec(it.get("p_icms_st")),
+                    v_bc_st=_dec(it.get("v_bc_st")),
+                    v_fcp=_dec(it.get("v_fcp")),
+                    p_fcp=_dec(it.get("p_fcp")),
+                    v_bc_fcp=_dec(it.get("v_bc_fcp")),
+                    v_fcp_st=_dec(it.get("v_fcp_st")),
+                    p_fcp_st=_dec(it.get("p_fcp_st")),
+                    v_bc_fcp_st=_dec(it.get("v_bc_fcp_st")),
                 )
             )
+
+        # ADR-0001: CT-e registra um vínculo por NF-e transportada (tolera órfão —
+        # a NF-e pode ainda não existir). vTPrest fica no vínculo para a agregação.
+        if parsed.get("tipo") == "CTe":
+            for chave_nfe in parsed.get("chaves_nfe", []):
+                self.repo.add_vinculo_cte(
+                    NfeCteVinculo(
+                        id=uuid4(),
+                        tenant_id=tenant_id,
+                        empresa_id=empresa.id,
+                        chave_nfe=chave_nfe,
+                        chave_cte=chave,
+                        vtprest=_dec(parsed.get("vtprest")),
+                        tp_cte=parsed.get("tp_cte") or None,
+                    )
+                )
         await self.session.flush()
 
         # Auto-cadastro da contraparte (cliente em saída/serviço; fornecedor em
