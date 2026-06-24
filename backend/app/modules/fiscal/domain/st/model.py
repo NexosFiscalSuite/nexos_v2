@@ -65,6 +65,7 @@ class ItemFiscal:
     v_icms: Decimal = ZERO
     p_icms: Decimal = ZERO
     p_red_bc: Decimal = ZERO
+    v_fcp: Decimal = ZERO          # FCP da operação própria (deduz do FCP-ST)
 
     # --- ST declarado no XML (apenas para comparação) ---
     p_mva_st: Decimal = ZERO
@@ -97,7 +98,9 @@ class MemoriaCalculo:
     deducao_aplicada: Decimal
     deducao_tipo: str               # "real" | "teorica" | "zero" | "contaminada"
     icms_st_calculado: Decimal
-    fcp_st_calculado: Decimal
+    fcp_st_debito: Decimal          # vBCFCPST × pFCPST (antes da dedução)
+    fcp_st_deducao: Decimal         # FCP próprio abatido (não-cumulatividade)
+    fcp_st_calculado: Decimal       # FCP-ST líquido devido
 
 
 class StatusAuditoria(str):

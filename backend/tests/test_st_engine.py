@@ -278,6 +278,42 @@ def test_simples_interestadual_sem_ajuste_deducao_teorica():
     assert r.memoria.icms_st_calculado == Decimal("150.00")
 
 
+def test_fcp_st_trilhas_paralelas_com_deducao():
+    """GABARITO (FCP-ST, interna MG->MG) — NÃO REGRIDIR.
+
+    Bebida alcoólica, FCP 2%, MVA 50%. ICMS-ST e FCP-ST correm em trilhas
+    SEPARADAS (nunca somadas). FCP-ST deduz o FCP próprio (não-cumulatividade,
+    NT 2016.002): FCP-ST = (1500 × 2%) − 20 = 10,00. ICMS-ST = 90,00.
+    """
+    engine = StAuditEngine(
+        MvaEmMemoria({("22084000", "0202200", "MG"): "50.00"}),
+        EnquadramentoEmMemoria(),
+        FcpEmMemoria({("MG", "22084000"): "2.00"}),
+    )
+    item = ItemFiscal(
+        numero_item=1, ncm="22084000", cest="0202200", cfop="5405", orig="0",
+        cst="10", mod_bc_st=4, v_prod=Decimal("1000"),
+        v_bc=Decimal("1000"), v_icms=Decimal("180.00"), p_icms=Decimal("18"),
+        v_fcp=Decimal("20.00"), p_mva_st=Decimal("50.00"),
+        v_bc_st=Decimal("1500.00"), v_icms_st=Decimal("90.00"),
+        p_fcp_st=Decimal("2.00"), v_bc_fcp_st=Decimal("1500.00"), v_fcp_st=Decimal("10.00"),
+    )
+    op = Operacao(uf_emit="MG", uf_dest="MG", crt=Crt.NORMAL, data=DATA)
+
+    r = engine.auditar_item(item, op)
+
+    assert r.status == StatusAuditoria.OK
+    # Trilha 1 — ICMS-ST (deduz ICMS próprio).
+    assert r.memoria.icms_st_debito == Decimal("270.00")
+    assert r.memoria.icms_st_calculado == Decimal("90.00")
+    # Trilha 2 — FCP-ST (paralela; deduz FCP próprio).
+    assert r.memoria.fcp_st_debito == Decimal("30.00")
+    assert r.memoria.fcp_st_deducao == Decimal("20.00")
+    assert r.memoria.fcp_st_calculado == Decimal("10.00")
+    # As trilhas são independentes: o FCP-ST jamais entra no ICMS-ST.
+    assert r.memoria.icms_st_calculado != r.memoria.fcp_st_calculado
+
+
 @pytest.mark.parametrize(
     "inter, intra, espera_ajuste",
     [

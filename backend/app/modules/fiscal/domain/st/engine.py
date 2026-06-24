@@ -105,9 +105,14 @@ class StAuditEngine:
         if icms_st_calc < ZERO:
             icms_st_calc = ZERO
 
-        # 8. FCP-ST em trilha paralela.
+        # 8. FCP-ST em trilha paralela. Não-cumulatividade (NT 2016.002): o FCP
+        #    da operação própria é creditado, então vFCPST = débito − FCP próprio.
+        #    Sem isso, a carga final ultrapassaria o teto do fundo (bitributação).
         p_fcp_esperado = self.fcp_repo.aliquota_st(item.ncm, operacao.uf_dest, operacao.data)
-        fcp_st_calc = aplicar_percentual(base_st_calc, p_fcp_esperado)
+        fcp_st_debito = aplicar_percentual(base_st_calc, p_fcp_esperado)
+        fcp_st_calc = fcp_st_debito - item.v_fcp
+        if fcp_st_calc < ZERO:
+            fcp_st_calc = ZERO
 
         # 9. Comparações com a régua de centavos.
         div_bc = centavos(item.v_bc_st) - centavos(base_st_calc)
@@ -135,6 +140,8 @@ class StAuditEngine:
             deducao_aplicada=centavos(deducao.valor),
             deducao_tipo=deducao.tipo,
             icms_st_calculado=centavos(icms_st_calc),
+            fcp_st_debito=centavos(fcp_st_debito),
+            fcp_st_deducao=centavos(item.v_fcp),
             fcp_st_calculado=centavos(fcp_st_calc),
         )
         status = StatusAuditoria.DIVERGENTE if erros else StatusAuditoria.OK
