@@ -216,6 +216,38 @@ def test_antecipacao_interestadual_com_frete_rateado():
     assert "ERRO_104_VALOR_ST_DIVERGENTE" in r.codigos_erro
 
 
+def test_cst70_reducao_base_interna():
+    """GABARITO (CST 70, redução de base, interna MG->MG) — NÃO REGRIDIR.
+
+    pRedBC e pRedBCST = 33,33%. Redução aplicada na base ANTES do débito
+    (Método A). A dedução usa o ICMS próprio REAL já reduzido (120,01) — a
+    "Armadilha da Dedução" do §6.1: própria reduzida => dedução menor => ST sobe.
+    ICMS-ST esperado = 48,00.
+    """
+    engine = StAuditEngine(
+        MvaEmMemoria({("84099900", "0102200", "MG"): "40.00"}),
+        EnquadramentoEmMemoria(),
+        FcpEmMemoria(),
+    )
+    item = ItemFiscal(
+        numero_item=1, ncm="84099900", cest="0102200", cfop="5405", orig="0",
+        cst="70", mod_bc_st=4, v_prod=Decimal("1000"),
+        v_bc=Decimal("666.70"), v_icms=Decimal("120.01"), p_icms=Decimal("18"),
+        p_red_bc=Decimal("33.33"), p_red_bc_st=Decimal("33.33"), p_mva_st=Decimal("40.00"),
+        v_bc_st=Decimal("933.38"), v_icms_st=Decimal("48.00"),
+    )
+    op = Operacao(uf_emit="MG", uf_dest="MG", crt=Crt.NORMAL, data=DATA)
+
+    r = engine.auditar_item(item, op)
+
+    assert r.status == StatusAuditoria.OK
+    assert r.memoria.mva_foi_ajustada is False
+    assert r.memoria.base_st_calculada == Decimal("933.38")   # 1400 × (1 − 33,33%)
+    assert r.memoria.icms_st_debito == Decimal("168.01")
+    assert r.memoria.deducao_aplicada == Decimal("120.01")    # próprio real reduzido
+    assert r.memoria.icms_st_calculado == Decimal("48.00")
+
+
 @pytest.mark.parametrize(
     "inter, intra, espera_ajuste",
     [
