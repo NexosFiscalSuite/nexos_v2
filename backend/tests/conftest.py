@@ -14,3 +14,7 @@ os.environ.setdefault(
 )
 os.environ.setdefault("NEXOS_JWT_SECRET", "test-secret-please-change")
 os.environ.setdefault("NEXOS_ENVIRONMENT", "test")
+
+# Registra TODOS os models em Base.metadata para que os testes de integração
+# (SQLite) consigam resolver as FKs no create_all. Mesmo padrão do env.py/celery.
+import app.core.celery_app  # noqa: E402, F401

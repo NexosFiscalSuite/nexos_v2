@@ -4,6 +4,7 @@ from decimal import Decimal
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     DateTime,
     ForeignKey,
@@ -153,6 +154,47 @@ class NfeCteVinculo(Base):
     chave_cte: Mapped[str] = mapped_column(String(44), index=True)
     vtprest: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
     tp_cte: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class AuditoriaIcmsSt(Base):
+    """Resultado da auditoria de ICMS-ST por item (Vault §9). Guarda o declarado
+    no XML, o calculado pelo motor, a divergência e a memória de cálculo aberta."""
+
+    __tablename__ = "auditoria_icms_st"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "nota_id", "numero_item", name="uq_auditoria_st_item"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), index=True
+    )
+    empresa_id: Mapped[UUID] = mapped_column(
+        ForeignKey("empresas.id", ondelete="CASCADE"), index=True
+    )
+    nota_id: Mapped[UUID] = mapped_column(ForeignKey("notas.id", ondelete="CASCADE"), index=True)
+    chave_acesso: Mapped[str] = mapped_column(String(44), index=True)
+    numero_item: Mapped[int] = mapped_column(Integer)
+    cst_csosn: Mapped[str | None] = mapped_column(String(3), nullable=True)
+    mod_bc_st: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # XML declarado × calculado pelo motor
+    pmva_xml: Mapped[Decimal] = mapped_column(_PCT, default=Decimal("0"))
+    pmva_calculada: Mapped[Decimal] = mapped_column(_PCT, default=Decimal("0"))
+    vbc_st_xml: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+    vbc_st_calculado: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+    vicms_st_xml: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+    vicms_st_calculado: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+    vicms_st_divergencia: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+    vfcp_st_xml: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+    vfcp_st_calculado: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+
+    status: Mapped[str] = mapped_column(String(14))            # OK|DIVERGENTE|NAO_AUDITAVEL
+    codigo_erro: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    memoria: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # cálculo aberto
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
