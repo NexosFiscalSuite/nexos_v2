@@ -1,0 +1,82 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: nexos
+      POSTGRES_PASSWORD: nexos
+      POSTGRES_DB: nexos
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Cria as roles nexos_app (RLS) e garante BYPASSRLS na role de migração.
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexos"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # MinIO = object storage compatível com S3 (storage de XML por tenant — Fase 3)
+  minio:
+    # Tag fixa: `latest` quebra builds de forma não-determinística.
+    image: minio/minio:RELEASE.2025-04-08T15-41-24Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: nexos
+      MINIO_ROOT_PASSWORD: nexos12345
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+
+  api:
+    build: .
+    env_file: .env
+    environment:
+      # Dentro da rede do compose os hosts mudam de localhost p/ nome do serviço.
+      NEXOS_DATABASE_URL: postgresql+asyncpg://nexos_app:nexos_app@postgres:5432/nexos
+      NEXOS_DATABASE_PRIVILEGED_URL: postgresql+asyncpg://nexos:nexos@postgres:5432/nexos
+      NEXOS_REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+  worker:
+    build: .
+    env_file: .env
+    environment:
+      NEXOS_DATABASE_URL: postgresql+asyncpg://nexos_app:nexos_app@postgres:5432/nexos
+      NEXOS_DATABASE_PRIVILEGED_URL: postgresql+asyncpg://nexos:nexos@postgres:5432/nexos
+      NEXOS_REDIS_URL: redis://redis:6379/0
+      # Em contêiner use S3 (MinIO): disco local não é compartilhado com a API.
+      NEXOS_STORAGE_BACKEND: s3
+      NEXOS_S3_ENDPOINT_URL: http://minio:9000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A app.core.celery_app:celery_app worker --loglevel=info --queues nexos
+
+volumes:
+  pgdata:
+  miniodata:

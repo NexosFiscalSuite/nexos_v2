@@ -1,0 +1,128 @@
+"""Modelos fiscais: Nota, NotaItem, NotaEvento. Todos tenant-scoped (RLS)."""
+from datetime import datetime
+from decimal import Decimal
+from uuid import UUID, uuid4
+
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+    Uuid,
+    func,
+)
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.core.database import Base
+
+_MONEY = Numeric(15, 2)
+_QTY = Numeric(15, 4)
+
+
+class Nota(Base):
+    __tablename__ = "notas"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "empresa_id", "chave_acesso", name="uq_nota_chave"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), index=True
+    )
+    empresa_id: Mapped[UUID] = mapped_column(
+        ForeignKey("empresas.id", ondelete="CASCADE"), index=True
+    )
+    chave_acesso: Mapped[str] = mapped_column(String(60), index=True)
+    tipo: Mapped[str] = mapped_column(String(10))          # NFe|NFCe|CTe|NFSe
+    fluxo: Mapped[str] = mapped_column(String(10))         # entrada|saida|servico|cte
+    modelo: Mapped[str] = mapped_column(String(10))        # 55|65|57|NFSe-A|NFSe-N
+    serie: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    numero: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
+    cnpj_emit: Mapped[str | None] = mapped_column(String(14), nullable=True)
+    nome_emit: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    uf_emit: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    cnpj_dest: Mapped[str | None] = mapped_column(String(14), nullable=True)
+    nome_dest: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    uf_dest: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    transportadora_cnpj: Mapped[str | None] = mapped_column(String(14), nullable=True)
+    transportadora_nome: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    tipo_nota: Mapped[str | None] = mapped_column(String(80), nullable=True)  # classificação da entrada
+
+    valor_total: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+    data_emissao: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    data_entrada: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    competencia: Mapped[str | None] = mapped_column(String(7), nullable=True)  # YYYY-MM
+    iss_retido: Mapped[int | None] = mapped_column(Integer, nullable=True)     # 1|0|None
+    ano: Mapped[str | None] = mapped_column(String(4), nullable=True)
+    mes: Mapped[str | None] = mapped_column(String(2), nullable=True)
+
+    storage_key: Mapped[str | None] = mapped_column(String(400), nullable=True)
+    status: Mapped[str] = mapped_column(String(12), default="ativa")  # ativa|cancelada
+    cancelada_em: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    protocolo: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    tem_correcao: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    uploaded_by: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class NotaItem(Base):
+    __tablename__ = "nota_itens"
+    __table_args__ = (UniqueConstraint("nota_id", "numero_item", name="uq_item_nota"),)
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), index=True
+    )
+    nota_id: Mapped[UUID] = mapped_column(
+        ForeignKey("notas.id", ondelete="CASCADE"), index=True
+    )
+    numero_item: Mapped[int] = mapped_column(Integer)
+    codigo: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    descricao: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    ncm: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    cfop: Mapped[str | None] = mapped_column(String(6), nullable=True)
+    cfop_original: Mapped[str | None] = mapped_column(String(6), nullable=True)
+    tipo_sped: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    unidade: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    quantidade: Mapped[Decimal] = mapped_column(_QTY, default=Decimal("0"))
+    valor_unitario: Mapped[Decimal] = mapped_column(_QTY, default=Decimal("0"))
+    valor_total: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+    valor_produto: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+    valor_desconto: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+    valor_frete: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+    valor_seguro: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+    base_calculo: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+    valor_icms: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+    valor_icms_st: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+
+
+class NotaEvento(Base):
+    """Eventos (cancelamento/CC-e). Pode existir órfão (nota ainda não importada)."""
+
+    __tablename__ = "nota_eventos"
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), index=True
+    )
+    empresa_id: Mapped[UUID] = mapped_column(
+        ForeignKey("empresas.id", ondelete="CASCADE"), index=True
+    )
+    nota_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("notas.id", ondelete="CASCADE"), nullable=True
+    )
+    chave_acesso: Mapped[str] = mapped_column(String(60), index=True)
+    tipo_evento: Mapped[str] = mapped_column(String(30))  # cancelamento
+    protocolo: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    data_evento: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    justificativa: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

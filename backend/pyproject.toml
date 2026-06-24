@@ -1,0 +1,66 @@
+[project]
+name = "nexos-fiscal-suite"
+version = "2.0.0"
+description = "Nexos Fiscal Suite V2 - SaaS multi-tenant para escritórios de contabilidade"
+requires-python = ">=3.11"
+dependencies = [
+    # API
+    "fastapi==0.115.6",
+    "uvicorn[standard]==0.34.0",
+    "python-multipart==0.0.20",
+    # Banco (async)
+    "sqlalchemy[asyncio]==2.0.36",
+    "asyncpg==0.30.0",
+    "alembic==1.14.0",
+    # Config / validação
+    "pydantic==2.10.4",
+    "pydantic-settings==2.7.0",
+    "email-validator==2.2.0",
+    # Parsing seguro de XML de upload (proteção contra XXE / billion laughs)
+    "defusedxml==0.7.1",
+    # Segurança
+    "argon2-cffi==23.1.0",
+    "pyjwt==2.10.1",
+    # Rate limiting + cache + filas
+    "slowapi==0.1.9",
+    "redis==5.2.1",
+    "celery==5.4.0",
+    # Storage de XML (S3/MinIO) + geração de relatórios Excel
+    "boto3==1.35.92",
+    "openpyxl==3.1.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.3.4",
+    "pytest-asyncio==0.25.0",
+    "httpx==0.28.1",
+    "ruff==0.8.4",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+# Subset E do default (E4/E7/E9) + F (pyflakes) e extras: I ordena imports,
+# UP moderniza sintaxe (py311+), B pega armadilhas comuns. E501 fica de fora:
+# comprimento é guiado por line-length sem poluir o lint.
+select = ["E4", "E7", "E9", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI usa chamadas em defaults de argumento (Depends/Query/...) de propósito.
+extend-immutable-calls = [
+    "fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Body",
+    "fastapi.Form", "fastapi.File", "fastapi.Header", "fastapi.Security",
+    "app.core.rbac.require_role",  # factory de dependência RBAC (idiomático)
+]

@@ -1,0 +1,9 @@
+# Normaliza fim de linha: LF no repositório, evitando churn entre SO.
+* text=auto eol=lf
+
+# Binários (não normalizar).
+*.png binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.xlsx binary
