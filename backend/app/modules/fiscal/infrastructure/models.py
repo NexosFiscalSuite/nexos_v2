@@ -45,6 +45,7 @@ class Nota(Base):
     cnpj_emit: Mapped[str | None] = mapped_column(String(14), nullable=True)
     nome_emit: Mapped[str | None] = mapped_column(String(200), nullable=True)
     uf_emit: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    crt_emit: Mapped[str | None] = mapped_column(String(1), nullable=True)  # 1|2|3|4 (regime ST)
     cnpj_dest: Mapped[str | None] = mapped_column(String(14), nullable=True)
     nome_dest: Mapped[str | None] = mapped_column(String(200), nullable=True)
     uf_dest: Mapped[str | None] = mapped_column(String(2), nullable=True)

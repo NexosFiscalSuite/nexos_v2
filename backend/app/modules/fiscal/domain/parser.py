@@ -285,6 +285,9 @@ def _parse_nfe(root) -> dict:
         "nome_emit": _g(emit, "xNome"),
         "ie_emit": _g(emit, "IE"),
         "uf_emit": _g(_find_local(emit, "enderEmit"), "UF"),
+        # CRT do emitente (1=Simples, 2=Simples excesso, 3=Normal, 4=MEI) —
+        # fonte primária do regime do fornecedor para o motor de auditoria de ST.
+        "crt_emit": _g(emit, "CRT"),
         "cnpj_dest": cnpj_dest,
         "nome_dest": _g(dest, "xNome"),
         "ie_dest": _g(dest, "IE"),

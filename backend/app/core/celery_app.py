@@ -13,6 +13,7 @@ celery_app = Celery(
     include=[
         "app.modules.fiscal.workers",
         "app.modules.reporting.workers",
+        "app.modules.contrapartes.workers",
     ],
 )
 

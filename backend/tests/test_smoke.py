@@ -1,6 +1,8 @@
 """Testes unitários (sem banco) das peças críticas da Fase 2:
 validação de CNPJ, hashing de senha, round-trip de JWT e hierarquia RBAC.
 """
+from uuid import uuid4
+
 import pytest
 
 from app.core.exceptions import DomainError
@@ -13,7 +15,6 @@ from app.core.security import (
     verify_password,
 )
 from app.shared.domain.value_objects import CNPJ
-from uuid import uuid4
 
 
 # ── CNPJ ─────────────────────────────────────────────────────────────────────

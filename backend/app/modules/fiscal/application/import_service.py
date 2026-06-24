@@ -135,6 +135,7 @@ class ImportService:
             cnpj_emit=parsed.get("cnpj_emit"),
             nome_emit=parsed.get("nome_emit"),
             uf_emit=parsed.get("uf_emit"),
+            crt_emit=parsed.get("crt_emit"),
             cnpj_dest=parsed.get("cnpj_dest"),
             nome_dest=parsed.get("nome_dest"),
             uf_dest=parsed.get("uf_dest"),

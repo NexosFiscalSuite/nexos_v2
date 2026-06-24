@@ -1,4 +1,6 @@
 """Repositório de contrapartes."""
+from __future__ import annotations
+
 from uuid import UUID
 
 from sqlalchemy import or_, select
@@ -36,6 +38,16 @@ class ContraparteRepository:
                 Contraparte.nome_fantasia.ilike(like),
             ))
         res = await self.session.execute(stmt.order_by(Contraparte.razao_social))
+        return list(res.scalars().all())
+
+    async def sem_regime(self, empresa_id: UUID) -> list[Contraparte]:
+        """Contrapartes ainda sem regime definido — candidatas à consulta optante."""
+        res = await self.session.execute(
+            select(Contraparte).where(
+                Contraparte.empresa_id == empresa_id,
+                or_(Contraparte.regime.is_(None), Contraparte.regime == ""),
+            )
+        )
         return list(res.scalars().all())
 
     def add(self, c: Contraparte) -> None:

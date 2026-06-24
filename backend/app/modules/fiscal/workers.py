@@ -58,6 +58,12 @@ async def _run(job_id, tenant_id, empresa_id, user_id, staging):
                 job.total = resumo["total_arquivos"]
                 job.processed = resumo["total_arquivos"]
                 job.result = resumo
+
+        # Etapa separada: enriquece o regime (consulta optante) das contrapartes
+        # recém-criadas, sem acoplar a velocidade do import à API externa.
+        celery_app.send_task(
+            "contrapartes.enriquecer_optante", args=[str(tenant_id), str(empresa_id)]
+        )
         return resumo
     except Exception as e:  # noqa: BLE001
         async with worker_tenant_session(tenant_id) as s:
