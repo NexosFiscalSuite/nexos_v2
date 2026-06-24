@@ -11,6 +11,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID, uuid4
 
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.fiscal.application.frete_service import agregar_frete, ratear_frete
@@ -94,6 +95,11 @@ class StAuditService:
             fcp_repo=matrizes.fcp,
         )
         resultados = engine.auditar_nota(itens_fiscais, operacao)
+
+        # Idempotente: re-auditar (ex.: CT-e que chegou depois) substitui o anterior.
+        await self.session.execute(
+            delete(AuditoriaIcmsSt).where(AuditoriaIcmsSt.nota_id == nota_id)
+        )
 
         registros: list[AuditoriaIcmsSt] = []
         for it_db, res in zip(itens_db, resultados, strict=False):

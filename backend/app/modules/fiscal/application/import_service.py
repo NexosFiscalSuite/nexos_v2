@@ -57,6 +57,7 @@ class ImportService:
         self.repo = NotaRepository(session)
         self.contrapartes = ContraparteService(session)
         self._regras: dict = {}  # cfop_origem -> regra De/Para (carregado no import_staged)
+        self.notas_auditaveis: list[UUID] = []  # NF-e/NFC-e p/ auditar ST após o lote
 
     async def import_staged(
         self, *, tenant_id: UUID, empresa: Empresa, user_id: UUID, staging: list[dict]
@@ -160,6 +161,11 @@ class ImportService:
         )
         self.repo.add(nota)
         await self.session.flush()  # garante que o próximo by_chave (mesma txn) veja a nota
+
+        # NF-e/NFC-e entram na fila de auditoria de ST (rodada ao fim do lote,
+        # quando os CT-e vinculados do mesmo lote já foram persistidos — ADR-0001).
+        if parsed.get("tipo") in ("NFe", "NFCe"):
+            self.notas_auditaveis.append(nota.id)
 
         is_entry = fluxo in ("entrada", "cte")
         for it in parsed.get("itens", []):

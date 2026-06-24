@@ -20,6 +20,7 @@ from app.modules.compliance.api.routers import router as compliance_router
 from app.modules.contrapartes.api.routers import lookup_router
 from app.modules.contrapartes.api.routers import router as contrapartes_router
 from app.modules.dashboard.api.routers import router as dashboard_router
+from app.modules.fiscal.api.auditoria_routers import router as auditoria_st_router
 from app.modules.fiscal.api.routers import router as fiscal_router
 from app.modules.grupos.api.routers import router as grupos_router
 from app.modules.identity.api.routers import auth_router, users_router
@@ -67,6 +68,7 @@ def create_app() -> FastAPI:
     app.include_router(users_router, prefix=p)
     app.include_router(empresas_router, prefix=p)
     app.include_router(fiscal_router, prefix=p)
+    app.include_router(auditoria_st_router, prefix=p)
     app.include_router(compliance_router, prefix=p)
     app.include_router(reporting_router, prefix=p)
     app.include_router(jobs_router, prefix=p)

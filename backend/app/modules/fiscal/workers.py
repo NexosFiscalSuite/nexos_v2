@@ -5,6 +5,7 @@ A API só faz o upload bruto para o staging e enfileira; o trabalho pesado
 próprio event loop (asyncio.run) e sua própria sessão tenant-aware.
 """
 import asyncio
+import logging
 from uuid import UUID
 
 from app.core.celery_app import celery_app
@@ -12,12 +13,15 @@ from app.core.storage import get_storage
 from app.core.worker_db import worker_tenant_session
 from app.modules.companies.infrastructure.repositories import EmpresaRepository
 from app.modules.fiscal.application.import_service import ImportService
+from app.modules.fiscal.application.st_audit_service import StAuditService
 from app.modules.jobs.infrastructure.models import (
     STATUS_DONE,
     STATUS_FAILED,
     STATUS_RUNNING,
 )
 from app.modules.jobs.infrastructure.repositories import JobRepository
+
+logger = logging.getLogger(__name__)
 
 
 @celery_app.task(name="fiscal.import_xmls", bind=True)
@@ -48,9 +52,11 @@ async def _run(job_id, tenant_id, empresa_id, user_id, staging):
                     job.error = "Empresa não encontrada."
                 return {"error": "empresa_not_found"}
 
-            resumo = await ImportService(s, storage).import_staged(
+            service = ImportService(s, storage)
+            resumo = await service.import_staged(
                 tenant_id=tenant_id, empresa=empresa, user_id=user_id, staging=staging
             )
+            auditaveis = list(service.notas_auditaveis)
 
             job = await jobrepo.by_id(job_id)
             if job:
@@ -58,6 +64,17 @@ async def _run(job_id, tenant_id, empresa_id, user_id, staging):
                 job.total = resumo["total_arquivos"]
                 job.processed = resumo["total_arquivos"]
                 job.result = resumo
+
+        # txn 3: auditoria de ICMS-ST das NF-e do lote (separada — o frete dos
+        # CT-e do mesmo lote já está persistido; falha aqui NÃO desfaz o import).
+        if auditaveis:
+            try:
+                async with worker_tenant_session(tenant_id) as s:
+                    auditor = StAuditService(s)
+                    for nota_id in auditaveis:
+                        await auditor.auditar_nota(empresa_id, nota_id)
+            except Exception as e:  # noqa: BLE001 — auditoria não derruba o import
+                logger.warning("Auditoria de ST falhou no job %s: %s", job_id, e)
 
         # Etapa separada: enriquece o regime (consulta optante) das contrapartes
         # recém-criadas, sem acoplar a velocidade do import à API externa.

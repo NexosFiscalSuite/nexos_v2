@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.database import Base
+from app.modules.fiscal.application.auditoria_query import listar_divergencias
 from app.modules.fiscal.application.st_audit_service import StAuditService
 from app.modules.fiscal.domain.parser import parse_xml
 from app.modules.fiscal.infrastructure.matrizes_models import (
@@ -99,6 +100,7 @@ async def _injetar(s: AsyncSession, tenant_id, empresa_id):
         id=uuid4(), tenant_id=tenant_id, empresa_id=empresa_id,
         chave_acesso=nfe["chave_acesso"], tipo="NFe", fluxo="entrada", modelo="55",
         uf_emit=nfe["uf_emit"], uf_dest=nfe["uf_dest"], crt_emit=nfe["crt_emit"],
+        nome_emit=nfe["nome_emit"], cnpj_emit=nfe["cnpj_emit"],
         data_emissao=nfe["data_emissao"],
     )
     s.add(nota)
@@ -161,3 +163,27 @@ async def test_e2e_autopeca_frete_agregado_ate_auditoria(sessao):
 
     # Persistiu de fato (não só retornou).
     assert await sessao.scalar(select(func.count()).select_from(AuditoriaIcmsSt)) == 2
+
+
+async def test_query_divergencias_e_idempotencia(sessao):
+    tenant_id, empresa_id = uuid4(), uuid4()
+    nota = await _injetar(sessao, tenant_id, empresa_id)
+    svc = StAuditService(sessao)
+    await svc.auditar_nota(empresa_id, nota.id)
+    await svc.auditar_nota(empresa_id, nota.id)   # re-auditoria NÃO duplica
+
+    assert await sessao.scalar(select(func.count()).select_from(AuditoriaIcmsSt)) == 2
+
+    # Endpoint: REL_Divergencia_ST.
+    res = await listar_divergencias(sessao, empresa_id=empresa_id)
+    assert res["total"] == 2
+    item = res["itens"][0]
+    assert item["vicms_st_calculado"] == Decimal("177.50")
+    assert item["vicms_st_xml"] == Decimal("0.00")
+    assert item["divergencia"] == Decimal("-177.50")     # rombo: XML − calculado
+    assert item["fornecedor"] == "FORNECEDOR SP"
+    assert item["memoria"]["mva_original"] == "71.78"    # memória exposta ao front
+
+    # Filtro de período exclui notas fora da janela.
+    vazio = await listar_divergencias(sessao, empresa_id=empresa_id, data_inicio="2027-01-01")
+    assert vazio["total"] == 0
