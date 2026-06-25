@@ -1,4 +1,5 @@
 """Entry point da API Nexos V2 (app factory)."""
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -21,6 +22,7 @@ from app.modules.contrapartes.api.routers import lookup_router
 from app.modules.contrapartes.api.routers import router as contrapartes_router
 from app.modules.dashboard.api.routers import router as dashboard_router
 from app.modules.fiscal.api.auditoria_routers import router as auditoria_st_router
+from app.modules.fiscal.api.matrizes_routers import router as matrizes_router
 from app.modules.fiscal.api.routers import router as fiscal_router
 from app.modules.grupos.api.routers import router as grupos_router
 from app.modules.identity.api.routers import auth_router, users_router
@@ -33,6 +35,15 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
+    # Provisiona o storage (cria o bucket S3) antes de aceitar uploads. Tolera
+    # falha transitória do MinIO no boot: o _ensure_bucket roda de novo no 1º uso.
+    try:
+        from fastapi.concurrency import run_in_threadpool
+
+        from app.core.storage import ensure_storage_ready
+        await run_in_threadpool(ensure_storage_ready)
+    except Exception:  # noqa: BLE001 — startup resiliente; storage reprovisiona sob demanda
+        logging.getLogger("nexos").warning("Falha ao provisionar o storage no startup; tentará no 1º uso.")
     yield
     await privileged_engine.dispose()
 
@@ -69,6 +80,7 @@ def create_app() -> FastAPI:
     app.include_router(empresas_router, prefix=p)
     app.include_router(fiscal_router, prefix=p)
     app.include_router(auditoria_st_router, prefix=p)
+    app.include_router(matrizes_router, prefix=p)
     app.include_router(compliance_router, prefix=p)
     app.include_router(reporting_router, prefix=p)
     app.include_router(jobs_router, prefix=p)

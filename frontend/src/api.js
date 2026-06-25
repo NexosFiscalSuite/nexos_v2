@@ -143,6 +143,15 @@ export const api = {
   criarEmpresa: (data) => request('POST', '/empresas', data),
   editarEmpresa: (id, data) => request('PATCH', `/empresas/${id}`, data),
 
+  // Matrizes Fiscais (MVA) — regras globais do motor de ST
+  matrizesMva: (params = {}) => {
+    const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
+    return request('GET', '/matrizes/mva' + (q ? `?${q}` : ''))
+  },
+  criarMatrizMva: (data) => request('POST', '/matrizes/mva', data),
+  editarMatrizMva: (id, data) => request('PATCH', `/matrizes/mva/${id}`, data),
+  removerMatrizMva: (id) => request('DELETE', `/matrizes/mva/${id}`),
+
   // ── Upload assíncrono + Jobs ──
   upload: (empresaId, formData) => form('POST', `/fiscal/empresas/${empresaId}/upload`, formData),
   job: (id) => request('GET', `/jobs/${id}`),

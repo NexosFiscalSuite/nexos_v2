@@ -90,12 +90,21 @@ class S3Storage(Storage):
         self._ensure_bucket()
 
     def _ensure_bucket(self) -> None:
+        """Idempotente: provisiona o bucket se ainda não existe. Tolera corrida
+        entre API e worker subindo ao mesmo tempo (BucketAlreadyOwnedByYou)."""
         from botocore.exceptions import ClientError
 
         try:
             self.client.head_bucket(Bucket=self.bucket)
+            return  # já existe
         except ClientError:
+            pass
+        try:
             self.client.create_bucket(Bucket=self.bucket)
+        except ClientError as exc:
+            code = exc.response.get("Error", {}).get("Code", "")
+            if code not in ("BucketAlreadyOwnedByYou", "BucketAlreadyExists"):
+                raise  # erro real de provisionamento de storage
 
     def put(self, key: str, data: bytes) -> str:
         self.client.put_object(Bucket=self.bucket, Key=key, Body=data)
@@ -112,3 +121,11 @@ def get_storage() -> Storage:
     if settings.storage_backend == "s3":
         return S3Storage()
     return LocalStorage(settings.storage_local_dir)
+
+
+def ensure_storage_ready() -> None:
+    """Provisiona o storage no startup — garante o bucket S3 antes do 1º upload,
+    para que a importação de XML nunca falhe por falta de provisionamento.
+    No backend local não há o que provisionar (diretórios são criados sob demanda)."""
+    if settings.storage_backend == "s3":
+        S3Storage()  # __init__ chama _ensure_bucket()

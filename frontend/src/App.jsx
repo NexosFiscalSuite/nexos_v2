@@ -19,6 +19,7 @@ import Conformidade from './pages/Conformidade'
 import Relatorios from './pages/Relatorios'
 import DivergenciasST from './pages/DivergenciasST'
 import CfopRegras from './pages/CfopRegras'
+import MatrizesFiscais from './pages/MatrizesFiscais'
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth()
@@ -54,6 +55,7 @@ export default function App() {
                 <Route path="/upload"        element={<Upload />} />
                 <Route path="/notas"         element={<Notas />} />
                 <Route path="/cadastros"     element={<Cadastros />} />
+                <Route path="/matrizes-fiscais" element={<MatrizesFiscais />} />
                 <Route path="/conformidade"  element={<Conformidade />} />
                 <Route path="/divergencias-st" element={<DivergenciasST />} />
                 <Route path="/relatorios"    element={<Relatorios />} />

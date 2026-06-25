@@ -16,6 +16,7 @@ const PAGE_TITLES = {
   '/divergencias-st': 'Divergências de ICMS-ST',
   '/relatorios': 'Relatórios',
   '/cadastros':  'Clientes e Fornecedores',
+  '/matrizes-fiscais': 'Matrizes Fiscais',
   '/empresas':   'Empresas',
   '/grupos':     'Grupos',
   '/usuarios':   'Usuários',
@@ -33,7 +34,10 @@ const NAV = [
   ] },
   { to:'/conformidade', icon:'ti-shield-check',   label:'Conformidade' },
   { to:'/divergencias-st', icon:'ti-alert-triangle', label:'Divergências ST' },
-  { to:'/cadastros', icon:'ti-address-book',      label:'Cadastros' },
+  { to:'/cadastros-grp', icon:'ti-address-book', label:'Cadastros', subItems: [
+    { to:'/cadastros',        icon:'ti-users',         label:'Clientes e Fornecedores' },
+    { to:'/matrizes-fiscais', icon:'ti-table-options', label:'Matrizes Fiscais' },
+  ] },
 ]
 const ADMIN_NAV = [
   { to:'/empresas', icon:'ti-building-store', label:'Empresas' },
