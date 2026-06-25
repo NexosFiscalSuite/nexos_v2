@@ -35,16 +35,6 @@ function seloAcao(item) {
   return null
 }
 
-// Selo DOMINANTE da nota: o de maior prioridade de ação entre os itens, para o
-// analista bater o olho na linha-mestre (sem expandir). Erro > antecipação >
-// a-favor > não auditável.
-const _PRIORIDADE = ['badge-error', 'badge-warn', 'badge-info', 'badge-neutral']
-function seloNota(itens) {
-  const selos = itens.map(seloAcao).filter(Boolean)
-  if (!selos.length) return null
-  return selos.sort((a, b) => _PRIORIDADE.indexOf(a.cls) - _PRIORIDADE.indexOf(b.cls))[0]
-}
-
 // ── Lógica de agrupamento: itens planos → notas (master) com seus itens (detail) ──
 function agruparPorNota(itens) {
   const mapa = new Map()
@@ -194,15 +184,8 @@ function FragmentoNota({ nota, aberto, onToggle, onMemoria }) {
           {brl(nota.totalDiferenca)}
         </td>
         <td style={{ textAlign: 'center' }}>
-          {(() => {
-            const selo = seloNota(nota.itens)
-            return selo && (
-              <span className={`badge ${selo.cls}`} style={{ fontSize: 10, marginRight: 6 }}>
-                <i className={`ti ${selo.icon}`} style={{ marginRight: 3 }} />{selo.txt}
-              </span>
-            )
-          })()}
-          {nota.divergentes > 0 && <span style={{ fontSize: 11, color: 'var(--text-4)' }}>{nota.divergentes} item(ns)</span>}
+          {nota.divergentes > 0 && <span className="badge badge-error" style={{ fontSize: 10 }}>{nota.divergentes} divergente(s)</span>}
+          {nota.naoAuditaveis > 0 && <span className="badge badge-warn" style={{ fontSize: 10, marginLeft: 4 }}>{nota.naoAuditaveis} não auditado(s)</span>}
         </td>
       </tr>
 
