@@ -49,6 +49,13 @@ class StAuditEngine:
         if regime != Regime.ST:
             return self._nao_auditavel(item, f"regime {regime.value} (fora do motor de ST)")
 
+        # Bifurcação por tpNF. SAÍDA de revenda com ST já retido (CST 60 / CSOSN
+        # 500): o ST foi recolhido na cadeia anterior, não se recolhe de novo —
+        # auditoria própria (Cenário 1). Os demais casos (entrada, ou saída como
+        # substituto CST 10/70/201…) seguem o mesmo cálculo de ST (Cenário 2).
+        if operacao.saida and item.cst_csosn in ("60", "500"):
+            return self._auditar_revenda_st_retido(item, operacao, regime)
+
         # 2. Estratégia de base — núcleo v1 cobre só MVA (4) e Valor da Operação (6).
         base_strategy = base_strategy_for(item.mod_bc_st)
         if base_strategy is None:
@@ -192,6 +199,37 @@ class StAuditEngine:
                     )
                     break
         return resultados
+
+    def _auditar_revenda_st_retido(
+        self, item: ItemFiscal, operacao: Operacao, regime: Regime
+    ) -> ResultadoAuditoria:
+        """Cenário 1 (saída): revenda de produto com ST já retido (CST 60/CSOSN 500).
+
+        Nesta operação NÃO se recolhe ST de novo — o vICMSST destacado deve ser
+        ZERO. Se houver valor, é pagamento indevido (bitributação): a diferença
+        é positiva (a FAVOR do cliente, imposto pago a maior, passível de estorno).
+        """
+        diferenca = centavos(item.v_icms_st) - ZERO          # esperado = 0
+        indevido = item.v_icms_st > TOLERANCIA_ITEM
+        erros = (ErroST.ST_INDEVIDO_REVENDA,) if indevido else ()
+        memoria = MemoriaCalculo(
+            regime=regime.value, mva_original=ZERO, mva_aplicada=ZERO,
+            mva_foi_ajustada=False,
+            motivo_nao_ajuste="ST retido anteriormente (CST 60/500) — sem novo recolhimento",
+            alq_inter=ZERO, alq_intra=ZERO, base_st_calculada=ZERO, icms_st_debito=ZERO,
+            deducao_aplicada=ZERO, deducao_tipo="zero", icms_st_calculado=ZERO,
+            fcp_st_debito=ZERO, fcp_st_deducao=ZERO, fcp_st_calculado=ZERO,
+        )
+        obs = (
+            "ST destacado numa revenda com ST já retido (CST 60/500): pagamento a "
+            "maior, passível de estorno." if indevido else
+            "Revenda com ST retido anteriormente — sem novo ST devido (correto)."
+        )
+        return ResultadoAuditoria(
+            numero_item=item.numero_item,
+            status=StatusAuditoria.DIVERGENTE if erros else StatusAuditoria.OK,
+            erros=erros, divergencia_icms_st=diferenca, memoria=memoria, observacao=obs,
+        )
 
     @staticmethod
     def _nao_auditavel(item: ItemFiscal, motivo: ErroST | str) -> ResultadoAuditoria:

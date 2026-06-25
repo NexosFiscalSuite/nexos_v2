@@ -64,3 +64,9 @@ class ErroST(_Erro, Enum):
         "NCM/CEST/UF na data — auditoria não confiável, não calculada.",
         "Cadastrar a MVA (com vigência) na matriz e reauditar.",
     )
+    ST_INDEVIDO_REVENDA = (
+        "ERRO_110_ST_INDEVIDO_REVENDA",
+        "Revenda de produto com ST já retido (CST 60 / CSOSN 500) destacou "
+        "vICMSST > 0 — pagamento indevido / bitributação (a favor do cliente).",
+        "Estornar o ST destacado e reemitir com vICMSST = 0 (ST já recolhido na cadeia).",
+    )

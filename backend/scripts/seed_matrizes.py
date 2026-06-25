@@ -35,6 +35,7 @@ def linhas_seed() -> list:
         # (ncm, cest, uf, mva, ato_legal)
         ("87082919", "0107500", "MG", "71.78", "Autopeça (lab #2)"),
         ("40111000", "0100500", "MG", "42.00", "Pneu (lab #1)"),
+        ("40111000", "1600100", "MG", "42.00", "Pneu — CEST segmento 16 (saída)"),
         ("22084000", "0202200", "MG", "50.00", "Cachaça (lab #5)"),
         ("85122011", "0100100", "MG", "40.00", "Iluminação (exemplo Vault)"),
     ]
@@ -42,6 +43,7 @@ def linhas_seed() -> list:
         # (uf, ncm, cest, regime, segmento)
         ("MG", "87082919", "0107500", "ST", "Autopeças"),
         ("MG", "40111000", "0100500", "ST", "Pneumáticos"),
+        ("MG", "40111000", "1600100", "ST", "Pneumáticos (segmento 16)"),
         ("MG", "22084000", "0202200", "ST", "Bebidas alcoólicas"),
         ("MG", "85122011", "0100100", "ST", "Material elétrico"),
     ]

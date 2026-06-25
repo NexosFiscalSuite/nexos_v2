@@ -346,6 +346,52 @@ def test_fcp_st_trilhas_paralelas_com_deducao():
     assert r.memoria.icms_st_calculado != r.memoria.fcp_st_calculado
 
 
+def test_saida_revenda_cst60_cobrando_st_indevido():
+    """SAÍDA, revenda interna de produto ST com CST 60: vICMSST DEVE ser 0.
+    Emitente destacou R$ 50 → bitributação (ERRO_110), diferença a FAVOR do cliente."""
+    op = Operacao(uf_emit="MG", uf_dest="MG", crt=Crt.NORMAL, data=DATA, saida=True)
+    item = _item(cst="60", csosn=None, mod_bc_st=None, v_icms_st=Decimal("50.00"))
+
+    r = _engine().auditar_item(item, op)
+
+    assert r.status == StatusAuditoria.DIVERGENTE
+    assert "ERRO_110_ST_INDEVIDO_REVENDA" in r.codigos_erro
+    assert r.divergencia_icms_st == Decimal("50.00")     # positivo = pago a maior
+    assert r.memoria.icms_st_calculado == Decimal("0.00")
+
+
+def test_saida_revenda_cst60_sem_st_ok():
+    """SAÍDA CST 60 com vICMSST = 0 (correto): sem novo ST devido → OK."""
+    op = Operacao(uf_emit="MG", uf_dest="MG", crt=Crt.NORMAL, data=DATA, saida=True)
+    item = _item(cst="60", csosn=None, mod_bc_st=None, v_icms_st=Decimal("0"))
+
+    r = _engine().auditar_item(item, op)
+
+    assert r.status == StatusAuditoria.OK
+    assert r.codigos_erro == []
+
+
+def test_saida_substituto_cst10_calcula_igual_a_entrada():
+    """SAÍDA como substituto (CST 10): mesmo cálculo de ST do motor de entradas.
+    SP->MG, MVA 71,78% ajustada, ICMS-ST esperado = 177,50."""
+    engine = StAuditEngine(
+        MvaEmMemoria({("87082919", "0107500", "MG"): "71.78"}),
+        EnquadramentoEmMemoria(), FcpEmMemoria(),
+    )
+    item = ItemFiscal(
+        numero_item=1, ncm="87082919", cest="0107500", cfop="6404", orig="0",
+        cst="10", mod_bc_st=4, v_prod=Decimal("799.40"),
+        v_bc=Decimal("799.40"), v_icms=Decimal("87.76"), p_icms=Decimal("12"),
+        v_bc_st=Decimal("1473.69"), v_icms_st=Decimal("177.50"),
+    )
+    op = Operacao(uf_emit="SP", uf_dest="MG", crt=Crt.NORMAL, data=DATA, saida=True)
+
+    r = engine.auditar_item(item, op)
+
+    assert r.status == StatusAuditoria.OK            # destaque correto
+    assert r.memoria.icms_st_calculado == Decimal("177.50")
+
+
 @pytest.mark.parametrize(
     "inter, intra, espera_ajuste",
     [

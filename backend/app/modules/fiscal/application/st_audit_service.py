@@ -19,8 +19,6 @@ from app.modules.fiscal.domain.st import (
     Crt,
     ItemFiscal,
     Operacao,
-    ResultadoAuditoria,
-    StatusAuditoria,
     StAuditEngine,
 )
 from app.modules.fiscal.domain.st.money import ZERO, centavos
@@ -79,34 +77,24 @@ class StAuditService:
         if not itens_db:
             return []
 
-        if (nota.fluxo or "") == "saida":
-            # Auditoria de SAÍDAS ainda em validação: registra com feedback claro
-            # em vez de engolir o XML (decisão de produto — sem falso "tudo OK").
-            resultados = [
-                ResultadoAuditoria(
-                    numero_item=it.numero_item, status=StatusAuditoria.NAO_AUDITAVEL,
-                    observacao="Auditoria de Saídas em desenvolvimento.",
-                )
-                for it in itens_db
-            ]
-        else:
-            # ADR-0001: agrega o frete dos CT-e vinculados e rateia por item.
-            vinculos = await self.repo.ctes_da_nfe(empresa_id, nota.chave_acesso)
-            rateio = ratear_frete(itens_db, agregar_frete(vinculos))
-            operacao = Operacao(
-                uf_emit=nota.uf_emit or "", uf_dest=nota.uf_dest or "",
-                crt=_crt(nota.crt_emit), data=date.fromisoformat(nota.data_emissao),
-            )
-            itens_fiscais = [_item_fiscal(it, rateio[it.numero_item]) for it in itens_db]
+        # ADR-0001: agrega o frete dos CT-e vinculados e rateia por item.
+        vinculos = await self.repo.ctes_da_nfe(empresa_id, nota.chave_acesso)
+        rateio = ratear_frete(itens_db, agregar_frete(vinculos))
+        operacao = Operacao(
+            uf_emit=nota.uf_emit or "", uf_dest=nota.uf_dest or "",
+            crt=_crt(nota.crt_emit), data=date.fromisoformat(nota.data_emissao),
+            saida=(nota.fluxo == "saida"),   # bifurcação tpNF no motor
+        )
+        itens_fiscais = [_item_fiscal(it, rateio[it.numero_item]) for it in itens_db]
 
-            # Carrega-então-calcula: hidrata os repos sync e roda o motor puro.
-            matrizes = await self.loader.hidratar(itens_fiscais, operacao)
-            engine = StAuditEngine(
-                mva_repo=matrizes.mva,
-                enquadramento_repo=matrizes.enquadramento,
-                fcp_repo=matrizes.fcp,
-            )
-            resultados = engine.auditar_nota(itens_fiscais, operacao)
+        # Carrega-então-calcula: hidrata os repos sync e roda o motor puro.
+        matrizes = await self.loader.hidratar(itens_fiscais, operacao)
+        engine = StAuditEngine(
+            mva_repo=matrizes.mva,
+            enquadramento_repo=matrizes.enquadramento,
+            fcp_repo=matrizes.fcp,
+        )
+        resultados = engine.auditar_nota(itens_fiscais, operacao)
 
         # Idempotente: re-auditar (ex.: CT-e que chegou depois) substitui o anterior.
         await self.session.execute(

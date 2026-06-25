@@ -24,6 +24,9 @@ class Operacao:
     uf_dest: str
     crt: Crt
     data: date
+    # tpNF: 0=entrada (compra) / 1=saída (venda). Bifurca a auditoria — na saída
+    # o cliente é o vendedor (substituto ou revendedor com ST já retido).
+    saida: bool = False
     # indIEDest: 1=contribuinte, 2=isento de IE, 9=não contribuinte. Usado a
     # montante (enquadramento); mantido aqui para roteamento futuro.
     ind_ie_dest: str | None = None
