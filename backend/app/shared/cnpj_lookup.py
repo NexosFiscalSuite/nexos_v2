@@ -61,10 +61,9 @@ def _normalize(data: dict, contexto: str) -> dict:
     if isinstance(atividade, list) and atividade:
         item = atividade[0]
         atividade = (item.get("text") or item.get("descricao") or "") if isinstance(item, dict) else str(item)
-    if not atividade:
-        codigo = re.sub(r"\D", "", str(data.get("cnae_principal") or data.get("cnae_fiscal") or ""))
-        if codigo:
-            atividade = _descricao_cnae(codigo) or f"CNAE {codigo}"
+    cnae_codigo = re.sub(r"\D", "", str(data.get("cnae_principal") or data.get("cnae_fiscal") or ""))
+    if not atividade and cnae_codigo:
+        atividade = _descricao_cnae(cnae_codigo) or f"CNAE {cnae_codigo}"
 
     return {
         "razao_social": data.get("razao_social") or data.get("nome") or "",
@@ -73,6 +72,7 @@ def _normalize(data: dict, contexto: str) -> dict:
         "uf": data.get("uf") or "",
         "municipio": municipio,
         "atividade": atividade,
+        "cnae": cnae_codigo,
         "porte": data.get("porte_empresa") or data.get("porte") or "",
         "regime": _regime(data, contexto),
         "logradouro": data.get("logradouro") or "",
@@ -89,7 +89,7 @@ def consultar_opencnpj(cnpj: str, contexto: str = "empresa") -> dict:
     cnpj_fmt = formatar_cnpj(cnpj_clean)
     empty = {
         "razao_social": "", "nome_fantasia": "", "situacao": "", "uf": "", "municipio": "",
-        "atividade": "", "porte": "", "regime": "", "logradouro": "", "numero": "",
+        "atividade": "", "cnae": "", "porte": "", "regime": "", "logradouro": "", "numero": "",
         "complemento": "", "bairro": "", "cep": "",
     }
     if len(cnpj_clean) != 14:

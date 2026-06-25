@@ -141,6 +141,7 @@ export const api = {
   empresas: () => request('GET', '/empresas'),
   empresa: (id) => request('GET', `/empresas/${id}`),
   criarEmpresa: (data) => request('POST', '/empresas', data),
+  editarEmpresa: (id, data) => request('PATCH', `/empresas/${id}`, data),
 
   // ── Upload assíncrono + Jobs ──
   upload: (empresaId, formData) => form('POST', `/fiscal/empresas/${empresaId}/upload`, formData),

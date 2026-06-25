@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import Dropdown from '../components/Dropdown'
+import EmptyState from '../components/EmptyState'
 import { api } from '../api'
 import { useEmpresa } from '../context/EmpresaContext'
 import { useCompetencia } from '../context/CompetenciaContext'
@@ -84,7 +85,8 @@ export default function Conformidade() {
     return (
       <div>
         <div className="page-header"><h1 className="page-title">Conformidade</h1></div>
-        <div className="empty-state"><i className="ti ti-shield-check" /><p>Selecione uma empresa no topo.</p></div>
+        <EmptyState icon="ti-shield-check" title="Selecione uma empresa no topo"
+          subtitle="Identifique quebras de sequência na numeração das notas, documentos cancelados e numerações inutilizadas importadas na competência." />
       </div>
     )
   }

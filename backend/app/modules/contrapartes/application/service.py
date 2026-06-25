@@ -36,8 +36,8 @@ def classificar_optante(res: dict) -> tuple[str | None, bool]:
     return regime, regime not in _REGIMES_SIMPLES
 _CAMPOS = (
     "razao_social", "nome_fantasia", "situacao", "uf", "municipio", "atividade",
-    "porte", "regime", "inscricao_estadual", "logradouro", "numero", "complemento",
-    "bairro", "cep", "pais",
+    "cnae", "porte", "regime", "inscricao_estadual", "logradouro", "numero",
+    "complemento", "bairro", "cep", "pais",
 )
 
 

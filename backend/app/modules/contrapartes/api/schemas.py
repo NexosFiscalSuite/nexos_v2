@@ -12,6 +12,7 @@ class ContraparteBase(BaseModel):
     uf: str | None = None
     municipio: str | None = None
     atividade: str | None = None
+    cnae: str | None = None
     porte: str | None = None
     regime: str | None = None
     inscricao_estadual: str | None = None

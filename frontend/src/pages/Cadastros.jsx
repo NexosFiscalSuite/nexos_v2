@@ -8,15 +8,17 @@ const TIPOS = [
   { value: 'cliente', label: 'Clientes', icon: 'ti-users' },
   { value: 'fornecedor', label: 'Fornecedores', icon: 'ti-truck-delivery' },
 ]
+// Para terceiros (cliente/fornecedor) só importa: é Simples ou é Normal? Real e
+// Presumido têm o mesmo cálculo de ICMS, então agrupam em "Regime Normal".
 const REGIME_OPTS = [
   { value: 'Simples Nacional', label: 'Simples Nacional' },
   { value: 'MEI', label: 'MEI' },
-  { value: 'Lucro Presumido', label: 'Lucro Presumido' },
-  { value: 'Lucro Real', label: 'Lucro Real' },
+  { value: 'Normal', label: 'Regime Normal' },
 ]
 const VAZIO = {
   cnpj: '', razao_social: '', nome_fantasia: '', situacao: '', uf: '', municipio: '',
-  atividade: '', porte: '', regime: '', inscricao_estadual: '',
+  atividade: '', cnae: '', porte: '', regime: 'Normal', inscricao_estadual: '',
+  cep: '', logradouro: '', numero: '', bairro: '',
 }
 
 export default function Cadastros() {
@@ -51,9 +53,10 @@ export default function Cadastros() {
   async function puxarCNPJ() {
     setLooking(true)
     try {
-      const r = await api.consultarCNPJ(form.cnpj, 'empresa')
+      // contexto 'contraparte': se não for Simples, o backend já devolve "Normal".
+      const r = await api.consultarCNPJ(form.cnpj, 'contraparte')
       if (!r.ok) { toast(r.error || 'CNPJ não encontrado.', 'error'); return }
-      setForm(f => ({ ...f, ...r.dados }))
+      setForm(f => ({ ...f, ...r.dados, regime: r.dados.regime || 'Normal' }))
       toast('Dados preenchidos pela Receita.', 'ok')
     } catch (e) { toast(e.message, 'error') }
     finally { setLooking(false) }
@@ -187,7 +190,18 @@ export default function Cadastros() {
                     <Dropdown value={form.regime || ''} onChange={v => setForm(f => ({ ...f, regime: v }))} options={REGIME_OPTS} placeholder="Selecione…" />
                   </div>
                 </div>
-                <div className="field"><label>Atividade</label><input value={form.atividade || ''} onChange={set('atividade')} /></div>
+                <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 14 }}>
+                  <div className="field"><label>CNAE</label><input value={form.cnae || ''} onChange={set('cnae')} placeholder="0000000" /></div>
+                  <div className="field"><label>Atividade</label><input value={form.atividade || ''} onChange={set('atividade')} /></div>
+                </div>
+
+                <div className="section-label" style={{ marginTop: 8 }}>Endereço</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr 100px', gap: 14 }}>
+                  <div className="field"><label>CEP</label><input value={form.cep || ''} onChange={set('cep')} placeholder="00000-000" /></div>
+                  <div className="field"><label>Logradouro</label><input value={form.logradouro || ''} onChange={set('logradouro')} /></div>
+                  <div className="field"><label>Número</label><input value={form.numero || ''} onChange={set('numero')} /></div>
+                </div>
+                <div className="field"><label>Bairro</label><input value={form.bairro || ''} onChange={set('bairro')} /></div>
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-ghost" onClick={() => setModal(false)}>Cancelar</button>

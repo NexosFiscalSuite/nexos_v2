@@ -40,6 +40,7 @@ class Contraparte(Base):
     uf: Mapped[str | None] = mapped_column(String(2), nullable=True)
     municipio: Mapped[str | None] = mapped_column(String(120), nullable=True)
     atividade: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    cnae: Mapped[str | None] = mapped_column(String(20), nullable=True)
     porte: Mapped[str | None] = mapped_column(String(40), nullable=True)
     regime: Mapped[str | None] = mapped_column(String(40), nullable=True)
     inscricao_estadual: Mapped[str | None] = mapped_column(String(30), nullable=True)

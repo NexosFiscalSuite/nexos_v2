@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import Dropdown from '../components/Dropdown'
+import EmptyState from '../components/EmptyState'
 import { api } from '../api'
 import { useToast, ToastContainer } from '../hooks/useToast'
 
@@ -63,7 +64,9 @@ export default function CfopRegras() {
       {loading ? (
         <div className="center-loader"><div className="spinner" /></div>
       ) : lista.length === 0 ? (
-        <div className="empty-state"><i className="ti ti-arrows-exchange" /><p>Nenhuma regra cadastrada. Crie a primeira para automatizar a classificação.</p></div>
+        <EmptyState icon="ti-arrows-exchange" title="Nenhuma regra De/Para cadastrada"
+          subtitle="Defina o Tipo de Item por CFOP para que o Nexos classifique automaticamente cada item na importação das notas de entrada — sem trabalho manual."
+          actionLabel="Nova regra" onAction={novo} />
       ) : (
         <div className="card" style={{ padding: 0 }}>
           <div className="tbl-wrap">

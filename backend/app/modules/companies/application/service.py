@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ConflictError, PermissionDeniedError
+from app.core.exceptions import ConflictError, NotFoundError, PermissionDeniedError
 from app.core.security import TokenClaims
 from app.modules.companies.infrastructure.models import Empresa
 from app.modules.companies.infrastructure.repositories import EmpresaRepository
@@ -45,6 +45,11 @@ class EmpresaService:
                 raise PermissionDeniedError("Você não tem acesso a esta empresa.")
         return empresa
 
+    _CAMPOS = (
+        "nome_fantasia", "regime", "uf", "municipio", "inscricao_estadual",
+        "cnae", "cep", "logradouro", "numero", "bairro",
+    )
+
     async def create(self, *, tenant_id: UUID, cnpj: str, razao_social: str, **extra) -> Empresa:
         cnpj_vo = CNPJ(cnpj)
         if await self.repo.by_cnpj(tenant_id, cnpj_vo.value):
@@ -54,12 +59,21 @@ class EmpresaService:
             tenant_id=tenant_id,
             cnpj=cnpj_vo.value,
             razao_social=razao_social.strip(),
-            nome_fantasia=extra.get("nome_fantasia"),
-            regime=extra.get("regime"),
-            uf=extra.get("uf"),
-            municipio=extra.get("municipio"),
-            inscricao_estadual=extra.get("inscricao_estadual"),
+            **{c: extra.get(c) for c in self._CAMPOS},
         )
         self.repo.add(empresa)
+        await self.session.flush()
+        return empresa
+
+    async def update(self, claims: TokenClaims, empresa_id: UUID, fields: dict) -> Empresa:
+        """Edição (respeita o acesso por grupo). CNPJ é imutável."""
+        empresa = await self.get_for(claims, empresa_id)
+        if empresa is None:
+            raise NotFoundError("Empresa não encontrada.")
+        if fields.get("razao_social"):
+            empresa.razao_social = fields["razao_social"].strip()
+        for campo in self._CAMPOS:
+            if campo in fields:
+                setattr(empresa, campo, fields[campo])
         await self.session.flush()
         return empresa

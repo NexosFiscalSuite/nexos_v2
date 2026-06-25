@@ -26,12 +26,14 @@ const PAGE_TITLES = {
 const NAV = [
   { to:'/dashboard', icon:'ti-layout-dashboard', label:'Dashboard' },
   { to:'/upload',    icon:'ti-cloud-upload',      label:'Upload' },
-  { to:'/notas',     icon:'ti-file-invoice',      label:'Notas' },
+  { to:'/documentos', icon:'ti-folders', label:'Documentos Fiscais', subItems: [
+    { to:'/notas',       icon:'ti-file-invoice',    label:'Notas' },
+    { to:'/relatorios',  icon:'ti-report',          label:'Relatórios' },
+    { to:'/cfop-regras', icon:'ti-arrows-exchange', label:'De/Para CFOP' },
+  ] },
   { to:'/conformidade', icon:'ti-shield-check',   label:'Conformidade' },
   { to:'/divergencias-st', icon:'ti-alert-triangle', label:'Divergências ST' },
-  { to:'/relatorios', icon:'ti-report',           label:'Relatórios' },
   { to:'/cadastros', icon:'ti-address-book',      label:'Cadastros' },
-  { to:'/cfop-regras', icon:'ti-arrows-exchange', label:'De/Para CFOP' },
 ]
 const ADMIN_NAV = [
   { to:'/empresas', icon:'ti-building-store', label:'Empresas' },
@@ -42,7 +44,9 @@ const ADMIN_NAV = [
 
 function NavItem({ to, icon, label, collapsed, subItems, badge }) {
   const location = useLocation()
-  const isActive = location.pathname === to || location.pathname.startsWith(to + '/')
+  const matches = (p) => location.pathname === p || location.pathname.startsWith(p + '/')
+  // No accordion, o pai fica ativo (e aberto) quando um dos filhos é a rota atual.
+  const isActive = subItems?.length ? subItems.some(s => matches(s.to)) : matches(to)
   const [open, setOpen] = useState(isActive)
 
   // Ponto de notificação (ex.: quebras de sequência pendentes) — sobre o ícone

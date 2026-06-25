@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import Dropdown from '../components/Dropdown'
+import EmptyState from '../components/EmptyState'
 import { api, saveBlob } from '../api'
 import { useEmpresa } from '../context/EmpresaContext'
 import { useCompetencia } from '../context/CompetenciaContext'
@@ -139,8 +140,11 @@ export default function Relatorios() {
       </div>
 
       {loading ? <div className="center-loader"><div className="spinner" /></div>
-        : modelos.length === 0 ? <div className="empty-state"><i className="ti ti-report" /><p>Nenhum modelo. Crie um para gerar planilhas.</p></div>
-          : (
+        : modelos.length === 0 ? (
+          <EmptyState icon="ti-report" title="Nenhum modelo de relatório"
+            subtitle="Monte modelos com as colunas que o seu escritório precisa e gere planilhas (Excel/CSV) das notas da competência em um clique."
+            actionLabel="Novo modelo" onAction={abrirNovo} />
+        ) : (
             <div className="stat-grid">
               {modelos.map(m => {
                 const c = m.config || {}

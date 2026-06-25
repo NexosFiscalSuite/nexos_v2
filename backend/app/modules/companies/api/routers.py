@@ -9,7 +9,11 @@ from app.core.rbac import Role, require_role
 from app.core.rls import tenant_session
 from app.core.security import TokenClaims, get_current_claims
 from app.modules.audit.application.service import AuditService
-from app.modules.companies.api.schemas import EmpresaCreate, EmpresaResponse
+from app.modules.companies.api.schemas import (
+    EmpresaCreate,
+    EmpresaResponse,
+    EmpresaUpdate,
+)
 from app.modules.companies.application.service import EmpresaService
 
 router = APIRouter(prefix="/empresas", tags=["Empresas"])
@@ -42,18 +46,30 @@ async def create_empresa(
     session: AsyncSession = Depends(tenant_session),
 ):
     empresa = await EmpresaService(session).create(
-        tenant_id=claims.tid,
-        cnpj=body.cnpj,
-        razao_social=body.razao_social,
-        nome_fantasia=body.nome_fantasia,
-        regime=body.regime,
-        uf=body.uf,
-        municipio=body.municipio,
-        inscricao_estadual=body.inscricao_estadual,
+        tenant_id=claims.tid, cnpj=body.cnpj, razao_social=body.razao_social,
+        **body.model_dump(exclude={"cnpj", "razao_social"}),
     )
     await AuditService(session).registrar(
         tenant_id=claims.tid, user_id=claims.sub, acao="empresa.criar",
         entidade="empresa", entidade_id=str(empresa.id),
         detalhe={"cnpj": empresa.cnpj, "razao_social": empresa.razao_social},
+    )
+    return empresa
+
+
+@router.patch("/{empresa_id}", response_model=EmpresaResponse)
+async def update_empresa(
+    empresa_id: UUID,
+    body: EmpresaUpdate,
+    claims: TokenClaims = Depends(require_role(Role.SUPERVISOR)),
+    session: AsyncSession = Depends(tenant_session),
+):
+    empresa = await EmpresaService(session).update(
+        claims, empresa_id, body.model_dump(exclude_unset=True)
+    )
+    await AuditService(session).registrar(
+        tenant_id=claims.tid, user_id=claims.sub, acao="empresa.editar",
+        entidade="empresa", entidade_id=str(empresa.id),
+        detalhe={"cnpj": empresa.cnpj},
     )
     return empresa

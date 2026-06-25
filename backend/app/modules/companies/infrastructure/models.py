@@ -23,6 +23,11 @@ class Empresa(Base):
     uf: Mapped[str | None] = mapped_column(String(2), nullable=True)
     municipio: Mapped[str | None] = mapped_column(String(120), nullable=True)
     inscricao_estadual: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    cnae: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    cep: Mapped[str | None] = mapped_column(String(9), nullable=True)
+    logradouro: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    numero: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    bairro: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
