@@ -152,6 +152,22 @@ export const api = {
   editarMatrizMva: (id, data) => request('PATCH', `/matrizes/mva/${id}`, data),
   removerMatrizMva: (id) => request('DELETE', `/matrizes/mva/${id}`),
 
+  matrizesEnquadramento: (params = {}) => {
+    const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
+    return request('GET', '/matrizes/enquadramento' + (q ? `?${q}` : ''))
+  },
+  criarMatrizEnquadramento: (data) => request('POST', '/matrizes/enquadramento', data),
+  editarMatrizEnquadramento: (id, data) => request('PATCH', `/matrizes/enquadramento/${id}`, data),
+  removerMatrizEnquadramento: (id) => request('DELETE', `/matrizes/enquadramento/${id}`),
+
+  matrizesFcp: (params = {}) => {
+    const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
+    return request('GET', '/matrizes/fcp' + (q ? `?${q}` : ''))
+  },
+  criarMatrizFcp: (data) => request('POST', '/matrizes/fcp', data),
+  editarMatrizFcp: (id, data) => request('PATCH', `/matrizes/fcp/${id}`, data),
+  removerMatrizFcp: (id) => request('DELETE', `/matrizes/fcp/${id}`),
+
   // ── Upload assíncrono + Jobs ──
   upload: (empresaId, formData) => form('POST', `/fiscal/empresas/${empresaId}/upload`, formData),
   job: (id) => request('GET', `/jobs/${id}`),
