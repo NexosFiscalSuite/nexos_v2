@@ -1,5 +1,6 @@
 """Instância do Celery. Broker e backend = Redis (configuráveis)."""
 from celery import Celery
+from celery.schedules import crontab
 
 from app.core.config import get_settings
 
@@ -12,10 +13,21 @@ celery_app = Celery(
     # Módulos com @celery_app.task — importados no boot do worker.
     include=[
         "app.modules.fiscal.workers",
+        "app.modules.fiscal.crawlers.workers",
         "app.modules.reporting.workers",
         "app.modules.contrapartes.workers",
     ],
 )
+
+# Agenda (Celery beat). Roda no worker com -B (ver docker-compose).
+celery_app.conf.beat_schedule = {
+    # Auto-alimentação das matrizes: relação NCM×CEST do CONFAZ, todo dia 1º 04h UTC.
+    "sync-cest-confaz-mensal": {
+        "task": "fiscal.sync_cest_confaz",
+        "schedule": crontab(day_of_month=1, hour=4, minute=0),
+        "args": (settings.crawler_uf_alvo,),
+    },
+}
 
 celery_app.conf.update(
     task_serializer="json",

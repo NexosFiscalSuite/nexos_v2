@@ -84,7 +84,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
-    command: celery -A app.core.celery_app:celery_app worker --loglevel=info --queues nexos
+    # -B = beat embutido (agenda os crawlers). OK p/ 1 worker; em HA, separar o beat.
+    command: celery -A app.core.celery_app:celery_app worker --beat --loglevel=info --queues nexos
 
 volumes:
   pgdata:

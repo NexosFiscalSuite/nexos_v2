@@ -16,6 +16,25 @@ function corDiferenca(v) {
   return 'var(--text-3)'
 }
 
+// Selo de AÇÃO: traduz o código de erro na conduta do analista (bater o olho).
+//  • Antecipação devida (laranja) → recolher guia local (responsabilidade nossa).
+//  • Erro do fornecedor / emissão (vermelho) → cobrar correção de quem emitiu.
+//  • A favor do cliente (azul) → ST paga a maior, pleitear estorno.
+function seloAcao(item) {
+  if (item.status === 'NAO_AUDITAVEL')
+    return { txt: 'Não auditável', cls: 'badge-neutral', icon: 'ti-help-circle' }
+  const cod = item.codigo_erro || ''
+  if (cod.includes('ERRO_111'))
+    return { txt: 'Antecipação devida', cls: 'badge-warn', icon: 'ti-clock-dollar' }
+  if (cod.includes('ERRO_110'))
+    return { txt: 'A favor do cliente', cls: 'badge-info', icon: 'ti-arrow-back-up' }
+  if (item.status === 'DIVERGENTE')
+    return item.fluxo === 'saida'
+      ? { txt: 'Erro de emissão', cls: 'badge-error', icon: 'ti-alert-triangle' }
+      : { txt: 'Erro do fornecedor', cls: 'badge-error', icon: 'ti-alert-triangle' }
+  return null
+}
+
 // ── Lógica de agrupamento: itens planos → notas (master) com seus itens (detail) ──
 function agruparPorNota(itens) {
   const mapa = new Map()
@@ -179,12 +198,19 @@ function FragmentoNota({ nota, aberto, onToggle, onMemoria }) {
         </tr>
       )}
 
-      {aberto && nota.itens.map(it => (
+      {aberto && nota.itens.map(it => {
+        const selo = seloAcao(it)
+        return (
         <tr key={it.numero_item} style={{ background: 'var(--surface)' }}>
           <td />
           <td style={{ paddingLeft: 28 }}>
             <span className="mono">Item {it.numero_item}</span>
             <span style={{ fontSize: 11, color: 'var(--text-4)', marginLeft: 8 }}>CST {it.cst_csosn || '—'} · modBCST {it.mod_bc_st ?? '—'}</span>
+            {selo && (
+              <span className={`badge ${selo.cls}`} style={{ fontSize: 10, marginLeft: 8 }}>
+                <i className={`ti ${selo.icon}`} style={{ marginRight: 3 }} />{selo.txt}
+              </span>
+            )}
             {it.status === 'NAO_AUDITAVEL' && it.observacao && (
               <div style={{ fontSize: 11, color: 'var(--warn-text)' }}><i className="ti ti-alert-circle" style={{ marginRight: 4 }} />{it.observacao}</div>
             )}
@@ -195,12 +221,11 @@ function FragmentoNota({ nota, aberto, onToggle, onMemoria }) {
           <td className="mono" style={{ textAlign: 'right' }}>{brl(it.vicms_st_calculado)}</td>
           <td className="mono" style={{ textAlign: 'right', fontWeight: 500, color: corDiferenca(it.diferenca) }}>{brl(it.diferenca)}</td>
           <td style={{ textAlign: 'center' }}>
-            {it.memoria
-              ? <button className="btn btn-icon" title="Memória de cálculo" onClick={() => onMemoria(it)}><i className="ti ti-calculator" /></button>
-              : <span className="badge badge-warn" style={{ fontSize: 10 }}>não auditado</span>}
+            {it.memoria && <button className="btn btn-icon" title="Memória de cálculo" onClick={() => onMemoria(it)}><i className="ti ti-calculator" /></button>}
           </td>
         </tr>
-      ))}
+        )
+      })}
     </>
   )
 }

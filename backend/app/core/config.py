@@ -51,6 +51,10 @@ class Settings(BaseSettings):
     s3_secret_key: str = "nexos12345"
     s3_region: str = "us-east-1"
 
+    # Crawlers de auto-alimentação (CONFAZ/SEFAZ) -----------------------------
+    # UF do nicho do escritório alvo do upsert das matrizes (job agendado).
+    crawler_uf_alvo: str = "MG"
+
     # CORS --------------------------------------------------------------------
     cors_origins: str = ""
 

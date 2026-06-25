@@ -33,3 +33,13 @@ async def worker_tenant_session(tenant_id: UUID) -> AsyncIterator[AsyncSession]:
         async with session.begin():
             await session.execute(_SET_TENANT, {"tid": str(tenant_id)})
             yield session
+
+
+@asynccontextmanager
+async def worker_global_session() -> AsyncIterator[AsyncSession]:
+    """Sessão SEM tenant para dados de REFERÊNCIA globais — as matrizes fiscais
+    (sem RLS). Mesma role nexos_app, que tem DML nas matrizes (migration 0015).
+    Usada pelos crawlers de auto-alimentação (CONFAZ/SEFAZ)."""
+    async with _WorkerSession() as session:
+        async with session.begin():
+            yield session
