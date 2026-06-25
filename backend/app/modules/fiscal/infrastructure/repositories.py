@@ -5,6 +5,7 @@ from uuid import UUID
 
 from sqlalchemy import BigInteger, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.modules.fiscal.infrastructure.models import (
     NfeCteVinculo,
@@ -108,12 +109,59 @@ class NotaRepository:
             .limit(page_size)
             .offset((page - 1) * page_size)
         )
-        return {
-            "total": total or 0,
-            "page": page,
-            "page_size": page_size,
-            "notas": list(res.scalars().all()),
-        }
+        notas = list(res.scalars().all())
+        # Marca quais NF-e têm CT-e vinculado (badge 🚚 na listagem — ADR-0001).
+        chaves = [n.chave_acesso for n in notas if n.tipo in ("NFe", "NFCe")]
+        com_cte: set[str] = set()
+        if chaves:
+            vinc = await self.session.execute(
+                select(NfeCteVinculo.chave_nfe)
+                .where(NfeCteVinculo.empresa_id == empresa_id, NfeCteVinculo.chave_nfe.in_(chaves))
+                .distinct()
+            )
+            com_cte = {c for (c,) in vinc.all()}
+        for n in notas:
+            n.tem_cte = n.chave_acesso in com_cte
+        return {"total": total or 0, "page": page, "page_size": page_size, "notas": notas}
+
+    async def vinculos_da_nota(self, nota: Nota) -> dict:
+        """Detalhe (ADR-0001): se NF-e → CT-e vinculados (transportador + frete);
+        se CT-e → NF-e transportadas. Cada vínculo traz o nota_id (se importado)
+        para o front abrir o documento."""
+        emp = nota.empresa_id
+        if nota.tipo in ("NFe", "NFCe"):
+            cte = aliased(Nota)
+            rows = await self.session.execute(
+                select(
+                    NfeCteVinculo.chave_cte, NfeCteVinculo.vtprest,
+                    cte.id, cte.nome_emit, cte.numero,
+                )
+                .outerjoin(
+                    cte, (cte.chave_acesso == NfeCteVinculo.chave_cte) & (cte.empresa_id == emp)
+                )
+                .where(NfeCteVinculo.empresa_id == emp, NfeCteVinculo.chave_nfe == nota.chave_acesso)
+            )
+            ctes = [
+                {"chave_cte": ch, "vtprest": vt, "nota_id": nid,
+                 "transportador": nm, "numero": num}
+                for ch, vt, nid, nm, num in rows.all()
+            ]
+            return {"ctes_vinculados": ctes, "nfes_transportadas": []}
+        if nota.tipo == "CTe":
+            nfe = aliased(Nota)
+            rows = await self.session.execute(
+                select(NfeCteVinculo.chave_nfe, nfe.id, nfe.nome_emit, nfe.numero)
+                .outerjoin(
+                    nfe, (nfe.chave_acesso == NfeCteVinculo.chave_nfe) & (nfe.empresa_id == emp)
+                )
+                .where(NfeCteVinculo.empresa_id == emp, NfeCteVinculo.chave_cte == nota.chave_acesso)
+            )
+            nfes = [
+                {"chave_nfe": ch, "nota_id": nid, "fornecedor": nm, "numero": num}
+                for ch, nid, nm, num in rows.all()
+            ]
+            return {"ctes_vinculados": [], "nfes_transportadas": nfes}
+        return {"ctes_vinculados": [], "nfes_transportadas": []}
 
     def add(self, nota: Nota) -> None:
         self.session.add(nota)

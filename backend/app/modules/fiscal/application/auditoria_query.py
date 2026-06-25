@@ -20,6 +20,7 @@ async def listar_divergencias(
     session: AsyncSession,
     *,
     empresa_id: UUID,
+    fluxo: str | None = None,
     data_inicio: str | None = None,
     data_fim: str | None = None,
     cnpj: str | None = None,
@@ -28,6 +29,8 @@ async def listar_divergencias(
 ) -> dict:
     a, n = AuditoriaIcmsSt, Nota
     where = [a.empresa_id == empresa_id, a.status != "OK"]   # DIVERGENTE + NAO_AUDITAVEL
+    if fluxo:   # abas Entradas (tpNF=0) × Saídas (tpNF=1)
+        where.append(n.fluxo == fluxo)
     # data_emissao é 'YYYY-MM-DD' (ISO): comparação lexicográfica = cronológica.
     if data_inicio:
         where.append(n.data_emissao >= data_inicio)

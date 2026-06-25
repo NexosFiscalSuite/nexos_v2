@@ -15,19 +15,21 @@ router = APIRouter(prefix="/auditoria/st", tags=["Auditoria ST"])
 @router.get("/divergencias", response_model=DivergenciasStResponse)
 async def divergencias(
     empresa_id: UUID = Query(..., description="Empresa (cliente) auditada"),
+    fluxo: str | None = Query(default=None, description="entrada (tpNF=0) | saida (tpNF=1)"),
     data_inicio: str | None = Query(default=None, description="Emissão >= AAAA-MM-DD"),
     data_fim: str | None = Query(default=None, description="Emissão <= AAAA-MM-DD"),
     cnpj: str | None = Query(default=None, description="CNPJ do fornecedor (emitente)"),
     page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=50, ge=1, le=200),
+    page_size: int = Query(default=200, ge=1, le=500),
     claims: TokenClaims = Depends(get_current_claims),
     session: AsyncSession = Depends(tenant_session),
 ):
-    """Itens com ICMS-ST divergente: declarado no XML × calculado pelo motor, o
-    rombo fiscal e a memória de cálculo (JSON) para o modal de explicação."""
+    """Itens com ICMS-ST divergente ou não auditável: declarado × calculado, a
+    diferença e a memória de cálculo (JSON) para o modal de explicação."""
     return await listar_divergencias(
         session,
         empresa_id=empresa_id,
+        fluxo=fluxo,
         data_inicio=data_inicio,
         data_fim=data_fim,
         cnpj=cnpj,

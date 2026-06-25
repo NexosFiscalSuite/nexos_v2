@@ -43,6 +43,7 @@ export default function DivergenciasST() {
   const { ano, mes } = useCompetencia()
   const { toasts, toast } = useToast()
 
+  const [tab, setTab] = useState('entrada')   // Entradas (tpNF=0) × Saídas (tpNF=1)
   const [data, setData] = useState({ total: 0, itens: [] })
   const [loading, setLoading] = useState(false)
   const [expandido, setExpandido] = useState(() => new Set())
@@ -53,15 +54,15 @@ export default function DivergenciasST() {
     setLoading(true)
     try {
       setData(await api.stDivergencias(selectedEmpresa.id, {
-        data_inicio: `${ano}-${mes}-01`, data_fim: `${ano}-${mes}-31`, page_size: PAGE_SIZE,
+        fluxo: tab, data_inicio: `${ano}-${mes}-01`, data_fim: `${ano}-${mes}-31`, page_size: PAGE_SIZE,
       }))
     } catch (e) {
       toast(e.message, 'error'); setData({ total: 0, itens: [] })
     } finally { setLoading(false) }
-  }, [selectedEmpresa, ano, mes])
+  }, [selectedEmpresa, ano, mes, tab])
 
   useEffect(() => { carregar() }, [carregar])
-  useEffect(() => { setExpandido(new Set()) }, [selectedEmpresa, ano, mes])
+  useEffect(() => { setExpandido(new Set()) }, [selectedEmpresa, ano, mes, tab])
 
   const notas = useMemo(() => agruparPorNota(data.itens), [data.itens])
   const toggle = (chave) => setExpandido(prev => {
@@ -85,6 +86,16 @@ export default function DivergenciasST() {
           <h1 className="page-title">Divergências de ICMS-ST</h1>
           <p className="page-breadcrumb">{selectedEmpresa.razao_social} · {mes}/{ano} · {notas.length} nota(s) · {data.total} item(ns)</p>
         </div>
+      </div>
+
+      {/* Abas: o risco fiscal da Entrada (erro de terceiro) ≠ da Saída (erro próprio) */}
+      <div style={{ display: 'inline-flex', background: 'var(--surface-2)', borderRadius: 'var(--radius)', padding: 3, marginBottom: 16 }}>
+        {[['entrada', 'Entradas', 'ti-arrow-down-left'], ['saida', 'Saídas', 'ti-arrow-up-right']].map(([v, label, icon]) => (
+          <button key={v} onClick={() => setTab(v)} className="btn btn-sm"
+            style={{ border: 'none', background: tab === v ? 'var(--surface)' : 'transparent', color: tab === v ? 'var(--text-1)' : 'var(--text-3)', boxShadow: tab === v ? 'var(--shadow-sm)' : 'none' }}>
+            <i className={`ti ${icon}`} /> {label}
+          </button>
+        ))}
       </div>
 
       {loading ? (

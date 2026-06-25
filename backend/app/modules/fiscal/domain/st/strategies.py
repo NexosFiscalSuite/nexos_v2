@@ -88,12 +88,18 @@ def calcular_deducao(
 ) -> ResultadoDeducao:
     """Dedução do imposto próprio (Seção 6 do CALC_ICMS_ST).
 
+    - SAÍDA (tpNF=1): deduz ESTRITAMENTE o vICMS que a própria empresa destacou
+      no item (é o ICMS dela na venda) — sem recálculo teórico/trava de zero.
     - CST 30: própria isenta → dedução zero (legítima).
-    - Simples (CRT 1/4): dedução TEÓRICA = base × alíquota da operação.
-    - Normal (CRT 2/3): deduz o vICMS REAL do XML; mas se CST 10/70 vier com
-      vICMS/vBC zerados (erro do emissor), não deduz o zero — recalcula o
-      próprio esperado e marca ERRO_107 (trava de causa-raiz da Seção 6.1).
+    - Simples (CRT 1/4) na ENTRADA: dedução TEÓRICA = base × alíquota da operação.
+    - Normal na ENTRADA: deduz o vICMS REAL do fornecedor; mas se CST 10/70 vier
+      com vICMS/vBC zerados (erro do emissor), recalcula o próprio esperado e
+      marca ERRO_107 (trava de causa-raiz da Seção 6.1 — só faz sentido na compra).
     """
+    if operacao.saida:
+        # Na venda, o vICMS do item é o destaque do próprio cliente: usar exato.
+        return ResultadoDeducao(item.v_icms, "real")
+
     if item.cst == "30":
         return ResultadoDeducao(ZERO, "zero")
 
@@ -101,7 +107,7 @@ def calcular_deducao(
         teorica = aplicar_percentual(_base_proprio(item), alq_operacao)
         return ResultadoDeducao(teorica, "teorica")
 
-    # Regime normal — trava do próprio zerado por erro de emissão.
+    # Regime normal (entrada) — trava do próprio zerado por erro do fornecedor.
     if item.cst in ("10", "70") and (item.v_icms == ZERO or item.v_bc == ZERO):
         base = _base_proprio(item) * fator_reducao(item.p_red_bc) if item.cst == "70" \
             else _base_proprio(item)

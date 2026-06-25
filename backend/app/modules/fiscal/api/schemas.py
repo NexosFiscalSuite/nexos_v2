@@ -55,6 +55,7 @@ class NotaResponse(BaseModel):
     competencia: str | None = None
     iss_retido: int | None = None
     tem_correcao: bool = False
+    tem_cte: bool = False          # tem CT-e vinculado (badge 🚚) — ADR-0001
     tipo_nota: str | None = None
     status: str
     created_at: datetime | None = None
@@ -62,8 +63,25 @@ class NotaResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class CteVinculadoResponse(BaseModel):
+    chave_cte: str
+    transportador: str | None = None
+    vtprest: float = 0
+    numero: str | None = None
+    nota_id: UUID | None = None
+
+
+class NfeTransportadaResponse(BaseModel):
+    chave_nfe: str
+    fornecedor: str | None = None
+    numero: str | None = None
+    nota_id: UUID | None = None
+
+
 class NotaDetailResponse(NotaResponse):
     itens: list[NotaItemResponse] = []
+    ctes_vinculados: list[CteVinculadoResponse] = []        # quando a nota é NF-e
+    nfes_transportadas: list[NfeTransportadaResponse] = []  # quando a nota é CT-e
 
 
 class NotaListResponse(BaseModel):

@@ -279,7 +279,7 @@ export default function Notas() {
                         <td onClick={click} style={{ cursor: 'pointer', textTransform: 'capitalize', ...txt }}><i className={`ti ${FLUXO_ICON[n.fluxo] || 'ti-file'}`} style={{ marginRight: 6 }} />{n.fluxo}</td>
                         <td onClick={click} style={{ cursor: 'pointer', ...txt }}>{n.modelo}</td>
                         <td onClick={click} className="mono" style={{ cursor: 'pointer', ...txt }}>
-                          {n.numero}{n.tem_correcao && <i className="ti ti-writing" title="CC-e emitida" style={{ marginLeft: 6, color: 'var(--info-text)' }} />}
+                          {n.numero}{n.tem_correcao && <i className="ti ti-writing" title="CC-e emitida" style={{ marginLeft: 6, color: 'var(--info-text)' }} />}{n.tem_cte && <i className="ti ti-truck" title="Possui CT-e vinculado" style={{ marginLeft: 6, color: 'var(--info-text)' }} />}
                         </td>
                         <td onClick={click} className="mono" style={{ cursor: 'pointer', ...txt }}>{n.serie || '—'}</td>
                         <td onClick={click} style={{ maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer', ...txt }}>{contra || '—'}</td>
@@ -433,6 +433,48 @@ export default function Notas() {
                   </tbody>
                 </table>
               </div>
+
+              {/* ADR-0001: CT-es vinculados (se NF-e) / NF-es transportadas (se CT-e) */}
+              {detalhe.ctes_vinculados?.length > 0 && (
+                <>
+                  <div className="section-label" style={{ marginTop: 18 }}><i className="ti ti-truck" /> CT-es Vinculados ({detalhe.ctes_vinculados.length})</div>
+                  <div className="tbl-wrap">
+                    <table className="table" style={{ minWidth: 640 }}>
+                      <thead><tr><th>Chave</th><th>Transportador</th><th style={{ textAlign: 'right' }}>Frete (vTPrest)</th><th style={{ width: 40 }} /></tr></thead>
+                      <tbody>
+                        {detalhe.ctes_vinculados.map(c => (
+                          <tr key={c.chave_cte}>
+                            <td className="mono" style={{ fontSize: 11 }}>{c.chave_cte}</td>
+                            <td>{c.transportador || '—'}</td>
+                            <td className="mono" style={{ textAlign: 'right' }}>{brl(c.vtprest)}</td>
+                            <td>{c.nota_id && <button type="button" className="btn btn-icon" title="Abrir CT-e" onClick={() => abrir(c.nota_id)}><i className="ti ti-external-link" /></button>}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+              {detalhe.nfes_transportadas?.length > 0 && (
+                <>
+                  <div className="section-label" style={{ marginTop: 18 }}><i className="ti ti-file-invoice" /> NF-es Transportadas ({detalhe.nfes_transportadas.length})</div>
+                  <div className="tbl-wrap">
+                    <table className="table" style={{ minWidth: 640 }}>
+                      <thead><tr><th>Chave</th><th>Fornecedor</th><th>NF-e</th><th style={{ width: 40 }} /></tr></thead>
+                      <tbody>
+                        {detalhe.nfes_transportadas.map(nf => (
+                          <tr key={nf.chave_nfe}>
+                            <td className="mono" style={{ fontSize: 11 }}>{nf.chave_nfe}</td>
+                            <td>{nf.fornecedor || '—'}</td>
+                            <td className="mono">{nf.numero || '—'}</td>
+                            <td>{nf.nota_id && <button type="button" className="btn btn-icon" title="Abrir NF-e" onClick={() => abrir(nf.nota_id)}><i className="ti ti-external-link" /></button>}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
             </div>
             <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', gap: 8 }}>

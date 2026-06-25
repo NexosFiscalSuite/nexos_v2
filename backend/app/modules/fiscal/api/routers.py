@@ -20,7 +20,9 @@ from app.modules.fiscal.api.schemas import (
     BulkIds,
     BulkResult,
     BulkTipoNota,
+    CteVinculadoResponse,
     ItemUpdate,
+    NfeTransportadaResponse,
     NotaDetailResponse,
     NotaItemResponse,
     NotaListResponse,
@@ -40,9 +42,12 @@ from app.shared.danfe_api import gerar_danfe
 router = APIRouter(prefix="/fiscal", tags=["Fiscal"])
 
 
-def _detail(nota: Nota, itens: list[NotaItem]) -> NotaDetailResponse:
+def _detail(nota: Nota, itens: list[NotaItem], vinculos: dict | None = None) -> NotaDetailResponse:
     d = NotaDetailResponse.model_validate(nota)
     d.itens = [NotaItemResponse.model_validate(i) for i in itens]
+    if vinculos:
+        d.ctes_vinculados = [CteVinculadoResponse(**c) for c in vinculos["ctes_vinculados"]]
+        d.nfes_transportadas = [NfeTransportadaResponse(**n) for n in vinculos["nfes_transportadas"]]
     return d
 
 
@@ -237,7 +242,8 @@ async def get_nota(
     session: AsyncSession = Depends(tenant_session),
 ):
     nota, itens = await NotaService(session).get_detail(nota_id)
-    return _detail(nota, itens)
+    vinculos = await NotaRepository(session).vinculos_da_nota(nota)
+    return _detail(nota, itens, vinculos)
 
 
 @router.patch("/notas/{nota_id}", response_model=NotaDetailResponse)

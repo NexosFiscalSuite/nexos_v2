@@ -392,6 +392,27 @@ def test_saida_substituto_cst10_calcula_igual_a_entrada():
     assert r.memoria.icms_st_calculado == Decimal("177.50")
 
 
+def test_saida_deducao_usa_vicms_exato_sem_recalculo():
+    """SAÍDA: a dedução é o vICMS EXATO do XML, sem recálculo teórico — mesmo
+    com vICMS=0 NÃO dispara o ERRO_107 (que é trava da ENTRADA)."""
+    engine = StAuditEngine(
+        MvaEmMemoria({("87082919", "0107500", "MG"): "71.78"}),
+        EnquadramentoEmMemoria(), FcpEmMemoria(),
+    )
+    item = ItemFiscal(
+        numero_item=1, ncm="87082919", cest="0107500", cfop="6404", orig="0",
+        cst="10", mod_bc_st=4, v_prod=Decimal("1000"),
+        v_bc=Decimal("0"), v_icms=Decimal("0"), p_icms=Decimal("18"),
+    )
+    op = Operacao(uf_emit="MG", uf_dest="MG", crt=Crt.NORMAL, data=DATA, saida=True)
+
+    r = engine.auditar_item(item, op)
+
+    assert r.memoria.deducao_tipo == "real"
+    assert r.memoria.deducao_aplicada == Decimal("0.00")    # vICMS exato (0), não recalcula
+    assert "ERRO_107_ICMS_PROPRIO_ZERADO_COM_ST" not in r.codigos_erro
+
+
 @pytest.mark.parametrize(
     "inter, intra, espera_ajuste",
     [
