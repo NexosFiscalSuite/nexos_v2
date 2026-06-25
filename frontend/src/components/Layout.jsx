@@ -37,9 +37,11 @@ const NAV = [
 ]
 const ADMIN_NAV = [
   { to:'/empresas', icon:'ti-building-store', label:'Empresas' },
-  { to:'/grupos',   icon:'ti-users-group',    label:'Grupos' },
-  { to:'/usuarios', icon:'ti-user-shield',    label:'Usuários' },
-  { to:'/auditoria', icon:'ti-history',       label:'Auditoria' },
+  { to:'/acessos', icon:'ti-shield-lock', label:'Acessos', subItems: [
+    { to:'/grupos',    icon:'ti-users-group', label:'Grupos' },
+    { to:'/usuarios',  icon:'ti-user-shield', label:'Usuários' },
+    { to:'/auditoria', icon:'ti-history',     label:'Auditoria' },
+  ] },
 ]
 
 function NavItem({ to, icon, label, collapsed, subItems, badge }) {

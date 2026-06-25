@@ -65,8 +65,7 @@ export default function CfopRegras() {
         <div className="center-loader"><div className="spinner" /></div>
       ) : lista.length === 0 ? (
         <EmptyState icon="ti-arrows-exchange" title="Nenhuma regra De/Para cadastrada"
-          subtitle="Defina o Tipo de Item por CFOP para que o Nexos classifique automaticamente cada item na importação das notas de entrada — sem trabalho manual."
-          actionLabel="Nova regra" onAction={novo} />
+          subtitle="Defina o Tipo de Item por CFOP para que o Nexos classifique automaticamente cada item na importação das notas de entrada — sem trabalho manual." />
       ) : (
         <div className="card" style={{ padding: 0 }}>
           <div className="tbl-wrap">

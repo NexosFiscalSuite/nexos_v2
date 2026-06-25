@@ -142,8 +142,7 @@ export default function Relatorios() {
       {loading ? <div className="center-loader"><div className="spinner" /></div>
         : modelos.length === 0 ? (
           <EmptyState icon="ti-report" title="Nenhum modelo de relatório"
-            subtitle="Monte modelos com as colunas que o seu escritório precisa e gere planilhas (Excel/CSV) das notas da competência em um clique."
-            actionLabel="Novo modelo" onAction={abrirNovo} />
+            subtitle="Monte modelos com as colunas que o seu escritório precisa e gere planilhas (Excel/CSV) das notas da competência em um clique." />
         ) : (
             <div className="stat-grid">
               {modelos.map(m => {

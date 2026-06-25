@@ -43,12 +43,16 @@ services:
 
   api:
     build: .
+    restart: unless-stopped          # Go-Live: sobe sozinha com o Docker
     env_file: .env
     environment:
       # Dentro da rede do compose os hosts mudam de localhost p/ nome do serviço.
       NEXOS_DATABASE_URL: postgresql+asyncpg://nexos_app:nexos_app@postgres:5432/nexos
       NEXOS_DATABASE_PRIVILEGED_URL: postgresql+asyncpg://nexos:nexos@postgres:5432/nexos
       NEXOS_REDIS_URL: redis://redis:6379/0
+      # API e worker são contêineres distintos: o storage precisa ser comum (S3/MinIO).
+      NEXOS_STORAGE_BACKEND: s3
+      NEXOS_S3_ENDPOINT_URL: http://minio:9000
     ports:
       - "8000:8000"
     depends_on:
@@ -56,12 +60,15 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      minio:
+        condition: service_started
     command: >
       sh -c "alembic upgrade head &&
              uvicorn app.main:app --host 0.0.0.0 --port 8000"
 
   worker:
     build: .
+    restart: unless-stopped
     env_file: .env
     environment:
       NEXOS_DATABASE_URL: postgresql+asyncpg://nexos_app:nexos_app@postgres:5432/nexos
@@ -75,6 +82,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      minio:
+        condition: service_started
     command: celery -A app.core.celery_app:celery_app worker --loglevel=info --queues nexos
 
 volumes:
