@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Dropdown from '../components/Dropdown'
-import { api } from '../api'
+import { api, saveBlob } from '../api'
 import { useToast, ToastContainer } from '../hooks/useToast'
 
 const pct = (v) => (v == null || v === '' ? '—' : `${Number(v).toFixed(2)}%`)
@@ -257,19 +257,59 @@ function CrudMatriz({ aba }) {
 }
 
 export default function MatrizesFiscais() {
+  const { toasts, toast } = useToast()
   const [tab, setTab] = useState('mva')
+  const [bulkVersion, setBulkVersion] = useState(0)   // bump → remonta o grid após import
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const fileRef = useRef(null)
   const aba = ABAS.find(a => a.id === tab)
+
+  async function exportar() {
+    setBulkBusy(true)
+    try {
+      const { blob, filename } = await api.exportarMatriz(tab)
+      saveBlob(blob, filename)
+      toast('Planilha exportada (vazia = template com os cabeçalhos).', 'ok')
+    } catch (e) { toast(e.message, 'error') }
+    finally { setBulkBusy(false) }
+  }
+
+  async function importar(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''                 // permite reimportar o mesmo arquivo
+    if (!file) return
+    setBulkBusy(true)
+    try {
+      const r = await api.importarMatriz(tab, file)
+      const nErros = r.erros?.length || 0
+      toast(`Importação: ${r.inseridos} novas, ${r.atualizados} atualizadas` +
+        (nErros ? ` · ${nErros} linha(s) com erro` : '.'), nErros ? 'warn' : 'ok')
+      if (nErros) toast(`Linha ${r.erros[0].linha}: ${r.erros[0].erro}`, 'error')
+      setBulkVersion(v => v + 1)
+    } catch (e2) { toast(e2.message, 'error') }
+    finally { setBulkBusy(false) }
+  }
 
   return (
     <div>
+      <ToastContainer toasts={toasts} />
+      <input ref={fileRef} type="file" accept=".csv" onChange={importar} style={{ display: 'none' }} />
       <div className="page-header">
         <div>
           <h1 className="page-title">Matrizes Fiscais</h1>
           <p className="page-breadcrumb">{aba.descricao}</p>
         </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-secondary" disabled={bulkBusy} onClick={exportar}>
+            <i className="ti ti-file-spreadsheet" /> Exportar Planilha
+          </button>
+          <button className="btn btn-secondary" disabled={bulkBusy} onClick={() => fileRef.current?.click()}>
+            <i className="ti ti-upload" /> Importar Planilha
+          </button>
+        </div>
       </div>
 
-      {/* Abas: as 3 fontes que o motor de ICMS-ST consome */}
+      {/* Abas: as fontes que o motor de ICMS-ST consome */}
       <div style={{ display: 'inline-flex', background: 'var(--surface-2)', borderRadius: 'var(--radius)', padding: 3, marginBottom: 18 }}>
         {ABAS.map(a => (
           <button key={a.id} onClick={() => setTab(a.id)} className="btn btn-sm"
@@ -279,7 +319,7 @@ export default function MatrizesFiscais() {
         ))}
       </div>
 
-      <CrudMatriz key={tab} aba={aba} />
+      <CrudMatriz key={`${tab}:${bulkVersion}`} aba={aba} />
     </div>
   )
 }

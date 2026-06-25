@@ -176,6 +176,14 @@ export const api = {
   editarMatrizProtocolo: (id, data) => request('PATCH', `/matrizes/protocolos/${id}`, data),
   removerMatrizProtocolo: (id) => request('DELETE', `/matrizes/protocolos/${id}`),
 
+  // Bulk (planilha CSV) — export = template/base; import = upsert por chave
+  exportarMatriz: (tipo) => downloadBlob(`/matrizes/${tipo}/export`, { fallback: `matriz_${tipo}.csv` }),
+  importarMatriz: (tipo, file) => {
+    const fd = new FormData()
+    fd.append('arquivo', file)
+    return request('POST', `/matrizes/${tipo}/import`, fd, true)
+  },
+
   // ── Upload assíncrono + Jobs ──
   upload: (empresaId, formData) => form('POST', `/fiscal/empresas/${empresaId}/upload`, formData),
   job: (id) => request('GET', `/jobs/${id}`),
