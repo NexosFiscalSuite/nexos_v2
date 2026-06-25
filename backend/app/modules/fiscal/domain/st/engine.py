@@ -6,7 +6,8 @@ podre vira diagnóstico, nunca crash do lote.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import date
 from decimal import Decimal
 
 from .aliquotas import AliquotaResolver
@@ -21,8 +22,17 @@ from .model import (
 )
 from .money import ZERO, aplicar_percentual, centavos
 from .mva import calcular_mva
-from .ports import EnquadramentoRepository, FcpRepository, MvaRepository
+from .ports import EnquadramentoRepository, FcpRepository, MvaRepository, ProtocoloRepository
 from .strategies import BaseMva, aplicar_reducao_base, base_strategy_for, calcular_deducao
+
+
+class _AssumeProtocolo:
+    """Default quando nenhuma matriz de protocolo é injetada: assume o acordo
+    vigente — a interestadual é auditada como responsabilidade do REMETENTE
+    (comportamento histórico, conservador)."""
+
+    def tem_protocolo(self, uf_orig: str, uf_dest: str, data: date) -> bool:
+        return True
 
 # Régua de centavos por item (Seção 6 do CALC_ICMS_Proprio).
 TOLERANCIA_ITEM = Decimal("0.02")
@@ -39,6 +49,7 @@ class StAuditEngine:
     mva_repo: MvaRepository
     enquadramento_repo: EnquadramentoRepository
     fcp_repo: FcpRepository
+    protocolo_repo: ProtocoloRepository = field(default_factory=_AssumeProtocolo)
     aliquotas: AliquotaResolver = AliquotaResolver()
 
     def auditar_item(self, item: ItemFiscal, operacao: Operacao) -> ResultadoAuditoria:
@@ -132,19 +143,7 @@ class StAuditEngine:
         if fcp_st_calc < ZERO:
             fcp_st_calc = ZERO
 
-        # 9. Comparações com a régua de centavos.
-        div_bc = centavos(item.v_bc_st) - centavos(base_st_calc)
-        if abs(div_bc) > TOLERANCIA_ITEM:
-            erros.append(ErroST.BC_ST_DIVERGENTE)
-
-        div_icms_st = centavos(item.v_icms_st) - centavos(icms_st_calc)
-        if abs(div_icms_st) > TOLERANCIA_ITEM:
-            erros.append(ErroST.VALOR_ST_DIVERGENTE)
-
-        div_fcp = centavos(item.v_fcp_st) - centavos(fcp_st_calc)
-        if abs(div_fcp) > TOLERANCIA_ITEM:
-            erros.append(ErroST.FCP_ST_DIVERGENTE)
-
+        # 9. Memória (independe das comparações — vale para os dois fluxos abaixo).
         memoria = MemoriaCalculo(
             regime=regime.value,
             mva_original=mva_original,
@@ -162,6 +161,29 @@ class StAuditEngine:
             fcp_st_deducao=centavos(item.v_fcp),
             fcp_st_calculado=centavos(fcp_st_calc),
         )
+
+        # 10. RESPONSABILIDADE na interestadual (matriz de protocolo). Sem acordo
+        #     vigente origem→destino, o remetente NÃO é o substituto: a ST vira
+        #     antecipação do destinatário (nosso cliente recolhe via guia local).
+        if operacao.interestadual and not self.protocolo_repo.tem_protocolo(
+            operacao.uf_emit, operacao.uf_dest, operacao.data
+        ):
+            return self._resultado_antecipacao(item, icms_st_calc, fcp_st_calc, memoria, erros)
+
+        # 11. Com protocolo (ou operação interna): a ST é do REMETENTE — auditamos
+        #     o que veio destacado no XML contra o cálculo.
+        div_bc = centavos(item.v_bc_st) - centavos(base_st_calc)
+        if abs(div_bc) > TOLERANCIA_ITEM:
+            erros.append(ErroST.BC_ST_DIVERGENTE)
+
+        div_icms_st = centavos(item.v_icms_st) - centavos(icms_st_calc)
+        if abs(div_icms_st) > TOLERANCIA_ITEM:
+            erros.append(ErroST.VALOR_ST_DIVERGENTE)
+
+        div_fcp = centavos(item.v_fcp_st) - centavos(fcp_st_calc)
+        if abs(div_fcp) > TOLERANCIA_ITEM:
+            erros.append(ErroST.FCP_ST_DIVERGENTE)
+
         status = StatusAuditoria.DIVERGENTE if erros else StatusAuditoria.OK
         return ResultadoAuditoria(
             numero_item=item.numero_item,
@@ -170,6 +192,43 @@ class StAuditEngine:
             divergencia_icms_st=div_icms_st,
             divergencia_fcp_st=div_fcp,
             memoria=memoria,
+        )
+
+    def _resultado_antecipacao(
+        self,
+        item: ItemFiscal,
+        icms_st_calc: Decimal,
+        fcp_st_calc: Decimal,
+        memoria: MemoriaCalculo,
+        erros_calc: list[ErroST],
+    ) -> ResultadoAuditoria:
+        """Interestadual SEM protocolo: o remetente corretamente NÃO retém a ST.
+        A obrigação é do destinatário (nosso cliente) por antecipação, recolhida
+        em guia local. O valor devido = ST calculado, líquido do que por acaso já
+        tenha vindo retido no XML (diferença negativa = falta antecipar)."""
+        devido = centavos(icms_st_calc)
+        diferenca = centavos(item.v_icms_st) - devido          # XML(0) − devido = falta
+        diferenca_fcp = centavos(item.v_fcp_st) - centavos(fcp_st_calc)
+        tem_obrigacao = abs(diferenca) > TOLERANCIA_ITEM
+        erros = (
+            (ErroST.ST_ANTECIPACAO_DESTINATARIO, *erros_calc)
+            if tem_obrigacao else tuple(erros_calc)
+        )
+        obs = (
+            f"Interestadual SEM protocolo de ST: o remetente não é o substituto. "
+            f"Antecipação de R$ {devido} devida pelo destinatário (recolher via guia local)."
+            if tem_obrigacao else
+            "Interestadual sem protocolo e sem ST a recolher — nada a antecipar."
+        )
+        status = StatusAuditoria.DIVERGENTE if erros else StatusAuditoria.OK
+        return ResultadoAuditoria(
+            numero_item=item.numero_item,
+            status=status,
+            erros=erros,
+            divergencia_icms_st=diferenca,
+            divergencia_fcp_st=diferenca_fcp,
+            memoria=memoria,
+            observacao=obs,
         )
 
     def auditar_nota(

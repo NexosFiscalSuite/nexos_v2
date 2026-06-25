@@ -20,6 +20,7 @@ from app.modules.fiscal.infrastructure.matrizes_models import (
     MatrizEnquadramentoSt,
     MatrizFcp,
     MatrizMva,
+    MatrizProtocoloSt,
 )
 from app.modules.fiscal.infrastructure.vigencia import filtrar_vigencia
 from app.shared.domain.value_objects import only_digits
@@ -78,12 +79,21 @@ class _FcpSnapshot:
 
 
 @dataclass(frozen=True, slots=True)
+class _ProtocoloSnapshot:
+    pares: frozenset[tuple[str, str]]            # (uf_orig, uf_dest) com acordo vigente
+
+    def tem_protocolo(self, uf_orig: str, uf_dest: str, data: date) -> bool:
+        return (uf_orig.upper(), uf_dest.upper()) in self.pares
+
+
+@dataclass(frozen=True, slots=True)
 class MatrizesHidratadas:
     """O que o orquestrador injeta no StAuditEngine."""
 
     mva: _MvaSnapshot
     enquadramento: _EnquadramentoSnapshot
     fcp: _FcpSnapshot
+    protocolo: _ProtocoloSnapshot
 
 
 # --------------------------------------------------------------------------- #
@@ -107,6 +117,7 @@ class MatrizesLoader:
             mva=await self._mva(uf, ncms, cests, data),
             enquadramento=await self._enquadramento(uf, ncms, cests, data),
             fcp=await self._fcp(uf, ncms, data),
+            protocolo=await self._protocolo(operacao.uf_emit.upper(), uf, data),
         )
 
     async def _mva(self, uf, ncms, cests, data) -> _MvaSnapshot:
@@ -148,3 +159,18 @@ class MatrizesLoader:
         )
         rows = (await self.session.execute(stmt)).scalars().all()
         return _FcpSnapshot({(r.uf_destino, r.ncm): r.aliq_fcp_st for r in rows})
+
+    async def _protocolo(self, uf_orig: str, uf_dest: str, data) -> _ProtocoloSnapshot:
+        # Operação interna (mesma UF) não tem protocolo a checar — evita ida ao banco.
+        if uf_orig == uf_dest:
+            return _ProtocoloSnapshot(frozenset())
+        stmt = filtrar_vigencia(
+            select(MatrizProtocoloSt).where(
+                MatrizProtocoloSt.uf_origem == uf_orig,
+                MatrizProtocoloSt.uf_destino == uf_dest,
+            ),
+            MatrizProtocoloSt,
+            data,
+        )
+        rows = (await self.session.execute(stmt)).scalars().all()
+        return _ProtocoloSnapshot(frozenset((r.uf_origem, r.uf_destino) for r in rows))

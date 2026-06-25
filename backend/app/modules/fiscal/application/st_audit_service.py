@@ -93,6 +93,7 @@ class StAuditService:
             mva_repo=matrizes.mva,
             enquadramento_repo=matrizes.enquadramento,
             fcp_repo=matrizes.fcp,
+            protocolo_repo=matrizes.protocolo,
         )
         resultados = engine.auditar_nota(itens_fiscais, operacao)
 

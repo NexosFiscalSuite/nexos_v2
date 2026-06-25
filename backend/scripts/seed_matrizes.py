@@ -23,6 +23,7 @@ from app.modules.fiscal.infrastructure.matrizes_models import (  # noqa: E402
     MatrizEnquadramentoSt,
     MatrizFcp,
     MatrizMva,
+    MatrizProtocoloSt,
 )
 
 _INICIO = date(2024, 1, 1)   # vigência genérica no passado
@@ -51,6 +52,10 @@ def linhas_seed() -> list:
         # (uf, ncm, fcp_interno, fcp_st, ato_legal)
         ("MG", "22084000", "2.00", "2.00", "FCP bebidas MG (lab #5)"),
     ]
+    protocolo = [
+        # (uf_origem, uf_destino, acordo) — ativa a ST do REMETENTE na interestadual.
+        ("SP", "MG", "Protocolo ICMS 41/2008 (autopeças)"),
+    ]
     linhas: list = []
     for ncm, cest, uf, val, ato in mva:
         linhas.append(MatrizMva(
@@ -66,6 +71,11 @@ def linhas_seed() -> list:
         linhas.append(MatrizFcp(
             uf_destino=uf, ncm=ncm, aliq_fcp_interno=Decimal(interno),
             aliq_fcp_st=Decimal(st), ato_legal=ato,
+            data_inicio_vigencia=_INICIO, data_fim_vigencia=_FIM,
+        ))
+    for uf_o, uf_d, acordo in protocolo:
+        linhas.append(MatrizProtocoloSt(
+            uf_origem=uf_o, uf_destino=uf_d, numero_acordo=acordo,
             data_inicio_vigencia=_INICIO, data_fim_vigencia=_FIM,
         ))
     return linhas

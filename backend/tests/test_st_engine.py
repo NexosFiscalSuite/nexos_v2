@@ -16,6 +16,7 @@ from app.modules.fiscal.domain.st import (
     ItemFiscal,
     MvaEmMemoria,
     Operacao,
+    ProtocoloEmMemoria,
     StatusAuditoria,
     StAuditEngine,
 )
@@ -29,6 +30,7 @@ def _engine(**kw) -> StAuditEngine:
         mva_repo=kw.get("mva", MvaEmMemoria()),
         enquadramento_repo=kw.get("enq", EnquadramentoEmMemoria()),
         fcp_repo=kw.get("fcp", FcpEmMemoria()),
+        protocolo_repo=kw.get("protocolo", ProtocoloEmMemoria()),   # default: acordo existe
     )
 
 
@@ -58,6 +60,52 @@ def test_caso_feliz_cst10_normal_interestadual_ok():
     assert round(r.memoria.mva_aplicada, 2) == Decimal("50.24")
     assert r.memoria.base_st_calculada == Decimal("1502.44")
     assert r.memoria.icms_st_calculado == Decimal("150.44")
+
+
+def test_interestadual_com_protocolo_st_zerada_e_erro_do_fornecedor():
+    """SP→MG COM protocolo vigente: a ST é do REMETENTE. Se o XML veio com ST
+    zerada, é divergência do fornecedor (deveria ter retido) — não antecipação."""
+    op = Operacao(uf_emit="SP", uf_dest="MG", crt=Crt.NORMAL, data=DATA)
+    item = _item(v_bc_st=Decimal("0"), v_icms_st=Decimal("0"))        # fornecedor não reteve
+    eng = _engine(protocolo=ProtocoloEmMemoria({("SP", "MG")}))       # acordo SP→MG vigente
+
+    r = eng.auditar_item(item, op)
+
+    assert r.status == StatusAuditoria.DIVERGENTE
+    assert "ERRO_104_VALOR_ST_DIVERGENTE" in r.codigos_erro
+    assert "ERRO_111_ST_ANTECIPACAO_DESTINATARIO" not in r.codigos_erro
+    assert r.memoria.icms_st_calculado == Decimal("150.44")
+    assert r.divergencia_icms_st == Decimal("-150.44")               # faltou recolher (fornecedor)
+
+
+def test_interestadual_sem_protocolo_vira_antecipacao_do_destinatario():
+    """SP→MG SEM protocolo: o fornecedor corretamente NÃO retém. A ST vira
+    antecipação do destinatário — o motor calcula o valor devido (150,44)."""
+    op = Operacao(uf_emit="SP", uf_dest="MG", crt=Crt.NORMAL, data=DATA)
+    item = _item(v_bc_st=Decimal("0"), v_icms_st=Decimal("0"))
+    eng = _engine(protocolo=ProtocoloEmMemoria(padrao=False))         # nenhum acordo
+
+    r = eng.auditar_item(item, op)
+
+    assert r.status == StatusAuditoria.DIVERGENTE
+    assert r.codigos_erro == ["ERRO_111_ST_ANTECIPACAO_DESTINATARIO"]
+    assert "ERRO_104_VALOR_ST_DIVERGENTE" not in r.codigos_erro       # fornecedor não errou
+    assert r.memoria.icms_st_calculado == Decimal("150.44")
+    assert r.divergencia_icms_st == Decimal("-150.44")               # devido pelo destinatário
+    assert "ntecipa" in (r.observacao or "")
+
+
+def test_interna_sem_protocolo_nunca_e_antecipacao():
+    """Operação INTERNA (MG→MG) nunca é antecipação por protocolo (conceito
+    interestadual): a ST é do vendedor mesmo sem matriz de protocolo."""
+    op = Operacao(uf_emit="MG", uf_dest="MG", crt=Crt.NORMAL, data=DATA)
+    item = _item(v_bc_st=Decimal("1400.00"), v_icms_st=Decimal("132.00"))
+    eng = _engine(protocolo=ProtocoloEmMemoria(padrao=False))
+
+    r = eng.auditar_item(item, op)
+
+    assert r.status == StatusAuditoria.OK
+    assert "ERRO_111_ST_ANTECIPACAO_DESTINATARIO" not in r.codigos_erro
 
 
 def test_simples_nao_ajusta_mva_erro_101():

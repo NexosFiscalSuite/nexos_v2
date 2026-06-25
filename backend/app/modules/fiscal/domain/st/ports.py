@@ -41,3 +41,12 @@ class FcpRepository(Protocol):
     """
 
     def aliquota_st(self, ncm: str, uf_dest: str, data: date) -> Decimal: ...
+
+
+class ProtocoloRepository(Protocol):
+    """MATRIZ_PROTOCOLO_ST — há acordo/convênio de ST vigente no par UF
+    origem→destino? Decide a RESPONSABILIDADE na interestadual: com protocolo o
+    remetente é o substituto; sem ele, a ST vira antecipação do destinatário.
+    """
+
+    def tem_protocolo(self, uf_orig: str, uf_dest: str, data: date) -> bool: ...

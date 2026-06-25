@@ -20,8 +20,19 @@ from .model import (
     ResultadoAuditoria,
     StatusAuditoria,
 )
-from .ports import EnquadramentoRepository, FcpRepository, MvaInfo, MvaRepository
-from .seed import EnquadramentoEmMemoria, FcpEmMemoria, MvaEmMemoria
+from .ports import (
+    EnquadramentoRepository,
+    FcpRepository,
+    MvaInfo,
+    MvaRepository,
+    ProtocoloRepository,
+)
+from .seed import (
+    EnquadramentoEmMemoria,
+    FcpEmMemoria,
+    MvaEmMemoria,
+    ProtocoloEmMemoria,
+)
 
 __all__ = [
     "StAuditEngine",
@@ -39,8 +50,10 @@ __all__ = [
     "MvaRepository",
     "EnquadramentoRepository",
     "FcpRepository",
+    "ProtocoloRepository",
     "MvaInfo",
     "MvaEmMemoria",
     "EnquadramentoEmMemoria",
     "FcpEmMemoria",
+    "ProtocoloEmMemoria",
 ]

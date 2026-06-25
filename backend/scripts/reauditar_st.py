@@ -13,10 +13,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import app.core.celery_app  # noqa: E402, F401 — registra TODOS os models (FKs)
 from sqlalchemy import select  # noqa: E402
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # noqa: E402
 
+import app.core.celery_app  # noqa: E402, F401 — registra TODOS os models (FKs)
 from app.core.config import get_settings  # noqa: E402
 from app.modules.fiscal.application.st_audit_service import StAuditService  # noqa: E402
 from app.modules.fiscal.infrastructure.models import Nota  # noqa: E402

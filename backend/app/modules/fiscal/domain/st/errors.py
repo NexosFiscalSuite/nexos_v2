@@ -70,3 +70,10 @@ class ErroST(_Erro, Enum):
         "vICMSST > 0 — pagamento indevido / bitributação (a favor do cliente).",
         "Estornar o ST destacado e reemitir com vICMSST = 0 (ST já recolhido na cadeia).",
     )
+    ST_ANTECIPACAO_DESTINATARIO = (
+        "ERRO_111_ST_ANTECIPACAO_DESTINATARIO",
+        "Operação interestadual SEM protocolo/convênio de ST no par origem→destino: "
+        "o remetente não é o substituto. A ST é devida por ANTECIPAÇÃO pelo "
+        "destinatário (recolhimento local pelo nosso cliente).",
+        "Recolher a antecipação via guia estadual (GNRE/DAE); não cobrar do fornecedor.",
+    )
