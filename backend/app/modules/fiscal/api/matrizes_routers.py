@@ -27,11 +27,15 @@ from app.modules.fiscal.api.matrizes_schemas import (
     MatrizMvaCreate,
     MatrizMvaResponse,
     MatrizMvaUpdate,
+    MatrizProtocoloCreate,
+    MatrizProtocoloResponse,
+    MatrizProtocoloUpdate,
 )
 from app.modules.fiscal.infrastructure.matrizes_models import (
     MatrizEnquadramentoSt,
     MatrizFcp,
     MatrizMva,
+    MatrizProtocoloSt,
 )
 from app.shared.domain.value_objects import only_digits
 
@@ -150,4 +154,11 @@ _registrar_crud(
     entidade="matriz_fcp",
     detalhe=lambda m: {"uf": m.uf_destino, "ncm": m.ncm, "fcp_st": str(m.aliq_fcp_st)},
     filtrar=_ordenar(MatrizFcp, MatrizFcp.uf_destino, MatrizFcp.ncm),
+)
+_registrar_crud(
+    "protocolos", MatrizProtocoloSt, MatrizProtocoloCreate, MatrizProtocoloUpdate,
+    MatrizProtocoloResponse,
+    entidade="matriz_protocolo",
+    detalhe=lambda m: {"origem": m.uf_origem, "destino": m.uf_destino, "acordo": m.numero_acordo},
+    filtrar=_ordenar(MatrizProtocoloSt, MatrizProtocoloSt.uf_origem, MatrizProtocoloSt.uf_destino),
 )

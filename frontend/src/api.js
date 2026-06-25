@@ -168,6 +168,14 @@ export const api = {
   editarMatrizFcp: (id, data) => request('PATCH', `/matrizes/fcp/${id}`, data),
   removerMatrizFcp: (id) => request('DELETE', `/matrizes/fcp/${id}`),
 
+  matrizesProtocolos: (params = {}) => {
+    const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
+    return request('GET', '/matrizes/protocolos' + (q ? `?${q}` : ''))
+  },
+  criarMatrizProtocolo: (data) => request('POST', '/matrizes/protocolos', data),
+  editarMatrizProtocolo: (id, data) => request('PATCH', `/matrizes/protocolos/${id}`, data),
+  removerMatrizProtocolo: (id) => request('DELETE', `/matrizes/protocolos/${id}`),
+
   // ── Upload assíncrono + Jobs ──
   upload: (empresaId, formData) => form('POST', `/fiscal/empresas/${empresaId}/upload`, formData),
   job: (id) => request('GET', `/jobs/${id}`),

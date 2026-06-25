@@ -95,6 +95,24 @@ const ABAS = [
       ...VIGENCIA_CAMPOS,
     ],
   },
+  {
+    id: 'protocolos', label: 'Protocolos', icon: 'ti-license',
+    api: { list: api.matrizesProtocolos, create: api.criarMatrizProtocolo, update: api.editarMatrizProtocolo, remove: api.removerMatrizProtocolo },
+    descricao: 'Protocolos e Convênios que ativam a ST interestadual — define o par UF origem → destino com acordo',
+    empty: { icon: 'ti-license', title: 'Nenhum protocolo cadastrado', sub: 'Cadastre os acordos (Protocolos/Convênios ICMS) que ativam a ST entre a UF de origem e a de destino.' },
+    colunas: [
+      { key: 'uf_origem', label: 'UF Origem', render: (m) => badge(m.uf_origem, 'warn') },
+      { key: 'uf_destino', label: 'UF Destino', render: (m) => badge(m.uf_destino) },
+      { key: 'numero_acordo', label: 'Acordo', strong: true },
+      { key: 'vigencia', label: 'Vigência', muted: true, small: true, render: vigencia },
+    ],
+    campos: [
+      { key: 'uf_origem', label: 'UF Origem', uf: true, required: true, placeholder: 'SP' },
+      { key: 'uf_destino', label: 'UF Destino', uf: true, required: true, placeholder: 'MG' },
+      { key: 'numero_acordo', label: 'Acordo', full: true, required: true, placeholder: 'Protocolo ICMS 41/2008' },
+      ...VIGENCIA_CAMPOS,
+    ],
+  },
 ]
 
 function vazioDe(campos) {

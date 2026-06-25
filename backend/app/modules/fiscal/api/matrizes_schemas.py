@@ -114,3 +114,34 @@ class MatrizFcpResponse(_MatrizFcpCampos):
     id: int
 
     model_config = {"from_attributes": True}
+
+
+# ── Protocolo / Convênio (ativa a ST interestadual no par UF origem→destino) ──
+class _MatrizProtocoloCampos(BaseModel):
+    uf_origem: str = Field(..., min_length=2, max_length=2, examples=["SP"])
+    uf_destino: str = Field(..., min_length=2, max_length=2, examples=["MG"])
+    numero_acordo: str = Field(..., min_length=2, max_length=80,
+                               examples=["Protocolo ICMS 41/2008"], description="Acordo (texto livre)")
+    data_inicio_vigencia: date
+    data_fim_vigencia: date | None = None
+
+    def normalizado(self) -> dict:
+        d = self.model_dump()
+        d["uf_origem"] = self.uf_origem.upper()
+        d["uf_destino"] = self.uf_destino.upper()
+        d["numero_acordo"] = self.numero_acordo.strip()
+        return d
+
+
+class MatrizProtocoloCreate(_MatrizProtocoloCampos):
+    pass
+
+
+class MatrizProtocoloUpdate(_MatrizProtocoloCampos):
+    pass
+
+
+class MatrizProtocoloResponse(_MatrizProtocoloCampos):
+    id: int
+
+    model_config = {"from_attributes": True}

@@ -68,9 +68,9 @@ class MatrizProtocoloSt(Base, VigenciaTemporal):
     id: Mapped[int] = mapped_column(primary_key=True)
     uf_origem: Mapped[str] = mapped_column(String(2))
     uf_destino: Mapped[str] = mapped_column(String(2))
-    ncm: Mapped[str] = mapped_column(String(8))
-    tipo_acordo: Mapped[str] = mapped_column(String(3))      # PRT | CVN
-    numero_acordo: Mapped[str] = mapped_column(String(20))
+    ncm: Mapped[str | None] = mapped_column(String(8), nullable=True)  # opcional: escopo por par UF
+    tipo_acordo: Mapped[str | None] = mapped_column(String(3), nullable=True)  # PRT | CVN
+    numero_acordo: Mapped[str] = mapped_column(String(80))   # "Acordo" livre: ex. "Protocolo ICMS 41/2008"
     situacao: Mapped[str] = mapped_column(String(10), default="ATIVO")
 
 
