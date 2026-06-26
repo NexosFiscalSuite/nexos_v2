@@ -122,11 +122,18 @@ export default function Dashboard() {
 
       {!loading && (
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(230px,1fr) minmax(360px,1.8fr) minmax(230px,1fr)', gap: 16, marginBottom: 22 }}>
-          {/* Bloco 1 — Destaque financeiro (flat branco, tipografia forte) */}
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--hairline)', borderRadius: 'var(--radius-lg)', padding: '22px 24px' }}>
-            <div style={{ fontSize: 11, color: 'var(--text-4)', textTransform: 'uppercase', letterSpacing: '0.6px', fontWeight: 600 }}>Impacto Total</div>
-            <div style={{ fontSize: 40, fontWeight: 700, marginTop: 12, letterSpacing: '-1.8px', color: 'var(--ink)', lineHeight: 1 }}>{fmtBRL(impactoTotal)}</div>
-            <div style={{ fontSize: 12.5, color: 'var(--text-3)', marginTop: 12, lineHeight: 1.5 }}>Soma das divergências e antecipações do escritório em {mes}/{ano}.</div>
+          {/* Bloco 1 — Destaque financeiro (escuro premium: gradiente navy da logo,
+              borda translúcida = vidro polido, sombra própria p/ saltar da tela) */}
+          <div style={{
+            background: 'linear-gradient(140deg, #1E3A5F 0%, #0F1F38 100%)',
+            border: '1px solid rgba(255,255,255,0.10)', borderRadius: 'var(--radius-lg)',
+            padding: '22px 24px', position: 'relative', overflow: 'hidden',
+            boxShadow: '0 14px 34px rgba(15,31,56,0.32)',
+          }}>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.6px', fontWeight: 600 }}>Impacto Total</div>
+            <div style={{ fontSize: 40, fontWeight: 700, marginTop: 12, letterSpacing: '-1.8px', color: '#FFFFFF', lineHeight: 1 }}>{fmtBRL(impactoTotal)}</div>
+            <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.65)', marginTop: 12, lineHeight: 1.5 }}>Soma das divergências e antecipações do escritório em {mes}/{ano}.</div>
+            <div style={{ position: 'absolute', right: -36, bottom: -36, width: 132, height: 132, borderRadius: '50%', background: 'rgba(130,223,111,0.14)' }} />
           </div>
 
           {/* Bloco 2 — KPIs (funil) */}
