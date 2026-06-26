@@ -30,9 +30,13 @@ class ReprocessService:
         regras = await CfopRegraRepository(self.session).as_map()
         alvo: dict[UUID, UUID] = {}     # nota_id -> empresa_id
 
-        # 1) Notas com item NAO_AUDITAVEL — a matriz pode ter sido cadastrada depois.
+        # 1) Notas TRAVADAS por falta de matriz: NAO_AUDITAVEL COM código de erro
+        #    (ex.: ERRO_MVA_NAO_ENCONTRADA). As sem código são "fora do motor de ST"
+        #    (produto não-ST) — legítimas, nunca mudam, não entram no reprocesso.
         q = select(AuditoriaIcmsSt.nota_id, AuditoriaIcmsSt.empresa_id).where(
-            AuditoriaIcmsSt.status == "NAO_AUDITAVEL"
+            AuditoriaIcmsSt.status == "NAO_AUDITAVEL",
+            AuditoriaIcmsSt.codigo_erro.isnot(None),
+            AuditoriaIcmsSt.codigo_erro != "",
         )
         if empresa_id:
             q = q.where(AuditoriaIcmsSt.empresa_id == empresa_id)
