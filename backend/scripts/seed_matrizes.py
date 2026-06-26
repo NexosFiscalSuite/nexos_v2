@@ -33,7 +33,7 @@ _FIM = None                  # aberta
 def linhas_seed() -> list:
     """Instâncias novas das matrizes (NCMs do Vault + laboratórios)."""
     mva = [
-        # (ncm, cest, uf, mva, ato_legal)
+        # (ncm, cest, uf, mva, base_legal)
         ("87082919", "0107500", "MG", "71.78", "Autopeça (lab #2)"),
         ("40111000", "0100500", "MG", "42.00", "Pneu (lab #1)"),
         ("40111000", "1600100", "MG", "42.00", "Pneu — CEST segmento 16 (saída)"),
@@ -49,7 +49,7 @@ def linhas_seed() -> list:
         ("MG", "85122011", "0100100", "ST", "Material elétrico"),
     ]
     fcp = [
-        # (uf, ncm, fcp_interno, fcp_st, ato_legal)
+        # (uf, ncm, fcp_interno, fcp_st, base_legal)
         ("MG", "22084000", "2.00", "2.00", "FCP bebidas MG (lab #5)"),
     ]
     protocolo = [
@@ -60,7 +60,7 @@ def linhas_seed() -> list:
     for ncm, cest, uf, val, ato in mva:
         linhas.append(MatrizMva(
             ncm=ncm, cest=cest, uf_destino=uf, mva_original=Decimal(val),
-            ato_legal=ato, data_inicio_vigencia=_INICIO, data_fim_vigencia=_FIM,
+            base_legal=ato, data_inicio_vigencia=_INICIO, data_fim_vigencia=_FIM,
         ))
     for uf, ncm, cest, regime, seg in enquadramento:
         linhas.append(MatrizEnquadramentoSt(
@@ -70,7 +70,7 @@ def linhas_seed() -> list:
     for uf, ncm, interno, st, ato in fcp:
         linhas.append(MatrizFcp(
             uf_destino=uf, ncm=ncm, aliq_fcp_interno=Decimal(interno),
-            aliq_fcp_st=Decimal(st), ato_legal=ato,
+            aliq_fcp_st=Decimal(st), base_legal=ato,
             data_inicio_vigencia=_INICIO, data_fim_vigencia=_FIM,
         ))
     for uf_o, uf_d, acordo in protocolo:

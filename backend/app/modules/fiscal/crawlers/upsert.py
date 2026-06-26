@@ -28,7 +28,7 @@ async def upsert_enquadramento(
     uf: str,
     vigencia_inicio: date,
     regime: str = "ST",
-    ato_legal: str = "Convênio ICMS 142/2018 (auto/CONFAZ)",
+    base_legal: str = "Convênio ICMS 142/2018 (auto/CONFAZ)",
 ) -> dict:
     """Upsert dos NCM×CEST na matriz de Enquadramento. Chave de unicidade:
     (uf_destino, ncm, cest, data_inicio_vigencia). Retorna o resumo do job."""
@@ -58,12 +58,12 @@ async def upsert_enquadramento(
         if atual is not None:
             atual.regime = regime
             atual.segmento = r.segmento or atual.segmento
-            atual.ato_legal = ato_legal
+            atual.base_legal = base_legal
             atualizados += 1
         else:
             session.add(MatrizEnquadramentoSt(
                 uf_destino=uf, ncm=r.ncm, cest=r.cest, regime=regime,
-                segmento=r.segmento, ato_legal=ato_legal,
+                segmento=r.segmento, base_legal=base_legal,
                 data_inicio_vigencia=vigencia_inicio, data_fim_vigencia=None,
             ))
             inseridos += 1

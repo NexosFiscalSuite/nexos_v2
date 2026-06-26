@@ -44,12 +44,12 @@ def test_mesma_chave_taxas_diferentes_por_data(sessao):
         MatrizMva(
             ncm="22030000", cest="0300100", uf_destino="MG", mva_original=Decimal("40.00"),
             data_inicio_vigencia=date(2023, 1, 1), data_fim_vigencia=date(2025, 12, 31),
-            ato_legal="RICMS/MG (até 2025)",
+            base_legal="RICMS/MG (até 2025)",
         ),
         MatrizMva(
             ncm="22030000", cest="0300100", uf_destino="MG", mva_original=Decimal("55.00"),
             data_inicio_vigencia=date(2026, 1, 1), data_fim_vigencia=None,
-            ato_legal="RICMS/MG (a partir de 2026)",
+            base_legal="RICMS/MG (a partir de 2026)",
         ),
     ])
     sessao.commit()

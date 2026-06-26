@@ -12,7 +12,7 @@ class _MatrizMvaCampos(BaseModel):
     cest: str = Field(..., examples=["0107500"])
     uf_destino: str = Field(..., min_length=2, max_length=2, examples=["MG"])
     mva_original: Decimal = Field(..., ge=0, le=999, examples=["42.00"])
-    ato_legal: str | None = Field(default=None, examples=["Decreto 48.589/2023"])
+    base_legal: str | None = Field(default=None, examples=["Decreto 48.589/2023"])
     data_inicio_vigencia: date
     data_fim_vigencia: date | None = None
 
@@ -48,7 +48,7 @@ class _MatrizEnquadramentoCampos(BaseModel):
     uf_destino: str = Field(..., min_length=2, max_length=2, examples=["MG"])
     regime: str = Field(..., examples=["ST"], description="ST | TN (Normal) | ST_ENTRADA")
     segmento: str | None = Field(default=None, examples=["Autopeças"])
-    ato_legal: str | None = None
+    base_legal: str | None = None
     data_inicio_vigencia: date
     data_fim_vigencia: date | None = None
 
@@ -90,7 +90,7 @@ class _MatrizFcpCampos(BaseModel):
     aliq_fcp_st: Decimal = Field(..., ge=0, le=100, examples=["2.00"],
                                  description="FCP-ST que o motor consome")
     aliq_fcp_interno: Decimal = Field(default=Decimal("0"), ge=0, le=100, examples=["2.00"])
-    ato_legal: str | None = None
+    base_legal: str | None = None
     data_inicio_vigencia: date
     data_fim_vigencia: date | None = None
 
@@ -122,6 +122,7 @@ class _MatrizProtocoloCampos(BaseModel):
     uf_destino: str = Field(..., min_length=2, max_length=2, examples=["MG"])
     numero_acordo: str = Field(..., min_length=2, max_length=80,
                                examples=["Protocolo ICMS 41/2008"], description="Acordo (texto livre)")
+    base_legal: str | None = None
     data_inicio_vigencia: date
     data_fim_vigencia: date | None = None
 

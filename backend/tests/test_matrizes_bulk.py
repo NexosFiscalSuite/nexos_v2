@@ -23,13 +23,13 @@ async def test_export_vazia_devolve_so_o_cabecalho_template(sessao):
     csv = await exportar_csv(sessao, _MVA)
     linhas = csv.strip().splitlines()
     assert len(linhas) == 1
-    assert linhas[0] == "ncm;cest;uf_destino;mva_original;ato_legal;data_inicio_vigencia;data_fim_vigencia"
+    assert linhas[0] == "ncm;cest;uf_destino;mva_original;base_legal;data_inicio_vigencia;data_fim_vigencia"
 
 
 async def test_import_valida_upserta_e_relata_erros(sessao):
     # 1 linha boa, 1 com vírgula decimal (Excel-BR) e 1 inválida (UF faltando).
     conteudo = (
-        b"ncm;cest;uf_destino;mva_original;ato_legal;data_inicio_vigencia;data_fim_vigencia\n"
+        b"ncm;cest;uf_destino;mva_original;base_legal;data_inicio_vigencia;data_fim_vigencia\n"
         b"40111000;0100500;MG;42,00;Pneu;2026-01-01;\n"
         b"87082919;0107500;MG;71.78;Autopeca;2026-01-01;\n"
         b"99999999;0000000;;10.00;SemUF;2026-01-01;\n"          # UF vazia → erro

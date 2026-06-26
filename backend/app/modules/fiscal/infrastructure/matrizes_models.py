@@ -36,7 +36,7 @@ class MatrizMva(Base, VigenciaTemporal):
     cest: Mapped[str] = mapped_column(String(7))
     uf_destino: Mapped[str] = mapped_column(String(2))
     mva_original: Mapped[Decimal] = mapped_column(_PCT)
-    ato_legal: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    base_legal: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
 
 class MatrizEnquadramentoSt(Base, VigenciaTemporal):
@@ -56,7 +56,7 @@ class MatrizEnquadramentoSt(Base, VigenciaTemporal):
     cest: Mapped[str] = mapped_column(String(7))
     regime: Mapped[str] = mapped_column(String(12))   # ST | TN | ST_ENTRADA
     segmento: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    ato_legal: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    base_legal: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
 
 class MatrizProtocoloSt(Base, VigenciaTemporal):
@@ -71,6 +71,7 @@ class MatrizProtocoloSt(Base, VigenciaTemporal):
     ncm: Mapped[str | None] = mapped_column(String(8), nullable=True)  # opcional: escopo por par UF
     tipo_acordo: Mapped[str | None] = mapped_column(String(3), nullable=True)  # PRT | CVN
     numero_acordo: Mapped[str] = mapped_column(String(80))   # "Acordo" livre: ex. "Protocolo ICMS 41/2008"
+    base_legal: Mapped[str | None] = mapped_column(String(120), nullable=True)  # decreto/norma que ratifica
     situacao: Mapped[str] = mapped_column(String(10), default="ATIVO")
 
 
@@ -88,4 +89,4 @@ class MatrizFcp(Base, VigenciaTemporal):
     ncm: Mapped[str] = mapped_column(String(8))      # 8/4 dígitos ou 'GERAL'
     aliq_fcp_interno: Mapped[Decimal] = mapped_column(_PCT, default=Decimal("0"))
     aliq_fcp_st: Mapped[Decimal] = mapped_column(_PCT, default=Decimal("0"))
-    ato_legal: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    base_legal: Mapped[str | None] = mapped_column(String(120), nullable=True)
