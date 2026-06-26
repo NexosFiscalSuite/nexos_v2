@@ -1,7 +1,11 @@
 """Relatório de ITENS: tags de capa (Identificação/Emitente) herdadas e repetidas
 em cada linha de produto (injeção capa→item)."""
+import io
 from types import SimpleNamespace
 
+from openpyxl import load_workbook
+
+from app.modules.reporting.domain.excel import build_excel
 from app.modules.reporting.domain.report_gen import gerar
 
 _CHAVE = "35260112345678901234567890123456789012345678"
@@ -36,3 +40,22 @@ def test_tags_de_capa_sao_repetidas_em_cada_linha_de_item():
         assert "11111111000111" in linha
     assert "Produto A" in itens["rows"][0]
     assert "Produto B" in itens["rows"][1]
+
+
+def test_excel_premium_freeze_cabecalho_e_autofilter():
+    nota = SimpleNamespace(numero="55", serie="1", chave_acesso=_CHAVE, nome_emit="FORN")
+    config = {
+        "capa": [{"tag": "nNF"}],
+        "itens": [{"tag": "chNFe"}, {"tag": "it_xProd"}],
+        "finalidade": False, "calculos": False, "totais": False,
+    }
+    rep = gerar(config, [{"nota": nota, "tipos": {1: "", 2: ""}, "xml": _XML}], regime="Simples Nacional")
+    wb = load_workbook(io.BytesIO(build_excel(rep, "Modelo Oficial")))
+    ws = wb["Produtos"]
+
+    assert ws.freeze_panes == "A2"                     # cabeçalho congelado
+    assert ws.auto_filter.ref.startswith("A1:")        # filtro p/ tabela dinâmica
+    head = ws.cell(row=1, column=1)
+    assert head.font.bold is True
+    assert head.fill.fgColor.rgb.endswith("EFEFF1")    # cinza claro
+    assert ws.column_dimensions["A"].width >= 44       # Chave de Acesso não esmagada

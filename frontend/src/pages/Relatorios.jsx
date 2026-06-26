@@ -54,7 +54,11 @@ export default function Relatorios() {
     ? (t) => t.escopo === 'capa'
     : (t) => t.escopo === 'item' || (t.escopo === 'capa' && GRUPOS_HERDAVEIS.has(t.grupo))
   const disponiveis = tags.filter(t => disp(t) && !usados.has(t.key))
-    .map(t => ({ value: t.key, label: `[${t.grupo}] ${t.label}` }))
+    .map(t => {
+      // Na aba Itens, tag de capa = dado da nota repetido por linha (herdada).
+      const herdada = builderTab !== 'capa' && t.escopo === 'capa'
+      return { value: t.key, label: `[${t.grupo}] ${t.label}${herdada ? '  🔗 (capa)' : ''}` }
+    })
   const tagLabel = (k) => (tags.find(t => t.key === k)?.label) || k
 
   function addColuna(key) {

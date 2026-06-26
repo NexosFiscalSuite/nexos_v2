@@ -10,30 +10,14 @@ from io import BytesIO
 
 _MONEY_FMT = "#,##0.00"
 _AUDIT_FILL = "FFFACD"
-_HEAD_FILL = "2F7D1E"
-
-# Paleta de cabeçalho por grupo de tag (bg, fonte) — inspirada no padrão fiscal.
-_GROUP_STYLES = {
-    "Identificação": ("1F3864", "FFFFFF"),
-    "Emitente": ("2E5DA8", "FFFFFF"),
-    "Destinatário": ("2E5DA8", "FFFFFF"),
-    "Totais": ("1B5E20", "FFFFFF"),
-    "Transporte": ("5D4037", "FFFFFF"),
-    "Pagamento": ("455A64", "FFFFFF"),
-    "Produto": ("BF360C", "FFFFFF"),
-    "ICMS": ("4A148C", "FFFFFF"),
-    "ICMS ST": ("880E4F", "FFFFFF"),
-    "IPI": ("E65100", "FFFFFF"),
-    "PIS": ("006064", "FFFFFF"),
-    "COFINS": ("006064", "FFFFFF"),
-    "_calc": ("F5A623", "FFFFFF"),
-    "_finalidade": ("FFF2CC", "7B4F00"),
-    "_audit": ("FFFACD", "7B4F00"),
-}
-_DEFAULT_STYLE = (_HEAD_FILL, "FFFFFF")
+_HEAD_FILL = "EFEFF1"   # cinza claro (cabeçalho premium, estética minimal)
+_HEAD_FONT = "1D1D1F"   # ink (texto do cabeçalho)
+_HEAD_BORDER = "D0D0D5"
 
 
 def _autosize(ws, ncols):
+    """Auto-ajuste de largura: dados grandes (ex.: Chave de Acesso, 44 dígitos)
+    não ficam esmagados; teto generoso para a chave caber inteira."""
     from openpyxl.utils import get_column_letter
     for i in range(1, ncols + 1):
         maxlen = 12
@@ -41,7 +25,7 @@ def _autosize(ws, ncols):
             v = cell.value
             if v is not None:
                 maxlen = max(maxlen, len(str(v)))
-        ws.column_dimensions[get_column_letter(i)].width = min(maxlen + 2, 45)
+        ws.column_dimensions[get_column_letter(i)].width = min(maxlen + 3, 52)
 
 
 def _ref(operand, row, tag2letter, calc2letter, lit):
@@ -69,24 +53,36 @@ def _formula(spec, row, tag2letter, calc2letter, lit):
 
 def build_excel(report: dict, nome_modelo: str) -> bytes:
     from openpyxl import Workbook
-    from openpyxl.styles import Font, PatternFill
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
     from openpyxl.utils import get_column_letter
 
     audit_fill = PatternFill("solid", fgColor=_AUDIT_FILL)
+    head_fill = PatternFill("solid", fgColor=_HEAD_FILL)
+    head_font = Font(bold=True, color=_HEAD_FONT)
+    head_border = Border(bottom=Side(style="thin", color=_HEAD_BORDER))
+    head_align = Alignment(vertical="center")
 
     wb = Workbook()
     wb.properties.title = nome_modelo
+
+    def _estilizar_cabecalho(ws, ncols, nrows):
+        """Cabeçalho premium: negrito + cinza claro, congelado (freeze panes) e
+        com auto-filtro para o cliente fatiar os dados (tabelas dinâmicas)."""
+        for ci in range(1, ncols + 1):
+            cell = ws.cell(row=1, column=ci)
+            cell.fill = head_fill
+            cell.font = head_font
+            cell.border = head_border
+            cell.alignment = head_align
+        ws.row_dimensions[1].height = 22
+        ws.freeze_panes = "A2"                   # cabeçalho fixo ao rolar
+        if ncols:
+            ws.auto_filter.ref = f"A1:{get_column_letter(ncols)}{max(nrows + 1, 1)}"
 
     def aba(ws, pack, totais):
         cols = pack["cols"]                      # [{label, money, audit?, grupo, calc_spec?}]
         ncols = len(cols)
         ws.append([c["label"] for c in cols])
-        for ci, c in enumerate(cols, start=1):
-            cell = ws.cell(row=1, column=ci)
-            # cor do cabeçalho conforme o grupo da tag (identificação, ICMS, …)
-            bg, fg = _GROUP_STYLES.get(c.get("grupo"), _DEFAULT_STYLE)
-            cell.fill = PatternFill("solid", fgColor=bg)
-            cell.font = Font(bold=True, color=fg)
 
         # mapa tag/calc -> letra da coluna (posição REAL, p/ as fórmulas)
         tag2letter, calc2letter = {}, {}
@@ -127,6 +123,7 @@ def build_excel(report: dict, nome_modelo: str) -> bytes:
                     cell = ws.cell(row=trow, column=ci, value=f"=SUBTOTAL(9,{L}2:{L}{nrows + 1})")
                     cell.number_format = _MONEY_FMT
                     cell.font = Font(bold=True)
+        _estilizar_cabecalho(ws, ncols, nrows)
         _autosize(ws, ncols)
 
     ws1 = wb.active
@@ -147,6 +144,9 @@ def build_excel(report: dict, nome_modelo: str) -> bytes:
             ws3.cell(row=1, column=ci).fill = warn_fill
         for r in al["rows"]:
             ws3.append(r)
+        ws3.row_dimensions[1].height = 22
+        ws3.freeze_panes = "A2"
+        ws3.auto_filter.ref = f"A1:{get_column_letter(len(al['cols']))}{len(al['rows']) + 1}"
         _autosize(ws3, len(al["cols"]))
 
     buf = BytesIO()
