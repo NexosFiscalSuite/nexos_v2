@@ -1,6 +1,6 @@
 PY = ./.venv/Scripts/python.exe
 
-.PHONY: up down migrate seed-matrizes seed-demo seed-pg test lint
+.PHONY: up down migrate seed-matrizes seed-demo seed-pg test lint go-live-check
 
 up:                ## Sobe Postgres + Redis (dev)
 	docker compose up -d postgres redis
@@ -26,3 +26,6 @@ test:              ## Roda a suíte
 
 lint:              ## Ruff
 	./.venv/Scripts/ruff.exe check app scripts tests
+
+go-live-check:     ## Verifica prod: migrations no head + JWT forte + RLS/FORCE + role do app
+	$(PY) -m scripts.go_live_check

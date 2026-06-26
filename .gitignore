@@ -9,18 +9,23 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
+env/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
 
+# ── Build ─────────────────────────────────────────────────────────────
+build/
+dist/
+
 # ── Node / frontend ───────────────────────────────────────────────────
 node_modules/
-dist/
 *.log
 
 # ── Dados locais / artefatos ──────────────────────────────────────────
 data/
 *.sqlite
+*.sqlite3
 *.db
 
 # ── Editor / SO ───────────────────────────────────────────────────────

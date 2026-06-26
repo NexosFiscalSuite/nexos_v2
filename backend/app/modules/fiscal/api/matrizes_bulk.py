@@ -69,7 +69,7 @@ async def exportar_matriz(
 async def importar_matriz(
     tipo: str,
     arquivo: UploadFile = File(...),
-    claims: TokenClaims = Depends(require_role(Role.SUPERVISOR)),
+    claims: TokenClaims = Depends(require_role(Role.ADMIN)),
     session: AsyncSession = Depends(tenant_session),
 ):
     resumo = await importar_csv(session, _spec(tipo), await arquivo.read())

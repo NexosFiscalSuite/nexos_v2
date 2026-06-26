@@ -16,6 +16,7 @@ from app.modules.reporting.api.schemas import (
     GerarRequest,
     GerarResponse,
     ModeloCreate,
+    ModeloDuplicar,
     ModeloResponse,
     ModeloUpdate,
     TagInfo,
@@ -89,6 +90,25 @@ async def delete_modelo(
     session: AsyncSession = Depends(tenant_session),
 ):
     await ReportingService(session).delete_modelo(modelo_id)
+
+
+@router.post(
+    "/modelos/{modelo_id}/duplicar",
+    response_model=ModeloResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def duplicar_modelo(
+    modelo_id: UUID,
+    body: ModeloDuplicar | None = None,
+    claims: TokenClaims = Depends(require_role(Role.SUPERVISOR)),
+    session: AsyncSession = Depends(tenant_session),
+):
+    """Duplica um modelo (inclusive template de fábrica) numa cópia editável."""
+    copia = await ReportingService(session).duplicar_modelo(
+        modelo_id, tenant_id=claims.tid, created_by=claims.sub,
+        novo_nome=(body.nome if body else None),
+    )
+    return _to_modelo_response(copia)
 
 
 @router.post(

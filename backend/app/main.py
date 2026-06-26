@@ -14,6 +14,7 @@ from app.core.database import privileged_engine
 from app.core.exceptions import DomainError, domain_error_handler
 from app.core.logging import setup_logging
 from app.core.rate_limit import limiter
+from app.core.security_headers import SecurityHeadersMiddleware
 from app.modules.audit.api.routers import router as audit_router
 from app.modules.cfop_rules.api.routers import router as cfop_regras_router
 from app.modules.companies.api.routers import router as empresas_router
@@ -36,6 +37,10 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
+    # Preflight de segurança (fail-fast em produção): segredo JWT forte + a role
+    # de runtime do app não pode ter SUPERUSER/BYPASSRLS (senão a RLS é ignorada).
+    from app.core.preflight import run_preflight
+    await run_preflight()
     # Provisiona o storage (cria o bucket S3) antes de aceitar uploads. Tolera
     # falha transitória do MinIO no boot: o _ensure_bucket roda de novo no 1º uso.
     try:
@@ -50,11 +55,25 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    is_prod = settings.is_production
     app = FastAPI(
         title=settings.app_name,
         version="2.0.0",
         description="SaaS multi-tenant para escritórios de contabilidade (RLS + RBAC).",
         lifespan=lifespan,
+        # Em produção, desativa docs interativas + schema OpenAPI para reduzir a
+        # superfície de ataque (e liberar a CSP estrita, que quebraria o Swagger).
+        docs_url=None if is_prod else "/docs",
+        redoc_url=None if is_prod else "/redoc",
+        openapi_url=None if is_prod else "/openapi.json",
+    )
+
+    # Headers de segurança (HSTS + CSP só em prod; demais sempre). Adicionado
+    # primeiro -> fica na camada mais externa, garantindo os headers em toda resposta.
+    app.add_middleware(
+        SecurityHeadersMiddleware,
+        hsts=is_prod,
+        csp="default-src 'none'; frame-ancestors 'none'; base-uri 'none'" if is_prod else None,
     )
 
     # Rate limiting (slowapi)

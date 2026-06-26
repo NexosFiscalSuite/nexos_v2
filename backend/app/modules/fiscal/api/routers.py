@@ -41,6 +41,39 @@ from app.shared.danfe_api import gerar_danfe
 
 router = APIRouter(prefix="/fiscal", tags=["Fiscal"])
 
+# ── Limites rígidos de upload (anti-DoS) ─────────────────────────────────────
+# Um XML de NF-e tem ~5-50 KB; 15 MB cobre folga absurda. O .zip carrega milhares
+# de notas, então tem teto bem maior. O limite TOTAL e a contagem de arquivos
+# barram floods. Validação por extensão + magic number (não confiamos no MIME do
+# cliente, que é forjável). A boa-formação do XML é re-verificada no worker
+# (defusedxml) — aqui o ganho é barrar lixo ANTES de gastar memória/fila.
+MAX_XML_BYTES = 15 * 1024 * 1024     # 15 MB por XML
+MAX_ZIP_BYTES = 150 * 1024 * 1024    # 150 MB por ZIP (lote grande de notas)
+MAX_TOTAL_BYTES = 300 * 1024 * 1024  # 300 MB por requisição
+MAX_FILES = 1000                     # nº de arquivos no multipart
+_BOM = b"\xef\xbb\xbf"
+_ZIP_MAGIC = (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08")
+_MB = 1024 * 1024
+
+
+def _validar_upload(fname: str, content: bytes) -> None:
+    """Valida extensão + magic number + tamanho. Levanta DomainError (400) se inválido."""
+    nome = (fname or "").lower()
+    if nome.endswith(".zip"):
+        if content[:4] not in _ZIP_MAGIC:
+            raise DomainError(f"{fname}: conteúdo não é um ZIP válido.")
+        if len(content) > MAX_ZIP_BYTES:
+            raise DomainError(f"{fname}: ZIP excede o limite de {MAX_ZIP_BYTES // _MB} MB.")
+        return
+    if nome.endswith(".xml"):
+        corpo = content[len(_BOM):] if content.startswith(_BOM) else content
+        if corpo.lstrip()[:1] != b"<":
+            raise DomainError(f"{fname}: conteúdo não é um XML válido.")
+        if len(content) > MAX_XML_BYTES:
+            raise DomainError(f"{fname}: XML excede o limite de {MAX_XML_BYTES // _MB} MB.")
+        return
+    raise DomainError(f"{fname}: extensão não permitida (use apenas .xml ou .zip).")
+
 
 def _detail(nota: Nota, itens: list[NotaItem], vinculos: dict | None = None) -> NotaDetailResponse:
     d = NotaDetailResponse.model_validate(nota)
@@ -63,19 +96,32 @@ async def upload_xmls(
     files: list[UploadFile] = File(...),
     claims: TokenClaims = Depends(get_current_claims),
 ):
-    """Recebe XMLs (ou .zip será suportado adiante), guarda no staging e enfileira.
+    """Recebe XMLs/ZIP (apenas .xml e .zip), valida e enfileira para o worker.
 
     O job é criado e COMMITADO antes de enfileirar — evita corrida com o worker.
+    Limites rígidos de tipo/tamanho/quantidade barram DoS antes do processamento.
     """
+    if len(files) > MAX_FILES:
+        raise DomainError(f"Máximo de {MAX_FILES} arquivos por lote.")
+
     storage = get_storage()
     job_id = uuid4()
 
     staging: list[dict] = []
+    total = 0
     for f in files:
+        # Pré-checagem barata pelo Content-Length da parte (evita ler arquivo
+        # gigante na memória só para depois rejeitar). Best-effort: pode ser None.
+        if f.size is not None and f.size > MAX_ZIP_BYTES:
+            raise DomainError(f"{f.filename}: arquivo excede o limite de {MAX_ZIP_BYTES // _MB} MB.")
         content = await f.read()
         if not content:
             continue
         fname = f.filename or "arquivo.xml"
+        _validar_upload(fname, content)
+        total += len(content)
+        if total > MAX_TOTAL_BYTES:
+            raise DomainError(f"Lote excede o limite total de {MAX_TOTAL_BYTES // _MB} MB.")
         key = staging_key(claims.tid, job_id, f"{len(staging)}_{fname}")
         storage.put(key, content)
         staging.append({"key": key, "filename": fname})

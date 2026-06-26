@@ -38,6 +38,10 @@ class ModeloUpdate(BaseModel):
     config: ModeloConfig | None = None
 
 
+class ModeloDuplicar(BaseModel):
+    nome: str | None = Field(default=None, max_length=120)
+
+
 class ModeloResponse(BaseModel):
     id: UUID
     nome: str

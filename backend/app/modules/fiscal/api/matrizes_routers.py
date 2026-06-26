@@ -1,8 +1,9 @@
 """CRUD de Matrizes Fiscais — tabelas GLOBAIS (sem RLS): MVA, Enquadramento e FCP.
 
-Leitura: qualquer usuário autenticado. Escrita: supervisor+ (a regra vale para
-todos os tenants do escritório). Um factory registra os 4 verbos por matriz para
-não repetir o mesmo CRUD três vezes.
+Leitura: qualquer usuário autenticado. Escrita: ADMIN apenas (alterar a regra
+fiscal é tarefa administrativa; a regra vale para todas as empresas do
+escritório). Um factory registra os 4 verbos por matriz para não repetir o mesmo
+CRUD três vezes.
 """
 from collections.abc import Callable
 
@@ -73,7 +74,7 @@ def _registrar_crud(
     )
     async def _criar(
         body: create_schema,  # type: ignore[valid-type]
-        claims: TokenClaims = Depends(require_role(Role.SUPERVISOR)),
+        claims: TokenClaims = Depends(require_role(Role.ADMIN)),
         session: AsyncSession = Depends(tenant_session),
     ):
         linha = modelo(**body.normalizado())
@@ -89,7 +90,7 @@ def _registrar_crud(
     async def _editar(
         linha_id: int,
         body: update_schema,  # type: ignore[valid-type]
-        claims: TokenClaims = Depends(require_role(Role.SUPERVISOR)),
+        claims: TokenClaims = Depends(require_role(Role.ADMIN)),
         session: AsyncSession = Depends(tenant_session),
     ):
         linha = await session.get(modelo, linha_id)
@@ -109,7 +110,7 @@ def _registrar_crud(
     )
     async def _remover(
         linha_id: int,
-        claims: TokenClaims = Depends(require_role(Role.SUPERVISOR)),
+        claims: TokenClaims = Depends(require_role(Role.ADMIN)),
         session: AsyncSession = Depends(tenant_session),
     ):
         linha = await session.get(modelo, linha_id)

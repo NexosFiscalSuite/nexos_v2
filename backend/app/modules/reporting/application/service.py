@@ -127,7 +127,10 @@ class ReportingService:
         if m is None:
             raise NotFoundError("Modelo não encontrado.")
         if m.sistema:
-            raise DomainError("Template de fábrica não pode ser editado — duplique para personalizar.")
+            raise DomainError(
+                "Template de fábrica não pode ser editado — duplique para personalizar.",
+                code="template_sistema",
+            )
         if nome:
             m.nome = nome.strip()
         if config is not None:
@@ -140,8 +143,41 @@ class ReportingService:
         if modelo is None:
             raise NotFoundError("Modelo não encontrado.")
         if modelo.sistema:
-            raise DomainError("Template de fábrica não pode ser excluído.")
+            raise DomainError(
+                "Template de fábrica não pode ser excluído.", code="template_sistema"
+            )
         await self.session.delete(modelo)
+
+    async def duplicar_modelo(
+        self, modelo_id: UUID, *, tenant_id: UUID, created_by: UUID, novo_nome: str | None = None
+    ) -> RelatorioModelo:
+        """Cria uma cópia EDITÁVEL (sistema=False) de um modelo — o caminho para
+        personalizar um template de fábrica sem tocar no original."""
+        origem = await self.get_modelo(modelo_id)
+        if origem is None:
+            raise NotFoundError("Modelo não encontrado.")
+        base = (novo_nome or f"Cópia de {origem.nome}").strip()
+        # Resolve colisão de nome (uq: empresa_id, nome, fluxo) com sufixo incremental.
+        nome = base
+        for i in range(2, 100):
+            existe = await self.session.execute(
+                select(RelatorioModelo.id).where(
+                    RelatorioModelo.empresa_id == origem.empresa_id,
+                    RelatorioModelo.nome == nome,
+                    RelatorioModelo.fluxo == origem.fluxo,
+                )
+            )
+            if existe.scalar_one_or_none() is None:
+                break
+            nome = f"{base} ({i})"
+        copia = RelatorioModelo(
+            id=uuid4(), tenant_id=tenant_id, empresa_id=origem.empresa_id,
+            nome=nome, fluxo=origem.fluxo, config_json=dict(origem.config_json or {}),
+            sistema=False, created_by=created_by,
+        )
+        self.session.add(copia)
+        await self.session.flush()
+        return copia
 
     async def load_notas_com_tipos(self, empresa_id: UUID, fluxo: str, ano: str | None, mes: str | None):
         """Retorna [(Nota, {numero_item: tipo_sped})] das notas ativas do período."""
