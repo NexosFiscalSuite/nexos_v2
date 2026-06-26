@@ -137,7 +137,7 @@ export default function Dashboard() {
           </div>
 
           {/* Bloco 2 — KPIs (funil) */}
-          <div className="hover-lift" style={{ background: 'var(--surface)', border: '1px solid var(--hairline)', borderRadius: 'var(--radius-lg)', padding: '20px 8px', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', alignItems: 'center' }}>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--hairline)', borderRadius: 'var(--radius-lg)', padding: '20px 8px', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', alignItems: 'center' }}>
             <Kpi valor={fmt(totalEmpresas)} label="Empresas" icon="ti-building-store" />
             <Kpi valor={fmt(notasProc)} label="Notas processadas" icon="ti-files" sep />
             <Kpi valor={pct(totalEmpresas ? comGargalo / totalEmpresas * 100 : 0)} label="Com gargalos" icon="ti-arrows-exchange" cor="var(--warn-text)" sep />
@@ -145,7 +145,7 @@ export default function Dashboard() {
           </div>
 
           {/* Bloco 3 — Dica/atalho (flat branco, accent verde) */}
-          <div className="hover-lift" onClick={() => navigate('/cfop-regras')} style={{ background: 'var(--surface)', border: '1px solid var(--hairline)', borderRadius: 'var(--radius-lg)', padding: '20px', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <div onClick={() => navigate('/cfop-regras')} style={{ background: 'var(--surface)', border: '1px solid var(--hairline)', borderRadius: 'var(--radius-lg)', padding: '20px', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <div>
               <span style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--primary-lt)', color: 'var(--primary-text)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 17 }}><i className="ti ti-bulb" /></span>
               <div style={{ fontWeight: 600, marginTop: 12, fontSize: 14, color: 'var(--ink)', letterSpacing: '-0.2px' }}>Dica do Sistema</div>
