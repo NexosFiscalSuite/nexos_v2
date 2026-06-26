@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import nexosIcon from '../assets/nexos-icon-clean.png'
+import solIcon from '../assets/sol-icon.svg'
 
 export default function Login() {
   const { login }   = useAuth()
@@ -50,7 +50,7 @@ export default function Login() {
 
       <div className="login-card">
         <div className="login-logo">
-          <img src={nexosIcon} alt="Nexos" />
+          <img src={solIcon} alt="Sol Contabilidade" />
         </div>
 
         <div className="login-head">

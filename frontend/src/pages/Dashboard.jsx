@@ -132,7 +132,7 @@ export default function Dashboard() {
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.6px', fontWeight: 600 }}>Impacto Total</div>
             <div style={{ fontSize: 40, fontWeight: 700, marginTop: 12, letterSpacing: '-1.8px', color: '#FFFFFF', lineHeight: 1 }}>{fmtBRL(impactoTotal)}</div>
             <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.65)', marginTop: 12, lineHeight: 1.5 }}>Soma das divergências e antecipações do escritório em {mes}/{ano}.</div>
-            <div style={{ position: 'absolute', right: -36, bottom: -36, width: 132, height: 132, borderRadius: '50%', background: 'rgba(130,223,111,0.14)' }} />
+            <div style={{ position: 'absolute', right: -36, bottom: -36, width: 132, height: 132, borderRadius: '50%', background: 'rgba(142,160,206,0.18)' }} />
           </div>
 
           {/* Bloco 2 — KPIs (funil) */}

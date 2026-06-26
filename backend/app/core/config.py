@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     )
 
     # App ----------------------------------------------------------------------
-    app_name: str = "Nexos Fiscal Suite V2"
+    app_name: str = "Sol Contabilidade"
     environment: str = "development"
     debug: bool = False
     api_prefix: str = "/api/v1"
