@@ -1,0 +1,58 @@
+#!/bin/sh
+# ─────────────────────────────────────────────────────────────────────────────
+# pre-push — guard-rail local da branch `main` (substituto gratuito de ruleset).
+#
+# Bloqueia:
+#   * deleção da main
+#   * force-push / non-fast-forward na main
+# E, em qualquer push que atualize a main, roda ruff + pytest ANTES de subir.
+#
+# Ative (uma vez por clone):  git config core.hooksPath .githooks
+# Pular em emergência:        git push --no-verify   (use com consciência)
+# ─────────────────────────────────────────────────────────────────────────────
+set -e
+
+Z40=0000000000000000000000000000000000000000
+push_main=0
+
+# git envia no stdin: <local_ref> <local_sha> <remote_ref> <remote_sha>
+while read -r local_ref local_sha remote_ref remote_sha; do
+    [ "$remote_ref" = "refs/heads/main" ] || continue
+
+    # Deleção da main (local_sha = tudo-zero)
+    if [ "$local_sha" = "$Z40" ]; then
+        echo "pre-push: BLOQUEADO — deleção da branch 'main' não é permitida." >&2
+        exit 1
+    fi
+
+    # Force-push: remote_sha existe e NÃO é ancestral do local (não-fast-forward)
+    if [ "$remote_sha" != "$Z40" ]; then
+        if ! git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
+            echo "pre-push: BLOQUEADO — force-push/non-fast-forward na 'main' não é permitido." >&2
+            exit 1
+        fi
+    fi
+    push_main=1
+done
+
+[ "$push_main" -eq 1 ] || exit 0
+
+echo "pre-push: push afeta a 'main' -> rodando ruff + pytest..."
+
+repo_root=$(git rev-parse --show-toplevel)
+if [ -x "$repo_root/backend/.venv/Scripts/python.exe" ]; then
+    PY="$repo_root/backend/.venv/Scripts/python.exe"   # Windows
+elif [ -x "$repo_root/backend/.venv/bin/python" ]; then
+    PY="$repo_root/backend/.venv/bin/python"           # Unix
+else
+    PY=python                                          # fallback (PATH)
+fi
+
+cd "$repo_root/backend"
+echo "  -> ruff check app"
+"$PY" -m ruff check app || { echo "pre-push: BLOQUEADO — ruff falhou. Corrija antes de subir." >&2; exit 1; }
+echo "  -> pytest -q"
+"$PY" -m pytest -q || { echo "pre-push: BLOQUEADO — pytest falhou. Corrija antes de subir." >&2; exit 1; }
+
+echo "pre-push: OK — checagens verdes, prosseguindo com o push."
+exit 0

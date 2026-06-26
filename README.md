@@ -64,6 +64,17 @@ cd backend
 pytest            # ou: make test
 ```
 
+### Git hooks (proteção local da `main`)
+
+O repositório versiona um hook `pre-push` em [`.githooks/`](.githooks/pre-push) que
+bloqueia force-push/deleção da `main` e roda `ruff`+`pytest` antes de qualquer push
+que a afete. Ative-o **uma vez por clone**:
+
+```bash
+git config core.hooksPath .githooks
+```
+> Emergência: `git push --no-verify` pula o hook (use com consciência).
+
 ### Checagem de go-live (produção)
 
 ```bash
