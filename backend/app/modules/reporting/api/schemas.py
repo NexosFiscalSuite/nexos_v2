@@ -43,6 +43,7 @@ class ModeloResponse(BaseModel):
     nome: str
     fluxo: str
     config: dict
+    sistema: bool = False
     created_at: datetime | None = None
 
 

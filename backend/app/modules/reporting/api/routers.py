@@ -31,7 +31,8 @@ _XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
 def _to_modelo_response(m: RelatorioModelo) -> ModeloResponse:
-    return ModeloResponse(id=m.id, nome=m.nome, fluxo=m.fluxo, config=m.config_json or {}, created_at=m.created_at)
+    return ModeloResponse(id=m.id, nome=m.nome, fluxo=m.fluxo, config=m.config_json or {},
+                          sistema=m.sistema, created_at=m.created_at)
 
 
 @router.get("/tags", response_model=list[TagInfo])
@@ -46,7 +47,7 @@ async def list_modelos(
     claims: TokenClaims = Depends(get_current_claims),
     session: AsyncSession = Depends(tenant_session),
 ):
-    modelos = await ReportingService(session).list_modelos(empresa_id, fluxo)
+    modelos = await ReportingService(session).list_modelos(empresa_id, fluxo, tenant_id=claims.tid)
     return [_to_modelo_response(m) for m in modelos]
 
 

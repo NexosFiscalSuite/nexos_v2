@@ -39,15 +39,65 @@ def _valida_config(config: dict) -> dict:
     }
 
 
+# Templates de fábrica (modelos oficiais, criados sob demanda por empresa).
+def _cols(*keys):
+    return [{"tag": k} for k in keys]
+
+
+_TEMPLATES = [
+    {
+        "nome": "Apuração de ICMS-ST", "fluxo": "entrada",
+        "config": {
+            "capa": _cols("chNFe", "dhEmi", "emit_CNPJ", "emit_xNome", "dest_CNPJ"),
+            "itens": _cols("it_xProd", "it_NCM", "it_vProd", "it_vICMSST", "it_pMVAST", "it_vBCST"),
+            "totais": True, "finalidade": True, "calculos": True,
+        },
+    },
+    {
+        "nome": "Conferência de Entradas", "fluxo": "entrada",
+        "config": {
+            "capa": _cols("chNFe", "serie", "dhEmi", "natOp"),
+            "itens": _cols("it_cProd", "it_xProd", "it_NCM", "it_qCom", "it_vUnCom", "it_vProd"),
+            "totais": True, "finalidade": False, "calculos": False,
+        },
+    },
+]
+
+
 class ReportingService:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def list_modelos(self, empresa_id: UUID, fluxo: str | None = None) -> list[RelatorioModelo]:
+    async def _ensure_templates(self, tenant_id: UUID, empresa_id: UUID) -> None:
+        """Cria os templates de fábrica que faltarem para a empresa (idempotente)."""
+        existentes = set((await self.session.execute(
+            select(RelatorioModelo.nome).where(
+                RelatorioModelo.empresa_id == empresa_id, RelatorioModelo.sistema.is_(True))
+        )).scalars().all())
+        novos = [
+            RelatorioModelo(
+                id=uuid4(), tenant_id=tenant_id, empresa_id=empresa_id,
+                nome=t["nome"], fluxo=t["fluxo"], config_json=_valida_config(t["config"]),
+                sistema=True, created_by=None,
+            )
+            for t in _TEMPLATES if t["nome"] not in existentes
+        ]
+        if novos:
+            self.session.add_all(novos)
+            await self.session.flush()
+
+    async def list_modelos(
+        self, empresa_id: UUID, fluxo: str | None = None, tenant_id: UUID | None = None
+    ) -> list[RelatorioModelo]:
+        if tenant_id is not None:
+            await self._ensure_templates(tenant_id, empresa_id)
         stmt = select(RelatorioModelo).where(RelatorioModelo.empresa_id == empresa_id)
         if fluxo:
             stmt = stmt.where(RelatorioModelo.fluxo == fluxo)
-        res = await self.session.execute(stmt.order_by(RelatorioModelo.fluxo, RelatorioModelo.nome))
+        # Templates de fábrica primeiro, depois os do usuário.
+        res = await self.session.execute(
+            stmt.order_by(RelatorioModelo.sistema.desc(), RelatorioModelo.fluxo, RelatorioModelo.nome)
+        )
         return list(res.scalars().all())
 
     async def get_modelo(self, modelo_id: UUID) -> RelatorioModelo | None:
@@ -76,6 +126,8 @@ class ReportingService:
         m = await self.get_modelo(modelo_id)
         if m is None:
             raise NotFoundError("Modelo não encontrado.")
+        if m.sistema:
+            raise DomainError("Template de fábrica não pode ser editado — duplique para personalizar.")
         if nome:
             m.nome = nome.strip()
         if config is not None:
@@ -87,6 +139,8 @@ class ReportingService:
         modelo = await self.session.get(RelatorioModelo, modelo_id)
         if modelo is None:
             raise NotFoundError("Modelo não encontrado.")
+        if modelo.sistema:
+            raise DomainError("Template de fábrica não pode ser excluído.")
         await self.session.delete(modelo)
 
     async def load_notas_com_tipos(self, empresa_id: UUID, fluxo: str, ano: str | None, mes: str | None):

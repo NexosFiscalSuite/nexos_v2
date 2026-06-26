@@ -3,6 +3,7 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     ForeignKey,
     String,
@@ -32,6 +33,7 @@ class RelatorioModelo(Base):
     nome: Mapped[str] = mapped_column(String(120))
     fluxo: Mapped[str] = mapped_column(String(10))
     config_json: Mapped[dict] = mapped_column(JSONB)  # {"colunas": [...]}
+    sistema: Mapped[bool] = mapped_column(Boolean, default=False)  # template de fábrica
     created_by: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

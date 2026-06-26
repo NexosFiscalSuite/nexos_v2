@@ -92,6 +92,17 @@ export default function Relatorios() {
     setEditId(m.id); setBuilderTab('capa'); setModal(true)
   }
 
+  // Templates de fábrica: abre o editor como modelo NOVO (cópia editável).
+  function duplicar(m) {
+    const c = m.config || {}
+    const capaLegacy = (c.auditoria || []).map(n => ({ audit: true, label: n }))
+    setForm({
+      nome: `Cópia de ${m.nome}`, fluxo: m.fluxo, totais: !!c.totais, finalidade: c.finalidade !== false, calculos: c.calculos !== false,
+      capa: withUid([...(c.capa || []), ...capaLegacy]), itens: withUid(c.itens || []),
+    })
+    setEditId(null); setBuilderTab('capa'); setModal(true)
+  }
+
   const strip = (cols) => cols.map(({ uid: _u, ...c }) => (c.audit ? { audit: true, label: c.label || 'Auditoria' } : { tag: c.tag, label: c.label }))
 
   async function salvar(e) {
@@ -160,12 +171,21 @@ export default function Relatorios() {
                   <div key={m.id} className="card">
                     <div className="card-header">
                       <div>
-                        <div className="card-title">{m.nome}</div>
+                        <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {m.nome}
+                          {m.sistema && <span className="badge badge-info" style={{ fontSize: 10 }} title="Template oficial do sistema"><i className="ti ti-shield-check" style={{ marginRight: 3 }} />Sistema</span>}
+                        </div>
                         <div className="card-sub">{FLUXO_OPTS.find(f => f.value === m.fluxo)?.label || m.fluxo} · {(c.capa || []).length} cap. · {(c.itens || []).length} itens{c.totais ? ' · totais' : ''}</div>
                       </div>
                       <div style={{ display: 'flex', gap: 4 }}>
-                        <button className="btn btn-icon" title="Editar" onClick={() => abrirEdit(m)}><i className="ti ti-pencil" /></button>
-                        <button className="btn btn-icon" title="Excluir" onClick={() => excluir(m.id)}><i className="ti ti-trash" /></button>
+                        {m.sistema ? (
+                          <button className="btn btn-icon" title="Duplicar para personalizar" onClick={() => duplicar(m)}><i className="ti ti-copy" /></button>
+                        ) : (
+                          <>
+                            <button className="btn btn-icon" title="Editar" onClick={() => abrirEdit(m)}><i className="ti ti-pencil" /></button>
+                            <button className="btn btn-icon" title="Excluir" onClick={() => excluir(m.id)}><i className="ti ti-trash" /></button>
+                          </>
+                        )}
                       </div>
                     </div>
                     <button className="btn btn-primary btn-sm" style={{ marginTop: 12 }} disabled={gerando === m.id} onClick={() => gerar(m)}>

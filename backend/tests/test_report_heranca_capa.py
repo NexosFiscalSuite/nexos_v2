@@ -59,3 +59,15 @@ def test_excel_premium_freeze_cabecalho_e_autofilter():
     assert head.font.bold is True
     assert head.fill.fgColor.rgb.endswith("EFEFF1")    # cinza claro
     assert ws.column_dimensions["A"].width >= 44       # Chave de Acesso não esmagada
+
+
+def test_templates_de_fabrica_config_valida():
+    from app.modules.reporting.application.service import _TEMPLATES, _valida_config
+    from app.modules.reporting.domain.tags import TAGS
+
+    assert {t["nome"] for t in _TEMPLATES} == {"Apuração de ICMS-ST", "Conferência de Entradas"}
+    assert "it_pMVAST" in TAGS                          # tag de MVA adicionada
+    for t in _TEMPLATES:
+        cfg = _valida_config(t["config"])               # não levanta DomainError
+        for col in [*cfg["capa"], *cfg["itens"]]:
+            assert col["tag"] in TAGS                    # toda tag do template existe

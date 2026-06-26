@@ -81,6 +81,7 @@ _DEFS = [
     ("it_vBC", "BC ICMS", "item", "ICMS", ["imposto", "ICMS", "vBC"], True),
     ("it_pICMS", "Alíquota ICMS", "item", "ICMS", ["imposto", "ICMS", "pICMS"], False),
     ("it_vICMS", "Valor ICMS", "item", "ICMS", ["imposto", "ICMS", "vICMS"], True),
+    ("it_pMVAST", "MVA ST (%)", "item", "ICMS ST", ["imposto", "ICMS", "pMVAST"], False),
     ("it_vBCST", "BC ICMS ST", "item", "ICMS ST", ["imposto", "ICMS", "vBCST"], True),
     ("it_vICMSST", "Valor ICMS ST", "item", "ICMS ST", ["imposto", "ICMS", "vICMSST"], True),
     # ── Item: IPI ──
