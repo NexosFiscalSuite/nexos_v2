@@ -1,6 +1,9 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, lazy, Suspense } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
+
+// three.js é pesado: carrega só quando o Dashboard monta (code-split).
+const ShaderAnimation = lazy(() => import('../components/ShaderAnimation'))
 import { useRefresh } from '../context/RefreshContext'
 import { useCompetencia } from '../context/CompetenciaContext'
 
@@ -130,10 +133,15 @@ export default function Dashboard() {
             padding: '22px 24px', position: 'relative', overflow: 'hidden',
             boxShadow: '0 14px 34px rgba(15,31,56,0.32)',
           }}>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.6px', fontWeight: 600 }}>Impacto Total</div>
-            <div style={{ fontSize: 40, fontWeight: 700, marginTop: 12, letterSpacing: '-1.8px', color: '#FFFFFF', lineHeight: 1 }}>{fmtBRL(impactoTotal)}</div>
-            <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.65)', marginTop: 12, lineHeight: 1.5 }}>Soma das divergências e antecipações do escritório em {mes}/{ano}.</div>
-            <div style={{ position: 'absolute', right: -36, bottom: -36, width: 132, height: 132, borderRadius: '50%', background: 'rgba(130,223,111,0.14)' }} />
+            {/* Shader WebGL (verde Nexos) como "linhas de luz" sutis sobre o navy */}
+            <div style={{ position: 'absolute', inset: 0, opacity: 0.45, mixBlendMode: 'screen', pointerEvents: 'none' }}>
+              <Suspense fallback={null}><ShaderAnimation /></Suspense>
+            </div>
+            <div style={{ position: 'relative', zIndex: 1 }}>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.6px', fontWeight: 600 }}>Impacto Total</div>
+              <div style={{ fontSize: 40, fontWeight: 700, marginTop: 12, letterSpacing: '-1.8px', color: '#FFFFFF', lineHeight: 1 }}>{fmtBRL(impactoTotal)}</div>
+              <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.7)', marginTop: 12, lineHeight: 1.5 }}>Soma das divergências e antecipações do escritório em {mes}/{ano}.</div>
+            </div>
           </div>
 
           {/* Bloco 2 — KPIs (funil) */}
