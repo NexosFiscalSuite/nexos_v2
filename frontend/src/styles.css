@@ -117,6 +117,11 @@ a:hover { color: var(--primary-h); }
 .card-title { font-size: 14px; font-weight: 600; color: var(--text-1); }
 .card-sub   { font-size: 12px; color: var(--text-3); margin-top: 2px; }
 
+/* Micro-interação premium: leve elevação + sombra suave ao passar o mouse. */
+.hover-lift { transition: transform .2s cubic-bezier(.2,.8,.2,1), box-shadow .2s ease, border-color .2s ease; }
+.hover-lift:hover { transform: translateY(-4px); box-shadow: 0 12px 30px rgba(15,31,56,0.14); border-color: var(--primary-lt2); }
+@media (prefers-reduced-motion: reduce) { .hover-lift { transition: none; } .hover-lift:hover { transform: none; } }
+
 /* ── Stat cards (Bento) ── */
 .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 16px; margin-bottom: 24px; }
 .stat-card {
