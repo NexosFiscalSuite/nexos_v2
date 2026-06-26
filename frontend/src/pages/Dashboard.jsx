@@ -122,30 +122,29 @@ export default function Dashboard() {
 
       {!loading && (
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(230px,1fr) minmax(360px,1.8fr) minmax(230px,1fr)', gap: 16, marginBottom: 22 }}>
-          {/* Bloco 1 — Destaque financeiro (navy gradiente) */}
-          <div style={{ background: 'var(--navy-grad)', borderRadius: 'var(--radius-lg)', padding: '22px 24px', color: '#fff', position: 'relative', overflow: 'hidden' }}>
-            <div style={{ fontSize: 12.5, color: 'var(--navy-text)', display: 'flex', alignItems: 'center', gap: 6 }}><i className="ti ti-alert-octagon" /> Impacto Total · {mes}/{ano}</div>
-            <div style={{ fontSize: 33, fontWeight: 800, marginTop: 10, letterSpacing: '-1px', fontFamily: 'var(--font-display)' }}>{fmtBRL(impactoTotal)}</div>
-            <div style={{ fontSize: 12, color: 'var(--navy-text)', marginTop: 6, lineHeight: 1.5 }}>Soma das divergências e antecipações do escritório na competência.</div>
-            <div style={{ position: 'absolute', right: -34, bottom: -34, width: 130, height: 130, borderRadius: '50%', background: 'rgba(130,223,111,0.13)' }} />
+          {/* Bloco 1 — Destaque financeiro (flat branco, tipografia forte) */}
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--hairline)', borderRadius: 'var(--radius-lg)', padding: '22px 24px' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-4)', textTransform: 'uppercase', letterSpacing: '0.6px', fontWeight: 600 }}>Impacto Total</div>
+            <div style={{ fontSize: 40, fontWeight: 700, marginTop: 12, letterSpacing: '-1.8px', color: 'var(--ink)', lineHeight: 1 }}>{fmtBRL(impactoTotal)}</div>
+            <div style={{ fontSize: 12.5, color: 'var(--text-3)', marginTop: 12, lineHeight: 1.5 }}>Soma das divergências e antecipações do escritório em {mes}/{ano}.</div>
           </div>
 
-          {/* Bloco 2 — KPIs brancos (funil) */}
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '20px 8px', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', alignItems: 'center', boxShadow: 'var(--shadow-sm)' }}>
+          {/* Bloco 2 — KPIs (funil) */}
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--hairline)', borderRadius: 'var(--radius-lg)', padding: '20px 8px', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', alignItems: 'center' }}>
             <Kpi valor={fmt(totalEmpresas)} label="Empresas" icon="ti-building-store" />
             <Kpi valor={fmt(notasProc)} label="Notas processadas" icon="ti-files" sep />
             <Kpi valor={pct(totalEmpresas ? comGargalo / totalEmpresas * 100 : 0)} label="Com gargalos" icon="ti-arrows-exchange" cor="var(--warn-text)" sep />
             <Kpi valor={pct(totalEmpresas ? comDiverg / totalEmpresas * 100 : 0)} label="Com divergências" icon="ti-alert-octagon" cor="var(--err-text)" sep />
           </div>
 
-          {/* Bloco 3 — Banner/atalho (navy sólido) */}
-          <div onClick={() => navigate('/cfop-regras')} style={{ background: 'var(--navy)', borderRadius: 'var(--radius-lg)', padding: '20px', color: '#fff', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', border: '1px solid var(--navy-border)' }}>
+          {/* Bloco 3 — Dica/atalho (flat branco, accent verde) */}
+          <div onClick={() => navigate('/cfop-regras')} style={{ background: 'var(--surface)', border: '1px solid var(--hairline)', borderRadius: 'var(--radius-lg)', padding: '20px', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <div>
-              <span style={{ width: 30, height: 30, borderRadius: 8, background: 'var(--navy-active)', color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 17 }}><i className="ti ti-bulb" /></span>
-              <div style={{ fontWeight: 600, marginTop: 12, fontSize: 14 }}>Dica do Sistema</div>
-              <div style={{ fontSize: 12.5, color: 'var(--navy-text)', marginTop: 5, lineHeight: 1.5 }}>Configure seus CFOPs globais para destravar notas retroativamente.</div>
+              <span style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--primary-lt)', color: 'var(--primary-text)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 17 }}><i className="ti ti-bulb" /></span>
+              <div style={{ fontWeight: 600, marginTop: 12, fontSize: 14, color: 'var(--ink)', letterSpacing: '-0.2px' }}>Dica do Sistema</div>
+              <div style={{ fontSize: 12.5, color: 'var(--text-3)', marginTop: 5, lineHeight: 1.5 }}>Configure seus CFOPs globais para destravar notas retroativamente.</div>
             </div>
-            <div style={{ color: 'var(--primary)', fontSize: 12.5, fontWeight: 600, marginTop: 16, display: 'flex', alignItems: 'center', gap: 5 }}>Ir para De/Para CFOP <i className="ti ti-arrow-right" /></div>
+            <div style={{ color: 'var(--primary-text)', fontSize: 12.5, fontWeight: 600, marginTop: 16, display: 'flex', alignItems: 'center', gap: 5 }}>Ir para De/Para CFOP <i className="ti ti-arrow-right" /></div>
           </div>
         </div>
       )}

@@ -4,42 +4,38 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:           #F8F9FA;
+  /* Estética Ultra-Premium (Apple): canvas parchment, superfícies brancas,
+     separação por hairline de 1px, zero sombra em cards/modais. */
+  --bg:           #F5F5F7;   /* parchment (canvas da página) */
   --surface:      #FFFFFF;
   --surface-2:    #F3F4F6;
   --topbar-bg:    #FFFFFF;
+  --sidebar-bg:   #FFFFFF;   /* sidebar clara: a logo respira e aparece 100% */
 
-  --primary:      #82DF6F;
+  --primary:      #82DF6F;   /* Verde Nexos = accent (ação) */
   --primary-h:    #72D35E;
   --primary-d:    #4FA83C;
   --primary-text: #2F7D1E;
   --primary-lt:   #EFFBEC;
   --primary-lt2:  #D3F2CB;
 
-  /* Azul-marinho da logo (#142543) — cor de ancoragem/base. Verde = accent. */
-  --navy:         #142543;
-  --navy-2:       #1E3A5F;
-  --navy-3:       #2C476F;
-  --navy-grad:    linear-gradient(135deg, #1B3055 0%, #0F1F38 100%);
-  --navy-text:    #AEC0DC;   /* texto secundário sobre navy */
-  --navy-text-hi: #FFFFFF;   /* texto/realce sobre navy */
-  --navy-border:  rgba(255,255,255,0.09);
-  --navy-active:  rgba(130,223,111,0.16);  /* realce verde translúcido no navy */
+  --ink:          #1D1D1F;   /* texto/ícones (quase-preto Apple) */
+  --hairline:     #E0E0E0;   /* borda finíssima de separação */
 
-  /* Sidebar agora é navy (peso visual); itens usam os tons --navy-* acima. */
-  --sidebar-bg:   #142543;
-
-  --text-1:       #111827;
+  --text-1:       #1D1D1F;
   --text-2:       #374151;
   --text-3:       #6B7280;
   --text-4:       #9CA3AF;
 
   --border:       #E5E7EB;
-  --border-2:     #F3F4F6;
+  --border-2:     #F1F1F3;
 
-  --shadow-sm:    0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
-  --shadow-md:    0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
-  --shadow-lg:    0 10px 32px rgba(0,0,0,0.10), 0 4px 8px rgba(0,0,0,0.06);
+  /* Flat & crisp: sem sombra em cards/modais (separação só por hairline).
+     --shadow-pop fica para elementos flutuantes (toast/dropdown). */
+  --shadow-sm:    none;
+  --shadow-md:    none;
+  --shadow-lg:    none;
+  --shadow-pop:   0 8px 24px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.06);
 
   --ok-bg:        #D1FAE5; --ok-text:   #065F46;
   --err-bg:       #FEE2E2; --err-text:  #991B1B;
@@ -47,8 +43,9 @@
   --info-bg:      #DBEAFE; --info-text: #1E40AF;
 
   --radius:       8px;
-  --radius-lg:    12px;
-  --radius-xl:    16px;
+  --radius-lg:    18px;      /* cards de utilidade/dashboard (Apple lg) */
+  --radius-xl:    18px;
+  --radius-pill:  9999px;    /* botões de ação = pílula */
 
   --sidebar-w:    240px;
   --sidebar-w-c:  64px;
@@ -89,28 +86,29 @@ a:hover { color: var(--primary-h); }
 /* ── Buttons ── */
 .btn {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 8px 16px; border-radius: var(--radius); border: 1.5px solid transparent;
+  padding: 9px 18px; border-radius: var(--radius-pill); border: 1px solid transparent;
   font-family: var(--font); font-size: 13px; font-weight: 500;
-  cursor: pointer; transition: all 0.15s; white-space: nowrap; line-height: 1;
+  cursor: pointer; transition: background .15s, transform .1s, border-color .15s;
+  white-space: nowrap; line-height: 1;
 }
-.btn-primary { background: var(--primary); color: #173B0E; border-color: var(--primary); font-weight: 600; }
-.btn-primary:hover { background: var(--primary-h); border-color: var(--primary-h); box-shadow: 0 2px 8px rgba(130,223,111,0.3); transform: translateY(-1px); }
-.btn-primary:active { transform: translateY(0); }
-.btn-secondary { background: var(--surface); color: var(--text-2); border-color: var(--border); }
-.btn-secondary:hover { background: var(--surface-2); border-color: #D1D5DB; }
+.btn:active { transform: scale(0.96); }   /* micro-interação Apple */
+.btn-primary { background: var(--primary); color: #FFFFFF; border-color: var(--primary); font-weight: 600; }
+.btn-primary:hover { background: var(--primary-h); border-color: var(--primary-h); }
+.btn-secondary { background: var(--surface); color: var(--ink); border-color: var(--hairline); }
+.btn-secondary:hover { background: var(--surface-2); }
 .btn-ghost { background: transparent; color: var(--text-3); border-color: transparent; }
-.btn-ghost:hover { background: var(--surface-2); color: var(--text-2); }
+.btn-ghost:hover { background: var(--surface-2); color: var(--ink); }
 .btn-danger { background: #EF4444; color: #fff; border-color: #EF4444; }
 .btn-danger:hover { background: #DC2626; border-color: #DC2626; }
-.btn-sm { padding: 5px 10px; font-size: 12px; }
-.btn-icon { padding: 7px; border-radius: var(--radius); }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+.btn-sm { padding: 6px 12px; font-size: 12px; }
+.btn-icon { padding: 7px; border-radius: 50%; }   /* ícone = círculo */
+.btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
 
-/* ── Cards ── */
+/* ── Cards ── (flat: hairline 1px, zero sombra, 18px) */
 .card {
-  background: var(--surface); border: 1px solid var(--border);
+  background: var(--surface); border: 1px solid var(--hairline);
   border-radius: var(--radius-lg); padding: 20px;
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 .card-header {
   display: flex; align-items: center; justify-content: space-between;
@@ -122,8 +120,8 @@ a:hover { color: var(--primary-h); }
 /* ── Stat cards (Bento) ── */
 .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 16px; margin-bottom: 24px; }
 .stat-card {
-  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
-  padding: 20px; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 10px;
+  background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius-lg);
+  padding: 20px; box-shadow: none; display: flex; flex-direction: column; gap: 10px;
 }
 .stat-card .s-icon {
   width: 38px; height: 38px; border-radius: 10px;
@@ -281,9 +279,10 @@ input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible {
 /* ── Toast ── */
 .toast-container { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 8px; z-index: 9999; }
 .toast {
-  padding: 12px 16px; border-radius: var(--radius-lg); font-size: 13px; font-weight: 500;
+  padding: 12px 16px; border-radius: 14px; font-size: 13px; font-weight: 500;
   display: flex; align-items: center; gap: 10px; min-width: 280px;
-  animation: slideUp 0.25s ease; box-shadow: var(--shadow-lg); background: var(--surface);
+  animation: slideUp 0.25s ease; box-shadow: var(--shadow-pop); background: var(--surface);
+  border: 1px solid var(--hairline);
 }
 .toast-ok    { border-left: 3px solid #10B981; }
 .toast-error { border-left: 3px solid #EF4444; }
@@ -343,7 +342,7 @@ input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible {
 
 /* ── Modal overlay ── */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.35); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
-.modal { background: var(--surface); border-radius: var(--radius-xl); width: 480px; max-width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow-lg); }
+.modal { background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius-xl); width: 480px; max-width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow-pop); }
 .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid var(--border-2); }
 .modal-header h2 { font-size: 16px; font-weight: 600; color: var(--text-1); }
 .modal-body { padding: 20px 24px; }
