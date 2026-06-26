@@ -30,8 +30,8 @@ function LinhaEmpresa({ e, aberto, onToggle }) {
         </td>
         <td style={{ fontWeight: 500, color: 'var(--text-1)' }}>{e.razao_social}</td>
         <td style={{ textAlign: 'center' }}>
-          {e.divergencias_fornecedor > 0 && <span className="badge badge-error" style={{ fontSize: 10, marginRight: 4 }}>🔴 {e.divergencias_fornecedor}</span>}
-          {e.antecipacoes > 0 && <span className="badge badge-warn" style={{ fontSize: 10 }}>🟠 {e.antecipacoes}</span>}
+          {e.divergencias_fornecedor > 0 && <span className="badge badge-error" style={{ fontSize: 10, marginRight: 4 }}><i className="ti ti-alert-octagon" style={{ marginRight: 3 }} />{e.divergencias_fornecedor}</span>}
+          {e.antecipacoes > 0 && <span className="badge badge-warn" style={{ fontSize: 10 }}><i className="ti ti-receipt-tax" style={{ marginRight: 3 }} />{e.antecipacoes}</span>}
           {totalDiv === 0 && <span style={{ color: 'var(--text-4)', fontSize: 12 }}>—</span>}
         </td>
         <td style={{ textAlign: 'center' }}>
@@ -51,8 +51,8 @@ function LinhaEmpresa({ e, aberto, onToggle }) {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
               <Indicador icon="ti-alert-octagon" cor="var(--err-text)" bg="var(--err-bg)" titulo="Divergências ST">
                 <div style={{ fontSize: 13 }}>
-                  <div style={{ color: 'var(--err-text)', fontWeight: 600 }}>🔴 {e.divergencias_fornecedor} Erro(s) do Fornecedor</div>
-                  <div style={{ color: 'var(--warn-text)', fontWeight: 600, marginTop: 2 }}>🟠 {e.antecipacoes} Antecipação(ões)</div>
+                  <div style={{ color: 'var(--err-text)', fontWeight: 600 }}><i className="ti ti-alert-octagon" style={{ marginRight: 5 }} />{e.divergencias_fornecedor} Erro(s) do Fornecedor</div>
+                  <div style={{ color: 'var(--warn-text)', fontWeight: 600, marginTop: 2 }}><i className="ti ti-receipt-tax" style={{ marginRight: 5 }} />{e.antecipacoes} Antecipação(ões)</div>
                 </div>
               </Indicador>
               <Indicador icon="ti-arrows-exchange" cor="var(--warn-text)" bg="var(--warn-bg)" titulo="Gargalos / Alertas">

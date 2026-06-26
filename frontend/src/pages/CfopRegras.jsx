@@ -41,6 +41,23 @@ export default function CfopRegras() {
     finally { setBulkBusy(false) }
   }
 
+  async function reprocessar() {
+    setBulkBusy(true)
+    try {
+      const r = await api.reprocessarPendentes()
+      const partes = []
+      if (r.notas_destravadas) partes.push(`${r.notas_destravadas} nota(s) destravada(s)`)
+      if (r.cfop_reclassificados) partes.push(`${r.cfop_reclassificados} item(ns) reclassificado(s)`)
+      toast(
+        r.notas_reprocessadas
+          ? `Reprocessadas ${r.notas_reprocessadas} nota(s)` + (partes.length ? ` · ${partes.join(' · ')}` : '.')
+          : 'Nenhuma nota pendente para reprocessar.',
+        r.notas_reprocessadas ? 'ok' : 'info',
+      )
+    } catch (e) { toast(e.message, 'error') }
+    finally { setBulkBusy(false) }
+  }
+
   const carregar = useCallback(async () => {
     setLoading(true)
     try { setLista(await api.cfopRegras() || []) }
@@ -85,6 +102,9 @@ export default function CfopRegras() {
           <p className="page-breadcrumb">Regra global do escritório · Tipo de Item por CFOP na entrada das notas</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-secondary" disabled={bulkBusy} onClick={reprocessar} title="Re-aplica as regras e re-audita notas travadas">
+            <i className={`ti ti-refresh ${bulkBusy ? 'spin' : ''}`} /> Reprocessar Pendentes
+          </button>
           <button className="btn btn-secondary" disabled={bulkBusy} onClick={exportar}><i className="ti ti-file-spreadsheet" /> Exportar Planilha</button>
           <button className="btn btn-secondary" disabled={bulkBusy} onClick={() => fileRef.current?.click()}><i className="ti ti-upload" /> Importar Planilha</button>
           <button className="btn btn-primary" onClick={novo}><i className="ti ti-plus" /> Nova regra</button>

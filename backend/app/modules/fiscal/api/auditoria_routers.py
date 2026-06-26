@@ -8,8 +8,20 @@ from app.core.rls import tenant_session
 from app.core.security import TokenClaims, get_current_claims
 from app.modules.fiscal.api.auditoria_schemas import DivergenciasStResponse
 from app.modules.fiscal.application.auditoria_query import listar_divergencias
+from app.modules.fiscal.application.reprocess_service import ReprocessService
 
 router = APIRouter(prefix="/auditoria/st", tags=["Auditoria ST"])
+
+
+@router.post("/reprocessar-pendentes")
+async def reprocessar_pendentes(
+    empresa_id: UUID | None = Query(default=None, description="Limita a uma empresa (opcional)"),
+    claims: TokenClaims = Depends(get_current_claims),
+    session: AsyncSession = Depends(tenant_session),
+):
+    """Retroatividade: re-aplica o De/Para CFOP e re-audita as notas travadas
+    (gargalo de CFOP ou NAO_AUDITAVEL por matriz faltante)."""
+    return await ReprocessService(session).reprocessar_pendentes(empresa_id)
 
 
 @router.get("/divergencias", response_model=DivergenciasStResponse)

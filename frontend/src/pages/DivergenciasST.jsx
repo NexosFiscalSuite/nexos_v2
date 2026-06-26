@@ -25,13 +25,13 @@ function seloAcao(item) {
     return { txt: 'Não auditável', cls: 'badge-neutral', icon: 'ti-help-circle' }
   const cod = item.codigo_erro || ''
   if (cod.includes('ERRO_111'))
-    return { txt: 'Antecipação devida', cls: 'badge-warn', icon: 'ti-clock-dollar' }
+    return { txt: 'Antecipação devida', cls: 'badge-warn', icon: 'ti-receipt-tax' }
   if (cod.includes('ERRO_110'))
     return { txt: 'A favor do cliente', cls: 'badge-info', icon: 'ti-arrow-back-up' }
   if (item.status === 'DIVERGENTE')
     return item.fluxo === 'saida'
-      ? { txt: 'Erro de emissão', cls: 'badge-error', icon: 'ti-alert-triangle' }
-      : { txt: 'Erro do fornecedor', cls: 'badge-error', icon: 'ti-alert-triangle' }
+      ? { txt: 'Erro de emissão', cls: 'badge-error', icon: 'ti-alert-octagon' }
+      : { txt: 'Erro do fornecedor', cls: 'badge-error', icon: 'ti-alert-octagon' }
   return null
 }
 
