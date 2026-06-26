@@ -240,10 +240,17 @@ export const api = {
   cfopRegraCriar: (data) => request('POST', '/cfop-regras', data),
   cfopRegraEditar: (id, data) => request('PATCH', `/cfop-regras/${id}`, data),
   cfopRegraExcluir: (id) => request('DELETE', `/cfop-regras/${id}`),
+  cfopExportar: () => downloadBlob('/cfop-regras/export', { fallback: 'cfop_regras.csv' }),
+  cfopImportar: (file) => {
+    const fd = new FormData()
+    fd.append('arquivo', file)
+    return request('POST', '/cfop-regras/import', fd, true)
+  },
 
   // ── Dashboard (agregações) ──
   geral: () => request('GET', '/dashboard/geral'),
   empresaDashboard: (id) => request('GET', `/dashboard/empresas/${id}`),
+  dashSaude: (ano, mes) => request('GET', `/dashboard/saude?ano=${ano}&mes=${mes}`),
 
   // ── Cadastros (contrapartes) + lookup de CNPJ ──
   contrapartes: (empresaId, tipo, search) => {

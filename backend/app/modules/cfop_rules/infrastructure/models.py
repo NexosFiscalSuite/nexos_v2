@@ -1,4 +1,5 @@
-"""Regra De/Para: CFOP -> Tipo de Item (SPED). Tenant-scoped (RLS).
+"""Regra De/Para: CFOP -> Tipo de Item (SPED). GLOBAL (regra do escritório, sem
+tenant/RLS — a classificação por CFOP é a mesma para todos os clientes).
 
 Na importação de ENTRADAS, o CFOP do XML (origem) casa com a regra e o sistema
 preenche o Tipo de Item e reclassifica o CFOP para o destino (cfop_original é
@@ -7,7 +8,7 @@ preservado no item).
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint, Uuid, func
+from sqlalchemy import Boolean, DateTime, String, UniqueConstraint, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -15,10 +16,9 @@ from app.core.database import Base
 
 class CfopRegra(Base):
     __tablename__ = "cfop_regras"
-    __table_args__ = (UniqueConstraint("tenant_id", "cfop_origem", name="uq_cfop_regra"),)
+    __table_args__ = (UniqueConstraint("cfop_origem", name="uq_cfop_origem"),)
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
-    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
     tipo_item: Mapped[str] = mapped_column(String(40))
     cfop_origem: Mapped[str] = mapped_column(String(10), index=True)
     cfop_destino: Mapped[str] = mapped_column(String(10))

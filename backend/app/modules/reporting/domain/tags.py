@@ -12,6 +12,7 @@ variante. Foco em NF-e/NFC-e (modelo 55/65).
 # (key, label, escopo, grupo, path, money)
 _DEFS = [
     # ── Capa: identificação ──
+    ("chNFe", "Chave de Acesso", "capa", "Identificação", ["protNFe", "infProt", "chNFe"], False),
     ("nNF", "Número", "capa", "Identificação", ["ide", "nNF"], False),
     ("serie", "Série", "capa", "Identificação", ["ide", "serie"], False),
     ("dhEmi", "Data de Emissão", "capa", "Identificação", ["ide", "dhEmi"], False),

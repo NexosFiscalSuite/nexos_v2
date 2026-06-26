@@ -19,7 +19,7 @@ class CfopRegraService:
     async def list(self):
         return await self.repo.list()
 
-    async def create(self, *, tenant_id: UUID, tipo_item: str, cfop_origem: str,
+    async def create(self, *, tipo_item: str, cfop_origem: str,
                      cfop_destino: str, usa_extensao: bool = False,
                      extensao: str | None = None, descricao: str | None = None) -> CfopRegra:
         if tipo_item not in TIPOS_SPED:
@@ -31,7 +31,7 @@ class CfopRegraService:
         if await self.repo.by_origem(co):
             raise ConflictError(f"Já existe regra para o CFOP de origem {co}. Edite-a.")
         regra = CfopRegra(
-            id=uuid4(), tenant_id=tenant_id, tipo_item=tipo_item,
+            id=uuid4(), tipo_item=tipo_item,
             cfop_origem=co, cfop_destino=cd,
             usa_extensao=usa_extensao, extensao=(extensao or None) if usa_extensao else None,
             descricao=descricao,

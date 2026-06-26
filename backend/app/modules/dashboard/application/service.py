@@ -4,11 +4,12 @@ Tudo é calculado a partir de `notas` (e contagem de `empresas`). Sem novas tabe
 """
 from uuid import UUID
 
-from sqlalchemy import case, func, select
+from sqlalchemy import case, exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.cfop_rules.infrastructure.models import CfopRegra
 from app.modules.companies.infrastructure.models import Empresa
-from app.modules.fiscal.infrastructure.models import Nota
+from app.modules.fiscal.infrastructure.models import AuditoriaIcmsSt, Nota, NotaItem
 
 _FLUXO_COUNT = {
     "entradas": "entrada",
@@ -46,6 +47,78 @@ class DashboardService:
             for (ano, mes, qtd, valor) in rows
         ]
         return {"total_empresas": int(total_empresas), "fiscal_mes": fiscal_mes}
+
+    async def saude(self, ano: str, mes: str) -> list[dict]:
+        """Saúde dos clientes na competência: por empresa, 4 indicadores —
+        divergências de ST (erro do fornecedor × antecipação devida), gargalos
+        (notas sem De/Para de CFOP), volume de XMLs e impacto financeiro (R$)."""
+        n, a, it = Nota, AuditoriaIcmsSt, NotaItem
+        empresas = (
+            await self.session.execute(
+                select(Empresa.id, Empresa.razao_social).order_by(Empresa.razao_social)
+            )
+        ).all()
+
+        volume = {
+            eid: int(q)
+            for eid, q in (
+                await self.session.execute(
+                    select(n.empresa_id, func.count(n.id))
+                    .where(n.ano == ano, n.mes == mes)
+                    .group_by(n.empresa_id)
+                )
+            ).all()
+        }
+
+        # ERRO_111 = antecipação do destinatário; demais DIVERGENTE = erro do emissor.
+        e_antecip = a.codigo_erro.like("%ERRO_111%")
+        div = {
+            eid: {"fornecedor": int(forn), "antecipacao": int(ante), "impacto": _f(imp)}
+            for eid, ante, forn, imp in (
+                await self.session.execute(
+                    select(
+                        a.empresa_id,
+                        func.coalesce(func.sum(case((e_antecip, 1), else_=0)), 0),
+                        func.coalesce(func.sum(case((e_antecip, 0), else_=1)), 0),
+                        func.coalesce(func.sum(func.abs(a.vicms_st_divergencia)), 0),
+                    )
+                    .join(n, a.nota_id == n.id)
+                    .where(a.status == "DIVERGENTE", n.ano == ano, n.mes == mes)
+                    .group_by(a.empresa_id)
+                )
+            ).all()
+        }
+
+        # Gargalo: nota de ENTRADA com item cujo CFOP não tem regra De/Para (global).
+        sem_regra = ~exists().where(CfopRegra.cfop_origem == it.cfop_original)
+        gargalos = {
+            eid: int(q)
+            for eid, q in (
+                await self.session.execute(
+                    select(n.empresa_id, func.count(func.distinct(n.id)))
+                    .join(it, it.nota_id == n.id)
+                    .where(
+                        n.fluxo == "entrada", n.ano == ano, n.mes == mes,
+                        it.cfop_original.isnot(None), it.cfop_original != "", sem_regra,
+                    )
+                    .group_by(n.empresa_id)
+                )
+            ).all()
+        }
+
+        out = []
+        for eid, razao in empresas:
+            d = div.get(eid, {})
+            out.append({
+                "empresa_id": str(eid),
+                "razao_social": razao,
+                "volume_mes": volume.get(eid, 0),
+                "divergencias_fornecedor": d.get("fornecedor", 0),
+                "antecipacoes": d.get("antecipacao", 0),
+                "gargalos_cfop": gargalos.get(eid, 0),
+                "impacto_financeiro": d.get("impacto", 0.0),
+            })
+        return out
 
     async def empresa(self, empresa_id: UUID) -> dict:
         totais_row = (

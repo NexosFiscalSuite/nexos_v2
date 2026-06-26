@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Dropdown from '../components/Dropdown'
 import EmptyState from '../components/EmptyState'
-import { api } from '../api'
+import ResumoImportModal from '../components/ResumoImportModal'
+import { api, saveBlob } from '../api'
 import { useToast, ToastContainer } from '../hooks/useToast'
 
 const VAZIO = { tipo_item: '', cfop_origem: '', cfop_destino: '', usa_extensao: false, extensao: '', descricao: '' }
@@ -15,6 +16,30 @@ export default function CfopRegras() {
   const [form, setForm] = useState(VAZIO)
   const [editId, setEditId] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [resultado, setResultado] = useState(null)
+  const fileRef = useRef(null)
+
+  async function exportar() {
+    setBulkBusy(true)
+    try { const { blob, filename } = await api.cfopExportar(); saveBlob(blob, filename); toast('Planilha exportada (vazia = template).', 'ok') }
+    catch (e) { toast(e.message, 'error') }
+    finally { setBulkBusy(false) }
+  }
+
+  async function importar(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setBulkBusy(true)
+    try {
+      const r = await api.cfopImportar(file)
+      await carregar()
+      if (r.erros?.length) setResultado(r)
+      else toast(`Importação: ${r.inseridos} novas, ${r.atualizados} atualizadas.`, 'ok')
+    } catch (e2) { toast(e2.message, 'error') }
+    finally { setBulkBusy(false) }
+  }
 
   const carregar = useCallback(async () => {
     setLoading(true)
@@ -53,12 +78,17 @@ export default function CfopRegras() {
   return (
     <div>
       <ToastContainer toasts={toasts} />
+      <input ref={fileRef} type="file" accept=".csv" onChange={importar} style={{ display: 'none' }} />
       <div className="page-header">
         <div>
           <h1 className="page-title">De/Para CFOP</h1>
-          <p className="page-breadcrumb">Atribuição automática do Tipo de Item por CFOP na entrada das notas</p>
+          <p className="page-breadcrumb">Regra global do escritório · Tipo de Item por CFOP na entrada das notas</p>
         </div>
-        <button className="btn btn-primary" onClick={novo}><i className="ti ti-plus" /> Nova regra</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-secondary" disabled={bulkBusy} onClick={exportar}><i className="ti ti-file-spreadsheet" /> Exportar Planilha</button>
+          <button className="btn btn-secondary" disabled={bulkBusy} onClick={() => fileRef.current?.click()}><i className="ti ti-upload" /> Importar Planilha</button>
+          <button className="btn btn-primary" onClick={novo}><i className="ti ti-plus" /> Nova regra</button>
+        </div>
       </div>
 
       {loading ? (
@@ -126,6 +156,7 @@ export default function CfopRegras() {
           </div>
         </div>
       )}
+      {resultado && <ResumoImportModal r={resultado} onClose={() => setResultado(null)} />}
     </div>
   )
 }
