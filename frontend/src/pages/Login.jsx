@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import solIcon from '../assets/sol-icon.svg'
+import solLogo from '../assets/sol-logo.png'
 
 export default function Login() {
   const { login }   = useAuth()
@@ -50,7 +50,7 @@ export default function Login() {
 
       <div className="login-card">
         <div className="login-logo">
-          <img src={solIcon} alt="Sol Contabilidade" />
+          <img src={solLogo} alt="Sol Contabilidade" />
         </div>
 
         <div className="login-head">

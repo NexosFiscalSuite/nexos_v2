@@ -6,7 +6,7 @@ import { useCompetencia } from '../context/CompetenciaContext'
 import { useRefresh } from '../context/RefreshContext'
 import { api } from '../api'
 import CompetenciaPicker from './CompetenciaPicker'
-import solIcon from '../assets/sol-icon.svg'
+import solLogo from '../assets/sol-logo.png'
 
 const PAGE_TITLES = {
   '/dashboard':  'Dashboard',
@@ -278,13 +278,7 @@ export default function Layout() {
         position:'fixed', left:0, top:0, bottom:0, overflow:'hidden', zIndex:100, borderRight:'1px solid var(--hairline)',
       }}>
         <div style={{ padding: collapsed ? '12px 0' : '12px 14px', height:64, display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid var(--border-2)', justifyContent: collapsed ? 'center' : 'flex-start', flexShrink:0 }}>
-          <img src={solIcon} alt="Sol Contabilidade" style={{ width:42, height:42, objectFit:'contain', flexShrink:0 }} />
-          {!collapsed && (
-            <div style={{ overflow:'hidden', lineHeight:1.12 }}>
-              <div style={{ fontWeight:800, fontSize:18, color:'var(--primary)', letterSpacing:'-0.5px', whiteSpace:'nowrap' }}>Sol</div>
-              <div style={{ fontSize:8.5, color:'var(--accent-text)', letterSpacing:'1.6px', textTransform:'uppercase', whiteSpace:'nowrap' }}>Contabilidade</div>
-            </div>
-          )}
+          <img src={solLogo} alt="Sol Contabilidade" style={{ height: collapsed ? 38 : 48, width:'auto', maxWidth: collapsed ? 46 : 190, objectFit:'contain', flexShrink:0 }} />
         </div>
 
         <nav style={{ flex:1, padding:'12px 8px', overflowY:'auto', overflowX:'hidden' }}>
