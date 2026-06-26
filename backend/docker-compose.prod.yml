@@ -1,0 +1,118 @@
+# docker-compose.prod.yml — stack de PRODUÇÃO on-prem (servidor do escritório).
+#
+# Uso (a partir de backend/):
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Diferenças vs. docker-compose.yml (dev):
+#   * postgres / redis / minio NÃO expõem portas — só a rede interna do compose.
+#   * NEXOS_ENVIRONMENT=production -> o preflight RECUSA subir com segredo fraco.
+#   * Caddy serve a SPA (frontend/dist) + proxy de /api -> MESMA origem (sem CORS).
+#   * Cloudflare Tunnel publica https://app.suitenexos.com.br SEM abrir porta no
+#     roteador (conexão de saída). Acesso externo sem VPN no PC do usuário.
+#
+# Segredos: defina TUDO no arquivo .env (NUNCA versionado). Ver docs/deploy_onprem.md.
+
+name: nexos-prod
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nexos
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+      POSTGRES_DB: nexos
+      # Usada pelo init 20-prod-set-app-password.sh para dar senha forte ao nexos_app.
+      NEXOS_APP_DB_PASSWORD: ${NEXOS_APP_DB_PASSWORD:?defina NEXOS_APP_DB_PASSWORD no .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+      - ./docker/prod-set-app-password.sh:/docker-entrypoint-initdb.d/20-app-pass.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexos"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # sem 'ports' -> inacessível fora da rede do compose
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-08T15-41-24Z
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?defina MINIO_ROOT_USER no .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?defina MINIO_ROOT_PASSWORD no .env}
+    volumes:
+      - miniodata:/data
+    ports:
+      - "127.0.0.1:9001:9001"   # console só no localhost do servidor (admin via SSH tunnel)
+
+  api:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NEXOS_ENVIRONMENT: production
+      NEXOS_DATABASE_URL: postgresql+asyncpg://nexos_app:${NEXOS_APP_DB_PASSWORD}@postgres:5432/nexos
+      NEXOS_DATABASE_PRIVILEGED_URL: postgresql+asyncpg://nexos:${POSTGRES_PASSWORD}@postgres:5432/nexos
+      NEXOS_REDIS_URL: redis://redis:6379/0
+      NEXOS_STORAGE_BACKEND: s3
+      NEXOS_S3_ENDPOINT_URL: http://minio:9000
+      NEXOS_CORS_ORIGINS: https://app.suitenexos.com.br
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_started }
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips='*'"
+    # sem 'ports' -> só o Caddy (rede interna) fala com a API
+
+  worker:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NEXOS_ENVIRONMENT: production
+      NEXOS_DATABASE_URL: postgresql+asyncpg://nexos_app:${NEXOS_APP_DB_PASSWORD}@postgres:5432/nexos
+      NEXOS_DATABASE_PRIVILEGED_URL: postgresql+asyncpg://nexos:${POSTGRES_PASSWORD}@postgres:5432/nexos
+      NEXOS_REDIS_URL: redis://redis:6379/0
+      NEXOS_STORAGE_BACKEND: s3
+      NEXOS_S3_ENDPOINT_URL: http://minio:9000
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_started }
+    command: celery -A app.core.celery_app:celery_app worker --beat --loglevel=info --queues nexos
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../frontend/dist:/srv:ro     # build do front (npm run build) servido como estático
+      - caddy_data:/data
+    depends_on:
+      - api
+    # sem 'ports' -> só o cloudflared (rede interna) alcança o Caddy
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:?defina CLOUDFLARE_TUNNEL_TOKEN no .env}
+    depends_on:
+      - caddy
+
+volumes:
+  pgdata:
+  miniodata:
+  caddy_data:
