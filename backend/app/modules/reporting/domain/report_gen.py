@@ -93,6 +93,11 @@ def gerar(config: dict, notas_dados: list, regime: str) -> dict:
     capa_all += [{"audit": True, "label": str(n)} for n in config.get("auditoria", []) if str(n).strip()]
     capa_tags = [c for c in capa_all if c.get("tag") in TAGS]
     item_tags = [c for c in item_all if c.get("tag") in TAGS]
+    # Herança capa→item: tags de CAPA pedidas no relatório de ITENS (Identificação,
+    # Emitente, Destinatário…) são extraídas da nota e REPETIDAS em cada linha de
+    # produto — permite filtros/tabelas dinâmicas no Excel.
+    item_capa_keys = [c["tag"] for c in item_tags if TAGS[c["tag"]]["escopo"] == "capa"]
+    item_own_keys = [c["tag"] for c in item_tags if TAGS[c["tag"]]["escopo"] == "item"]
     inc_finalidade = config.get("finalidade", True)
     inc_calc = config.get("calculos", True)
 
@@ -107,7 +112,7 @@ def gerar(config: dict, notas_dados: list, regime: str) -> dict:
         root = extract.parse(nd.get("xml") or b"")
         inf = extract.find_inf(root)
 
-        capa_keys = list({*[c["tag"] for c in capa_tags], *CALC_KEYS})
+        capa_keys = list({*[c["tag"] for c in capa_tags], *CALC_KEYS, *item_capa_keys})
         capa_vals = extract.extract_capa(root, inf, capa_keys) if inf is not None else {}
         for k, v in capa_vals.items():
             if k in capa_seen and _presente(k, v):
@@ -117,14 +122,18 @@ def gerar(config: dict, notas_dados: list, regime: str) -> dict:
         fins = {t for t in tipos.values() if t}
         finalidade_capa = "Múltiplas Finalidades" if len(fins) > 1 else (next(iter(fins), "") if fins else "")
 
-        # Itens: tags exibidas + tags "extra" (vedação e cálculos), sempre extraídas
-        itens_x = extract.extract_itens(inf, [c["tag"] for c in item_tags]) if inf is not None else []
+        # Itens: tags próprias do item + tags "extra" (vedação e cálculos), sempre
+        # extraídas. As tags de capa pedidas vêm de capa_vals (injetadas por linha).
+        itens_x = extract.extract_itens(inf, item_own_keys) if inf is not None else []
         extra_map = {r["_nItem"]: r for r in (extract.extract_itens(inf, EXTRA_ITEM_KEYS) if inf is not None else [])}
 
         for r in itens_x:
             ni = r["_nItem"]
             fin = tipos.get(ni, "")
             vals = dict(r)
+            # Injeta os dados da nota-pai (chave, CNPJ emit, data…) na linha do item.
+            for k in item_capa_keys:
+                vals[k] = capa_vals.get(k, "")
             extra = extra_map.get(ni, {})
             for k in [c["tag"] for c in item_tags]:
                 if _presente(k, vals.get(k)):

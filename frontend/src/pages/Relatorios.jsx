@@ -44,11 +44,16 @@ export default function Relatorios() {
   useEffect(() => { api.relTags().then(setTags).catch(() => {}) }, [])
 
   // ── builder helpers ──
-  const escopo = builderTab === 'capa' ? 'capa' : 'item'
   const colsKey = builderTab === 'capa' ? 'capa' : 'itens'
   const cols = form[colsKey]
   const usados = new Set(cols.filter(c => c.tag).map(c => c.tag))
-  const disponiveis = tags.filter(t => t.escopo === escopo && !usados.has(t.key))
+  // Na aba ITENS, além das tags de item, liberamos as tags de capa "herdáveis"
+  // (Identificação/Emitente/Destinatário) — viram dados da nota repetidos por linha.
+  const GRUPOS_HERDAVEIS = new Set(['Identificação', 'Emitente', 'Destinatário'])
+  const disp = builderTab === 'capa'
+    ? (t) => t.escopo === 'capa'
+    : (t) => t.escopo === 'item' || (t.escopo === 'capa' && GRUPOS_HERDAVEIS.has(t.grupo))
+  const disponiveis = tags.filter(t => disp(t) && !usados.has(t.key))
     .map(t => ({ value: t.key, label: `[${t.grupo}] ${t.label}` }))
   const tagLabel = (k) => (tags.find(t => t.key === k)?.label) || k
 
