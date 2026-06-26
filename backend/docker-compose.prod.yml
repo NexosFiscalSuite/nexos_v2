@@ -7,7 +7,7 @@
 #   * postgres / redis / minio NÃO expõem portas — só a rede interna do compose.
 #   * NEXOS_ENVIRONMENT=production -> o preflight RECUSA subir com segredo fraco.
 #   * Caddy serve a SPA (frontend/dist) + proxy de /api -> MESMA origem (sem CORS).
-#   * Cloudflare Tunnel publica https://app.contabilidadesol.com.br SEM abrir porta no
+#   * Cloudflare Tunnel publica https://fiscal.solsistema.com.br SEM abrir porta no
 #     roteador (conexão de saída). Acesso externo sem VPN no PC do usuário.
 #
 # Segredos: defina TUDO no arquivo .env (NUNCA versionado). Ver docs/deploy_onprem.md.
@@ -67,7 +67,7 @@ services:
       NEXOS_REDIS_URL: redis://redis:6379/0
       NEXOS_STORAGE_BACKEND: s3
       NEXOS_S3_ENDPOINT_URL: http://minio:9000
-      NEXOS_CORS_ORIGINS: https://app.contabilidadesol.com.br
+      NEXOS_CORS_ORIGINS: https://fiscal.solsistema.com.br
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }

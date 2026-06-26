@@ -3,7 +3,7 @@
 # O TLS é terminado na borda da Cloudflare (via Cloudflare Tunnel), então aqui o
 # Caddy escuta em :80 interno — o cloudflared alcança como http://caddy:80.
 #
-# Fluxo: usuário -> https://app.contabilidadesol.com.br (Cloudflare) -> Tunnel -> caddy:80
+# Fluxo: usuário -> https://fiscal.solsistema.com.br (Cloudflare) -> Tunnel -> caddy:80
 #          /api/*  -> reverse_proxy para a API (FastAPI :8000)
 #          resto   -> arquivos estáticos da SPA (fallback SPA: index.html)
 
