@@ -4,10 +4,10 @@ Como subir o Nexos Fiscal Suite V2 num servidor local do escritório, acessível
 de qualquer lugar **sem VPN no PC do usuário** e **sem abrir porta no roteador**,
 usando Cloudflare Tunnel.
 
-**Domínio:** `suitenexos.com.br` · **Acesso:** `https://app.suitenexos.com.br`
+**Domínio:** `contabilidadesol.com.br` · **Acesso:** `https://app.contabilidadesol.com.br`
 
 ```
-Usuário (qualquer lugar) ─ https://app.suitenexos.com.br ─▶ Cloudflare (TLS)
+Usuário (qualquer lugar) ─ https://app.contabilidadesol.com.br ─▶ Cloudflare (TLS)
                                                               │  Tunnel (saída)
                                                               ▼
    Servidor do escritório:  cloudflared ─▶ caddy ─┬─ /api/* ─▶ api (FastAPI)
@@ -21,17 +21,35 @@ Usuário (qualquer lugar) ─ https://app.suitenexos.com.br ─▶ Cloudflare (T
 
 - Servidor: **Ubuntu Server LTS**, 4 cores / 8–16 GB RAM / SSD, **no-break (UPS)**.
 - **Docker + Docker Compose** e **git** instalados.
-- Domínio `suitenexos.com.br` registrado no **registro.br**.
+- Domínio `contabilidadesol.com.br` registrado no **registro.br**.
 - Conta **Cloudflare** (free) com o domínio adicionado (DNS gerido pela Cloudflare).
 
 ---
 
 ## 1. Apontar o domínio para a Cloudflare
 
-1. Em **dash.cloudflare.com** → *Add a site* → `suitenexos.com.br` (plano Free).
-2. A Cloudflare mostra 2 **nameservers** (ex.: `xxx.ns.cloudflare.com`).
-3. No **registro.br** → seu domínio → *Alterar servidores DNS* → cole os 2 da Cloudflare.
-4. Aguarde a propagação (minutos a algumas horas).
+> ⚠️ **ATENÇÃO — domínio em uso.** `contabilidadesol.com.br` já é o domínio do
+> escritório e provavelmente tem **e-mail (registros MX)** e talvez um **site**.
+> Mover os nameservers para a Cloudflare transfere TODO o DNS — se os registros
+> atuais não forem replicados, **o e-mail e o site param**.
+>
+> Antes de trocar os nameservers:
+> 1. No painel atual (registro.br ou onde o DNS está hoje), **anote todos os
+>    registros**: A, CNAME, **MX** (e-mail), TXT (SPF/DKIM), etc.
+> 2. Ao adicionar o site na Cloudflare, ela faz um *scan* e importa o que achar —
+>    **confira** se MX e os registros de site vieram corretos.
+> 3. Só então troque os nameservers. Mantenha esses registros (a Cloudflare só
+>    "intermedia" o app via o subdomínio `app.`; o resto continua resolvendo igual).
+>
+> Se preferir **não mexer no DNS atual**, a alternativa é manter o caminho 100%
+> grátis sem domínio próprio para o app (Tailscale Funnel `…ts.net`), deixando o
+> `contabilidadesol.com.br` intocado. Mas o ideal é usar `app.contabilidadesol.com.br`.
+
+1. Em **dash.cloudflare.com** → *Add a site* → `contabilidadesol.com.br` (plano Free).
+2. **Confira os registros importados** (especialmente MX/e-mail) — ver aviso acima.
+3. A Cloudflare mostra 2 **nameservers** (ex.: `xxx.ns.cloudflare.com`).
+4. No **registro.br** → seu domínio → *Alterar servidores DNS* → cole os 2 da Cloudflare.
+5. Aguarde a propagação (minutos a algumas horas).
 
 ---
 
@@ -82,7 +100,7 @@ NEXOS_S3_ACCESS_KEY=<mesmo do MINIO_ROOT_USER>
 NEXOS_S3_SECRET_KEY=<mesmo do MINIO_ROOT_PASSWORD>
 
 # CORS (mesma origem; mantido por segurança)
-NEXOS_CORS_ORIGINS=https://app.suitenexos.com.br
+NEXOS_CORS_ORIGINS=https://app.contabilidadesol.com.br
 
 # Cloudflare Tunnel (preenchido no passo 4)
 CLOUDFLARE_TUNNEL_TOKEN=
@@ -100,7 +118,7 @@ CLOUDFLARE_TUNNEL_TOKEN=
 2. Tipo **Cloudflared**, dê um nome (ex.: `nexos-escritorio`).
 3. Copie o **token** exibido e cole em `CLOUDFLARE_TUNNEL_TOKEN=` no `.env`.
 4. Em *Public Hostnames* → *Add a public hostname*:
-   - **Subdomain:** `app` · **Domain:** `suitenexos.com.br`
+   - **Subdomain:** `app` · **Domain:** `contabilidadesol.com.br`
    - **Service:** `HTTP` → `caddy:80`
 5. Salve. (O `cloudflared` roda como contêiner no compose e se conecta sozinho.)
 
@@ -136,7 +154,7 @@ docker compose -f docker-compose.prod.yml exec api python -m scripts.go_live_che
 Só siga se imprimir **✅ APROVADO** (valida migrações no head, JWT/segredos fortes,
 RLS+FORCE e role do app sem bypass).
 
-Acesse: **https://app.suitenexos.com.br** 🎉
+Acesse: **https://app.contabilidadesol.com.br** 🎉
 
 ---
 
@@ -174,7 +192,7 @@ cd ../backend && docker compose -f docker-compose.prod.yml up -d --build
 
 ## Notas
 
-- **Tráfego interno + externo** passa pelo mesmo `https://app.suitenexos.com.br`
+- **Tráfego interno + externo** passa pelo mesmo `https://app.contabilidadesol.com.br`
   (via Cloudflare). Simples e sempre com TLS. Se quiser acesso LAN direto (mais
   rápido in-office) depois, dá para expor o Caddy na rede local — otimização opcional.
 - **Nada exposto ao roteador/internet** além do túnel de saída do `cloudflared`.
