@@ -66,7 +66,7 @@ function NavItem({ to, icon, label, collapsed, subItems, badge }) {
         marginLeft: collapsed ? 6 : 0,
         width:8, height:8, borderRadius:'50%',
         background:'var(--err-text, #DC2626)',
-        boxShadow:'0 0 0 2px var(--surface)',
+        boxShadow:'0 0 0 2px var(--navy)',
         pointerEvents:'none',
       }} />
     )
@@ -76,8 +76,8 @@ function NavItem({ to, icon, label, collapsed, subItems, badge }) {
     display:'flex', alignItems:'center', gap:10,
     padding: collapsed ? '10px' : '9px 10px',
     borderRadius:'var(--radius)', fontWeight: a ? 600 : 400, fontSize:13,
-    color: a ? 'var(--primary-text)' : 'var(--text-3)',
-    background: a ? 'var(--primary-lt)' : 'transparent',
+    color: a ? 'var(--primary)' : 'var(--navy-text)',
+    background: a ? 'var(--navy-active)' : 'transparent',
     borderLeft: a ? '2.5px solid var(--primary)' : '2.5px solid transparent',
     transition:'all .12s', justifyContent: collapsed ? 'center' : 'flex-start',
     textDecoration:'none', cursor:'pointer', marginBottom:2, userSelect:'none',
@@ -102,9 +102,9 @@ function NavItem({ to, icon, label, collapsed, subItems, badge }) {
               display:'flex', alignItems:'center', gap:8,
               padding:'7px 10px 7px 14px', borderRadius:'var(--radius)',
               fontSize:12, fontWeight: a ? 600 : 400,
-              color: a ? 'var(--primary-text)' : 'var(--text-3)',
-              background: a ? 'var(--primary-lt)' : 'transparent',
-              borderLeft: a ? '2px solid var(--primary)' : '2px solid var(--border)',
+              color: a ? 'var(--primary)' : 'var(--navy-text)',
+              background: a ? 'var(--navy-active)' : 'transparent',
+              borderLeft: a ? '2px solid var(--primary)' : '2px solid var(--navy-border)',
               textDecoration:'none', transition:'all .12s', marginBottom:2,
             })}>
               <i className={`ti ${sub.icon}`} style={{ fontSize:14 }} />
@@ -272,17 +272,17 @@ export default function Layout() {
       {/* Sidebar */}
       <aside style={{
         width: collapsed ? 'var(--sidebar-w-c)' : 'var(--sidebar-w)',
-        flexShrink:0, background:'var(--sidebar-bg)', borderRight:'1px solid var(--border)',
+        flexShrink:0, background:'var(--sidebar-bg)',
         display:'flex', flexDirection:'column',
         transition:'width .22s cubic-bezier(.4,0,.2,1)',
-        position:'fixed', left:0, top:0, bottom:0, overflow:'hidden', zIndex:100,
+        position:'fixed', left:0, top:0, bottom:0, overflow:'hidden', zIndex:100, borderRight:'none',
       }}>
-        <div style={{ padding: collapsed ? '12px 0' : '10px 14px', height:64, display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid var(--border-2)', justifyContent: collapsed ? 'center' : 'flex-start', flexShrink:0 }}>
+        <div style={{ padding: collapsed ? '12px 0' : '10px 14px', height:64, display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid var(--navy-border)', justifyContent: collapsed ? 'center' : 'flex-start', flexShrink:0 }}>
           <img src={nexosIcon} alt="Nexos" style={{ width:42, height:42, objectFit:'contain', flexShrink:0, borderRadius:6 }} />
           {!collapsed && (
             <div style={{ overflow:'hidden', lineHeight:1.15 }}>
-              <div style={{ fontWeight:900, fontSize:15, color:'var(--text-1)', letterSpacing:'-0.3px', whiteSpace:'nowrap' }}>NEXOS</div>
-              <div style={{ fontSize:9, color:'var(--text-4)', letterSpacing:'1.8px', textTransform:'uppercase', whiteSpace:'nowrap' }}>Fiscal Suite</div>
+              <div style={{ fontWeight:900, fontSize:15, color:'var(--navy-text-hi)', letterSpacing:'-0.3px', whiteSpace:'nowrap' }}>NEXOS</div>
+              <div style={{ fontSize:9, color:'var(--navy-text)', letterSpacing:'1.8px', textTransform:'uppercase', whiteSpace:'nowrap' }}>Fiscal Suite</div>
             </div>
           )}
         </div>
@@ -294,14 +294,14 @@ export default function Layout() {
           ))}
           {user?.role === 'admin' && (
             <>
-              <div style={{ height:1, background:'var(--border-2)', margin:'12px 8px' }} />
+              <div style={{ height:1, background:'var(--navy-border)', margin:'12px 8px' }} />
               {ADMIN_NAV.map(item => <NavItem key={item.to} {...item} collapsed={collapsed} />)}
             </>
           )}
         </nav>
 
-        <div style={{ padding:'10px 8px', borderTop:'1px solid var(--border-2)', flexShrink:0 }}>
-          <button onClick={() => setCollapsed(c => !c)} style={{ width:'100%', display:'flex', alignItems:'center', justifyContent: collapsed ? 'center' : 'flex-end', gap:8, padding:'8px 10px', borderRadius:'var(--radius)', border:'none', background:'transparent', color:'var(--text-4)', cursor:'pointer', fontSize:13 }}>
+        <div style={{ padding:'10px 8px', borderTop:'1px solid var(--navy-border)', flexShrink:0 }}>
+          <button onClick={() => setCollapsed(c => !c)} style={{ width:'100%', display:'flex', alignItems:'center', justifyContent: collapsed ? 'center' : 'flex-end', gap:8, padding:'8px 10px', borderRadius:'var(--radius)', border:'none', background:'transparent', color:'var(--navy-text)', cursor:'pointer', fontSize:13 }}>
             {!collapsed && <span style={{ fontSize:12 }}>Recolher</span>}
             <i className={`ti ti-chevron-${collapsed ? 'right' : 'left'}`} style={{ fontSize:16 }} />
           </button>

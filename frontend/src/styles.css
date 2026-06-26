@@ -7,7 +7,6 @@
   --bg:           #F8F9FA;
   --surface:      #FFFFFF;
   --surface-2:    #F3F4F6;
-  --sidebar-bg:   #FFFFFF;
   --topbar-bg:    #FFFFFF;
 
   --primary:      #82DF6F;
@@ -16,6 +15,19 @@
   --primary-text: #2F7D1E;
   --primary-lt:   #EFFBEC;
   --primary-lt2:  #D3F2CB;
+
+  /* Azul-marinho da logo (#142543) — cor de ancoragem/base. Verde = accent. */
+  --navy:         #142543;
+  --navy-2:       #1E3A5F;
+  --navy-3:       #2C476F;
+  --navy-grad:    linear-gradient(135deg, #1B3055 0%, #0F1F38 100%);
+  --navy-text:    #AEC0DC;   /* texto secundário sobre navy */
+  --navy-text-hi: #FFFFFF;   /* texto/realce sobre navy */
+  --navy-border:  rgba(255,255,255,0.09);
+  --navy-active:  rgba(130,223,111,0.16);  /* realce verde translúcido no navy */
+
+  /* Sidebar agora é navy (peso visual); itens usam os tons --navy-* acima. */
+  --sidebar-bg:   #142543;
 
   --text-1:       #111827;
   --text-2:       #374151;

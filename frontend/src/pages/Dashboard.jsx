@@ -1,10 +1,22 @@
 import { useEffect, useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { useRefresh } from '../context/RefreshContext'
 import { useCompetencia } from '../context/CompetenciaContext'
 
 const fmt = n => (n || 0).toLocaleString('pt-BR')
 const fmtBRL = n => 'R$ ' + (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+const pct = n => `${Math.round(n || 0)}%`
+
+// Mini-métrica do bloco branco (estilo funil).
+function Kpi({ valor, label, icon, cor = 'var(--text-1)', sep }) {
+  return (
+    <div style={{ padding: '0 18px', borderLeft: sep ? '1px solid var(--border-2)' : 'none', textAlign: 'center' }}>
+      <div style={{ fontSize: 11, color: 'var(--text-4)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, marginBottom: 6 }}><i className={`ti ${icon}`} />{label}</div>
+      <div style={{ fontSize: 26, fontWeight: 800, color: cor, letterSpacing: '-0.5px', fontFamily: 'var(--font-display)' }}>{valor}</div>
+    </div>
+  )
+}
 
 // Um indicador estratégico dentro do resumo expandido da empresa.
 function Indicador({ icon, cor, bg, titulo, children }) {
@@ -21,7 +33,6 @@ function Indicador({ icon, cor, bg, titulo, children }) {
 
 function LinhaEmpresa({ e, aberto, onToggle }) {
   const totalDiv = (e.divergencias_fornecedor || 0) + (e.antecipacoes || 0)
-  const temAlerta = totalDiv > 0 || e.gargalos_cfop > 0
   return (
     <>
       <tr onClick={onToggle} style={{ cursor: 'pointer', background: aberto ? 'var(--surface-2)' : undefined }}>
@@ -78,6 +89,7 @@ function LinhaEmpresa({ e, aberto, onToggle }) {
 export default function Dashboard() {
   const { dataVersion } = useRefresh()
   const { ano, mes } = useCompetencia()
+  const navigate = useNavigate()
   const [empresas, setEmpresas] = useState([])
   const [loading, setLoading] = useState(true)
   const [aberto, setAberto] = useState(null)
@@ -93,6 +105,11 @@ export default function Dashboard() {
   useEffect(() => { setAberto(null) }, [ano, mes])
 
   const comAlerta = empresas.filter(e => (e.divergencias_fornecedor + e.antecipacoes + e.gargalos_cfop) > 0).length
+  const totalEmpresas = empresas.length
+  const notasProc = empresas.reduce((s, e) => s + (e.volume_mes || 0), 0)
+  const impactoTotal = empresas.reduce((s, e) => s + (e.impacto_financeiro || 0), 0)
+  const comGargalo = empresas.filter(e => e.gargalos_cfop > 0).length
+  const comDiverg = empresas.filter(e => (e.divergencias_fornecedor + e.antecipacoes) > 0).length
 
   return (
     <div>
@@ -102,6 +119,36 @@ export default function Dashboard() {
           <p className="page-breadcrumb">{mes}/{ano} · {empresas.length} empresa(s) · {comAlerta} com pendência(s)</p>
         </div>
       </div>
+
+      {!loading && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(230px,1fr) minmax(360px,1.8fr) minmax(230px,1fr)', gap: 16, marginBottom: 22 }}>
+          {/* Bloco 1 — Destaque financeiro (navy gradiente) */}
+          <div style={{ background: 'var(--navy-grad)', borderRadius: 'var(--radius-lg)', padding: '22px 24px', color: '#fff', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ fontSize: 12.5, color: 'var(--navy-text)', display: 'flex', alignItems: 'center', gap: 6 }}><i className="ti ti-alert-octagon" /> Impacto Total · {mes}/{ano}</div>
+            <div style={{ fontSize: 33, fontWeight: 800, marginTop: 10, letterSpacing: '-1px', fontFamily: 'var(--font-display)' }}>{fmtBRL(impactoTotal)}</div>
+            <div style={{ fontSize: 12, color: 'var(--navy-text)', marginTop: 6, lineHeight: 1.5 }}>Soma das divergências e antecipações do escritório na competência.</div>
+            <div style={{ position: 'absolute', right: -34, bottom: -34, width: 130, height: 130, borderRadius: '50%', background: 'rgba(130,223,111,0.13)' }} />
+          </div>
+
+          {/* Bloco 2 — KPIs brancos (funil) */}
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '20px 8px', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', alignItems: 'center', boxShadow: 'var(--shadow-sm)' }}>
+            <Kpi valor={fmt(totalEmpresas)} label="Empresas" icon="ti-building-store" />
+            <Kpi valor={fmt(notasProc)} label="Notas processadas" icon="ti-files" sep />
+            <Kpi valor={pct(totalEmpresas ? comGargalo / totalEmpresas * 100 : 0)} label="Com gargalos" icon="ti-arrows-exchange" cor="var(--warn-text)" sep />
+            <Kpi valor={pct(totalEmpresas ? comDiverg / totalEmpresas * 100 : 0)} label="Com divergências" icon="ti-alert-octagon" cor="var(--err-text)" sep />
+          </div>
+
+          {/* Bloco 3 — Banner/atalho (navy sólido) */}
+          <div onClick={() => navigate('/cfop-regras')} style={{ background: 'var(--navy)', borderRadius: 'var(--radius-lg)', padding: '20px', color: '#fff', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', border: '1px solid var(--navy-border)' }}>
+            <div>
+              <span style={{ width: 30, height: 30, borderRadius: 8, background: 'var(--navy-active)', color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 17 }}><i className="ti ti-bulb" /></span>
+              <div style={{ fontWeight: 600, marginTop: 12, fontSize: 14 }}>Dica do Sistema</div>
+              <div style={{ fontSize: 12.5, color: 'var(--navy-text)', marginTop: 5, lineHeight: 1.5 }}>Configure seus CFOPs globais para destravar notas retroativamente.</div>
+            </div>
+            <div style={{ color: 'var(--primary)', fontSize: 12.5, fontWeight: 600, marginTop: 16, display: 'flex', alignItems: 'center', gap: 5 }}>Ir para De/Para CFOP <i className="ti ti-arrow-right" /></div>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="center-loader"><div className="spinner" /></div>
