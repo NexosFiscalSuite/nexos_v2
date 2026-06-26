@@ -124,11 +124,10 @@ export default function Dashboard() {
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(230px,1fr) minmax(360px,1.8fr) minmax(230px,1fr)', gap: 16, marginBottom: 22 }}>
           {/* Bloco 1 — Destaque financeiro (escuro premium: gradiente navy da logo,
               borda translúcida = vidro polido, sombra própria p/ saltar da tela) */}
-          <div className="hover-lift" style={{
+          <div className="impacto-hero" style={{
             background: 'linear-gradient(140deg, #1E3A5F 0%, #0F1F38 100%)',
             border: '1px solid rgba(255,255,255,0.10)', borderRadius: 'var(--radius-lg)',
             padding: '22px 24px', position: 'relative', overflow: 'hidden',
-            boxShadow: '0 14px 34px rgba(15,31,56,0.32)',
           }}>
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.6px', fontWeight: 600 }}>Impacto Total</div>
             <div style={{ fontSize: 40, fontWeight: 700, marginTop: 12, letterSpacing: '-1.8px', color: '#FFFFFF', lineHeight: 1 }}>{fmtBRL(impactoTotal)}</div>
@@ -137,7 +136,7 @@ export default function Dashboard() {
           </div>
 
           {/* Bloco 2 — KPIs (funil) */}
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--hairline)', borderRadius: 'var(--radius-lg)', padding: '20px 8px', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', alignItems: 'center' }}>
+          <div className="hover-lift" style={{ background: 'var(--surface)', border: '1px solid var(--hairline)', borderRadius: 'var(--radius-lg)', padding: '20px 8px', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', alignItems: 'center' }}>
             <Kpi valor={fmt(totalEmpresas)} label="Empresas" icon="ti-building-store" />
             <Kpi valor={fmt(notasProc)} label="Notas processadas" icon="ti-files" sep />
             <Kpi valor={pct(totalEmpresas ? comGargalo / totalEmpresas * 100 : 0)} label="Com gargalos" icon="ti-arrows-exchange" cor="var(--warn-text)" sep />
@@ -145,7 +144,7 @@ export default function Dashboard() {
           </div>
 
           {/* Bloco 3 — Dica/atalho (flat branco, accent verde) */}
-          <div onClick={() => navigate('/cfop-regras')} style={{ background: 'var(--surface)', border: '1px solid var(--hairline)', borderRadius: 'var(--radius-lg)', padding: '20px', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <div className="hover-lift" onClick={() => navigate('/cfop-regras')} style={{ background: 'var(--surface)', border: '1px solid var(--hairline)', borderRadius: 'var(--radius-lg)', padding: '20px', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <div>
               <span style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--primary-lt)', color: 'var(--primary-text)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 17 }}><i className="ti ti-bulb" /></span>
               <div style={{ fontWeight: 600, marginTop: 12, fontSize: 14, color: 'var(--ink)', letterSpacing: '-0.2px' }}>Dica do Sistema</div>

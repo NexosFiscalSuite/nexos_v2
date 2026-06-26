@@ -120,7 +120,18 @@ a:hover { color: var(--primary-h); }
 /* Micro-interação premium: leve elevação + sombra suave ao passar o mouse. */
 .hover-lift { transition: transform .2s cubic-bezier(.2,.8,.2,1), box-shadow .2s ease, border-color .2s ease; }
 .hover-lift:hover { transform: translateY(-4px); box-shadow: 0 12px 30px rgba(15,31,56,0.14); border-color: var(--primary-lt2); }
-@media (prefers-reduced-motion: reduce) { .hover-lift { transition: none; } .hover-lift:hover { transform: none; } }
+
+/* Card Impacto Total: MOVIMENTO de verdade — flutua de leve enquanto o mouse está sobre ele. */
+.impacto-hero { box-shadow: 0 14px 34px rgba(15,31,56,0.32); transition: box-shadow .25s ease; }
+.impacto-hero:hover { animation: float-impacto 2s ease-in-out infinite; box-shadow: 0 24px 50px rgba(15,31,56,0.45); }
+@keyframes float-impacto {
+  0%, 100% { transform: translateY(-3px); }
+  50%      { transform: translateY(-11px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hover-lift { transition: none; } .hover-lift:hover { transform: none; }
+  .impacto-hero:hover { animation: none; }
+}
 
 /* ── Stat cards (Bento) ── */
 .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 16px; margin-bottom: 24px; }
