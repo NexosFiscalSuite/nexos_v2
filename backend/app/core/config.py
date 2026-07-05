@@ -60,6 +60,11 @@ class Settings(BaseSettings):
     # globais. Vazio = qualquer ADMIN (comportamento histórico).
     matriz_curadores: str = ""
 
+    # Alertas operacionais ------------------------------------------------------
+    # Webhook (POST JSON) notificado quando um job assíncrono falha — ntfy.sh,
+    # Slack/Teams incoming webhook etc. Vazio = só log CRITICAL.
+    alert_webhook_url: str = ""
+
     # CORS --------------------------------------------------------------------
     cors_origins: str = ""
 

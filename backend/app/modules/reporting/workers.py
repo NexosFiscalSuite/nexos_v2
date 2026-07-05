@@ -2,6 +2,7 @@
 import asyncio
 from uuid import UUID
 
+from app.core.alerts import alertar_falha
 from app.core.celery_app import celery_app
 from app.core.storage import get_storage
 from app.core.worker_db import worker_tenant_session
@@ -42,6 +43,8 @@ async def _run(job_id, tenant_id, empresa_id, modelo_id, ano, mes):
                 if job:
                     job.status = STATUS_FAILED
                     job.error = "Modelo não encontrado."
+                alertar_falha("reporting.generate", "Modelo não encontrado.",
+                              {"job_id": str(job_id), "modelo_id": str(modelo_id)})
                 return {"error": "modelo_not_found"}
 
             empresa = await EmpresaRepository(s).by_id(empresa_id)
@@ -81,4 +84,5 @@ async def _run(job_id, tenant_id, empresa_id, modelo_id, ano, mes):
             if job:
                 job.status = STATUS_FAILED
                 job.error = str(e)[:1000]
+        alertar_falha("reporting.generate", str(e)[:500], {"job_id": str(job_id)})
         raise

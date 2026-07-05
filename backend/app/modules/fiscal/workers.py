@@ -5,9 +5,9 @@ A API só faz o upload bruto para o staging e enfileira; o trabalho pesado
 próprio event loop (asyncio.run) e sua própria sessão tenant-aware.
 """
 import asyncio
-import logging
 from uuid import UUID
 
+from app.core.alerts import alertar_falha
 from app.core.celery_app import celery_app
 from app.core.storage import get_storage
 from app.core.worker_db import worker_tenant_session
@@ -20,8 +20,6 @@ from app.modules.jobs.infrastructure.models import (
     STATUS_RUNNING,
 )
 from app.modules.jobs.infrastructure.repositories import JobRepository
-
-logger = logging.getLogger(__name__)
 
 
 @celery_app.task(name="fiscal.import_xmls", bind=True)
@@ -50,6 +48,8 @@ async def _run(job_id, tenant_id, empresa_id, user_id, staging):
                 if job:
                     job.status = STATUS_FAILED
                     job.error = "Empresa não encontrada."
+                alertar_falha("fiscal.import_xmls", "Empresa não encontrada.",
+                              {"job_id": str(job_id), "empresa_id": str(empresa_id)})
                 return {"error": "empresa_not_found"}
 
             service = ImportService(s, storage)
@@ -74,7 +74,10 @@ async def _run(job_id, tenant_id, empresa_id, user_id, staging):
                     for nota_id in auditaveis:
                         await auditor.auditar_nota(empresa_id, nota_id)
             except Exception as e:  # noqa: BLE001 — auditoria não derruba o import
-                logger.warning("Auditoria de ST falhou no job %s: %s", job_id, e)
+                # Degradação silenciosa é o pior modo de falha: o import "deu
+                # certo" mas as notas ficaram sem auditoria — alerta sempre.
+                alertar_falha("fiscal.auditoria_st", f"Auditoria de ST falhou: {e}",
+                              {"job_id": str(job_id), "notas": len(auditaveis)})
 
         # Etapa separada: enriquece o regime (consulta optante) das contrapartes
         # recém-criadas, sem acoplar a velocidade do import à API externa.
@@ -88,4 +91,5 @@ async def _run(job_id, tenant_id, empresa_id, user_id, staging):
             if job:
                 job.status = STATUS_FAILED
                 job.error = str(e)[:1000]
+        alertar_falha("fiscal.import_xmls", str(e)[:500], {"job_id": str(job_id)})
         raise
