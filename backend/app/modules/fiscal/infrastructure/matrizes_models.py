@@ -10,6 +10,7 @@ suportar o fallback por hierarquia na busca.
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import ClassVar
 
 from sqlalchemy import Index, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
@@ -30,6 +31,8 @@ class MatrizMva(Base, VigenciaTemporal):
         ),
         Index("ix_mva_busca", "uf_destino", "ncm", "cest"),
     )
+    # Chave de identidade da regra: períodos de vigência não podem se sobrepor.
+    CHAVE_VIGENCIA: ClassVar[tuple[str, ...]] = ("ncm", "cest", "uf_destino")
 
     id: Mapped[int] = mapped_column(primary_key=True)
     ncm: Mapped[str] = mapped_column(String(8))      # 8/6/4 dígitos (fallback)
@@ -49,6 +52,7 @@ class MatrizEnquadramentoSt(Base, VigenciaTemporal):
         ),
         Index("ix_enq_busca", "uf_destino", "ncm", "cest"),
     )
+    CHAVE_VIGENCIA: ClassVar[tuple[str, ...]] = ("uf_destino", "ncm", "cest")
 
     id: Mapped[int] = mapped_column(primary_key=True)
     uf_destino: Mapped[str] = mapped_column(String(2))
@@ -64,6 +68,9 @@ class MatrizProtocoloSt(Base, VigenciaTemporal):
 
     __tablename__ = "matriz_protocolo_st"
     __table_args__ = (Index("ix_protocolo_busca", "uf_origem", "uf_destino", "ncm"),)
+    # Mesmo acordo não pode ter vigências sobrepostas; acordos distintos no
+    # mesmo par UF→UF podem coexistir.
+    CHAVE_VIGENCIA: ClassVar[tuple[str, ...]] = ("uf_origem", "uf_destino", "numero_acordo")
 
     id: Mapped[int] = mapped_column(primary_key=True)
     uf_origem: Mapped[str] = mapped_column(String(2))
@@ -75,6 +82,29 @@ class MatrizProtocoloSt(Base, VigenciaTemporal):
     situacao: Mapped[str] = mapped_column(String(10), default="ATIVO")
 
 
+class MatrizAliquota(Base, VigenciaTemporal):
+    """Alíquota modal do ICMS por UF de destino (alimenta o AliquotaRepository).
+
+    `aliq_modal` é o débito do ST (sem FCP); `aliq_fcp_integrado` só compõe a
+    carga efetiva no denominador do ajuste de MVA (R-07). Antes vivia fixa em
+    código (aliquotas.py) e ignorava a data — dupla vigência como AL 19%→20,5%
+    em 01/04/2026 (Lei 9.776/2025) exige a matriz temporal.
+    """
+
+    __tablename__ = "matriz_aliquota"
+    __table_args__ = (
+        UniqueConstraint("uf_destino", "data_inicio_vigencia", name="uq_aliquota_vigencia"),
+        Index("ix_aliquota_busca", "uf_destino"),
+    )
+    CHAVE_VIGENCIA: ClassVar[tuple[str, ...]] = ("uf_destino",)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    uf_destino: Mapped[str] = mapped_column(String(2))
+    aliq_modal: Mapped[Decimal] = mapped_column(_PCT)
+    aliq_fcp_integrado: Mapped[Decimal] = mapped_column(_PCT, default=Decimal("0"))
+    base_legal: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+
 class MatrizFcp(Base, VigenciaTemporal):
     """Alíquota de FCP por UF+NCM (alimenta o FcpRepository). NCM pode ser 'GERAL'."""
 
@@ -83,6 +113,7 @@ class MatrizFcp(Base, VigenciaTemporal):
         UniqueConstraint("uf_destino", "ncm", "data_inicio_vigencia", name="uq_fcp_vigencia"),
         Index("ix_fcp_busca", "uf_destino", "ncm"),
     )
+    CHAVE_VIGENCIA: ClassVar[tuple[str, ...]] = ("uf_destino", "ncm")
 
     id: Mapped[int] = mapped_column(primary_key=True)
     uf_destino: Mapped[str] = mapped_column(String(2))

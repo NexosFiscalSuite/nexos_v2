@@ -105,6 +105,13 @@ class MemoriaCalculo:
     fcp_st_deducao: Decimal         # FCP próprio abatido (não-cumulatividade)
     fcp_st_calculado: Decimal       # FCP-ST líquido devido
 
+    # --- rastreabilidade (defensibilidade fiscal) ---
+    engine_version: str | None = None       # versão do motor que produziu o cálculo
+    mva_matriz_id: int | None = None        # linha da matriz_mva usada (None = seed/teste)
+    aliquota_matriz_id: int | None = None   # linha da matriz_aliquota usada
+    tem_protocolo: bool | None = None       # None = operação interna (não se aplica)
+    protocolo_fonte: str | None = None      # "matriz" (consultada) | "assumido" (default)
+
 
 class StatusAuditoria(str):
     OK = "OK"

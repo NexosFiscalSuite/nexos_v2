@@ -16,6 +16,7 @@ from app.modules.fiscal.application.auditoria_query import listar_divergencias
 from app.modules.fiscal.application.st_audit_service import StAuditService
 from app.modules.fiscal.domain.parser import parse_xml
 from app.modules.fiscal.infrastructure.matrizes_models import (
+    MatrizAliquota,
     MatrizEnquadramentoSt,
     MatrizFcp,
     MatrizMva,
@@ -33,8 +34,8 @@ from scripts.seed_matrizes import aplicar_seed
 # As FKs para tenants/empresas resolvem no metadata; o SQLite não as fiscaliza.
 _TABELAS = [
     MatrizMva.__table__, MatrizEnquadramentoSt.__table__, MatrizFcp.__table__,
-    MatrizProtocoloSt.__table__, Nota.__table__, NotaItem.__table__,
-    NfeCteVinculo.__table__, AuditoriaIcmsSt.__table__,
+    MatrizProtocoloSt.__table__, MatrizAliquota.__table__, Nota.__table__,
+    NotaItem.__table__, NfeCteVinculo.__table__, AuditoriaIcmsSt.__table__,
 ]
 
 _CHAVE_NFE = "1" * 44
@@ -160,6 +161,14 @@ async def test_e2e_autopeca_frete_agregado_ate_auditoria(sessao):
         assert r.status == "DIVERGENTE"
         assert "ERRO_104_VALOR_ST_DIVERGENTE" in r.codigo_erro
         assert r.memoria["mva_original"] == "71.78"          # veio do banco
+        # Rastreabilidade (defensibilidade): versão do motor + linhas de matriz
+        # usadas + fonte da decisão de protocolo, tudo na memória persistida.
+        assert r.memoria["engine_version"]
+        assert r.memoria["mva_matriz_id"] is not None
+        assert r.memoria["aliquota_matriz_id"] is not None   # alíquota veio da matriz
+        assert r.memoria["alq_intra"] == "18.00"             # MG vigente em 2026-06-01
+        assert r.memoria["tem_protocolo"] is True            # SP→MG (seed)
+        assert r.memoria["protocolo_fonte"] == "matriz"
 
     # Persistiu de fato (não só retornou).
     assert await sessao.scalar(select(func.count()).select_from(AuditoriaIcmsSt)) == 2

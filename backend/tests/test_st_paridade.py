@@ -15,6 +15,7 @@ from app.core.database import Base
 from app.modules.fiscal.domain.st import Crt, ItemFiscal, Operacao, StAuditEngine
 from app.modules.fiscal.infrastructure.matrizes_loaders import MatrizesLoader
 from app.modules.fiscal.infrastructure.matrizes_models import (
+    MatrizAliquota,
     MatrizEnquadramentoSt,
     MatrizFcp,
     MatrizMva,
@@ -27,6 +28,7 @@ _TABELAS = [
     MatrizEnquadramentoSt.__table__,
     MatrizFcp.__table__,
     MatrizProtocoloSt.__table__,
+    MatrizAliquota.__table__,
 ]
 
 
@@ -61,11 +63,14 @@ async def test_paridade_autopeca_banco_para_motor(sessao):
         mva_repo=matrizes.mva,
         enquadramento_repo=matrizes.enquadramento,
         fcp_repo=matrizes.fcp,
+        aliquota_repo=matrizes.aliquota,
     )
     r = engine.auditar_item(item, op)
 
-    # A MVA 71,78% veio do BANCO (não de mock fixo).
+    # A MVA 71,78% veio do BANCO (não de mock fixo) — e a alíquota também.
     assert r.memoria.mva_original == Decimal("71.78")
+    assert r.memoria.aliquota_matriz_id is not None
+    assert r.memoria.mva_matriz_id is not None
     assert r.memoria.mva_foi_ajustada is True
     assert round(r.memoria.mva_aplicada, 2) == Decimal("84.35")
     assert r.memoria.base_st_calculada == Decimal("1473.69")
@@ -86,7 +91,8 @@ async def test_paridade_vigencia_fora_de_periodo(sessao):
         mva_repo=matrizes.mva,
         enquadramento_repo=matrizes.enquadramento,
         fcp_repo=matrizes.fcp,
+        aliquota_repo=matrizes.aliquota,
     )
     r = engine.auditar_item(item, op)
-    # Sem MVA vigente em 2023 -> motor não audita (depende do dado da matriz).
+    # Sem matriz vigente em 2023 -> motor não audita (depende do dado da matriz).
     assert r.status == "NAO_AUDITAVEL"

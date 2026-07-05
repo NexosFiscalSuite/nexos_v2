@@ -9,8 +9,8 @@ Uso típico:
     engine = StAuditEngine(MvaEmMemoria(), EnquadramentoEmMemoria(), FcpEmMemoria())
     resultado = engine.auditar_item(item, operacao)
 """
-from .aliquotas import AliquotaResolver
-from .engine import StAuditEngine
+from .aliquotas import AliquotaResolver, AliquotasReferencia
+from .engine import ENGINE_VERSION, StAuditEngine
 from .enums import Crt, MetodoReducao, ModBcSt, Regime
 from .errors import ErroST
 from .model import (
@@ -21,6 +21,8 @@ from .model import (
     StatusAuditoria,
 )
 from .ports import (
+    AliquotaRepository,
+    AliquotaUf,
     EnquadramentoRepository,
     FcpRepository,
     MvaInfo,
@@ -36,7 +38,11 @@ from .seed import (
 
 __all__ = [
     "StAuditEngine",
+    "ENGINE_VERSION",
     "AliquotaResolver",
+    "AliquotasReferencia",
+    "AliquotaRepository",
+    "AliquotaUf",
     "Crt",
     "ModBcSt",
     "MetodoReducao",

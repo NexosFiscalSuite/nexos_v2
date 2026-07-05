@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 
-from .aliquotas import AliquotaResolver
+from .aliquotas import AliquotaResolver, AliquotasReferencia
 from .enums import Regime
 from .errors import ErroST
 from .model import (
@@ -22,14 +22,26 @@ from .model import (
 )
 from .money import ZERO, aplicar_percentual, centavos
 from .mva import calcular_mva
-from .ports import EnquadramentoRepository, FcpRepository, MvaRepository, ProtocoloRepository
+from .ports import (
+    AliquotaRepository,
+    EnquadramentoRepository,
+    FcpRepository,
+    MvaRepository,
+    ProtocoloRepository,
+)
 from .strategies import BaseMva, aplicar_reducao_base, base_strategy_for, calcular_deducao
+
+# Gravada em cada memória de cálculo: permite responder "qual regra o sistema
+# aplicou na época" (defensibilidade). Bump a cada mudança de regra de cálculo.
+ENGINE_VERSION = "2.1.0"
 
 
 class _AssumeProtocolo:
     """Default quando nenhuma matriz de protocolo é injetada: assume o acordo
     vigente — a interestadual é auditada como responsabilidade do REMETENTE
-    (comportamento histórico, conservador)."""
+    (comportamento histórico, conservador). A memória registra fonte="assumido"."""
+
+    fonte = "assumido"
 
     def tem_protocolo(self, uf_orig: str, uf_dest: str, data: date) -> bool:
         return True
@@ -49,6 +61,9 @@ class StAuditEngine:
     mva_repo: MvaRepository
     enquadramento_repo: EnquadramentoRepository
     fcp_repo: FcpRepository
+    # Intra (modal/FCP) vem de matriz com vigência; a referência em código serve
+    # a testes/dev — em produção o orquestrador injeta o snapshot do banco.
+    aliquota_repo: AliquotaRepository = field(default_factory=AliquotasReferencia)
     protocolo_repo: ProtocoloRepository = field(default_factory=_AssumeProtocolo)
     aliquotas: AliquotaResolver = AliquotaResolver()
 
@@ -72,12 +87,17 @@ class StAuditEngine:
         if base_strategy is None:
             return self._nao_auditavel(item, f"modBCST={item.mod_bc_st} fora do núcleo v1")
 
-        # 3. Alíquotas.
+        # 3. Alíquotas. A interestadual é lei em fórmula (código); a interna vem
+        #    da matriz VIGENTE NA DATA — sem alíquota cadastrada, o motor não
+        #    assume a taxa atual (fail-closed, ADR-0002).
+        aliq_uf = self.aliquota_repo.buscar(operacao.uf_dest, operacao.data)
+        if aliq_uf is None:
+            return self._nao_auditavel(item, ErroST.ALIQUOTA_NAO_ENCONTRADA)
         alq_inter = self.aliquotas.alq_inter(
             operacao.uf_emit, operacao.uf_dest, item.orig, operacao.data
         )
-        alq_intra_modal = self.aliquotas.alq_intra_modal(operacao.uf_dest, operacao.data)
-        alq_intra_efetiva = self.aliquotas.alq_intra_efetiva(operacao.uf_dest, operacao.data)
+        alq_intra_modal = aliq_uf.modal
+        alq_intra_efetiva = aliq_uf.efetiva   # R-07: carga efetiva no ajuste de MVA
         alq_operacao = alq_inter if operacao.interestadual else alq_intra_modal
 
         erros: list[ErroST] = []
@@ -143,7 +163,18 @@ class StAuditEngine:
         if fcp_st_calc < ZERO:
             fcp_st_calc = ZERO
 
-        # 9. Memória (independe das comparações — vale para os dois fluxos abaixo).
+        # 9. RESPONSABILIDADE na interestadual (matriz de protocolo), resolvida
+        #    ANTES da memória: fica registrado o que o motor decidiu E de onde
+        #    veio a resposta ("assumido" = default sem matriz, nunca silencioso).
+        tem_protocolo: bool | None = None
+        protocolo_fonte: str | None = None
+        if operacao.interestadual:
+            tem_protocolo = self.protocolo_repo.tem_protocolo(
+                operacao.uf_emit, operacao.uf_dest, operacao.data
+            )
+            protocolo_fonte = getattr(self.protocolo_repo, "fonte", "matriz")
+
+        # 10. Memória (independe das comparações — vale para os dois fluxos abaixo).
         memoria = MemoriaCalculo(
             regime=regime.value,
             mva_original=mva_original,
@@ -160,17 +191,19 @@ class StAuditEngine:
             fcp_st_debito=centavos(fcp_st_debito),
             fcp_st_deducao=centavos(item.v_fcp),
             fcp_st_calculado=centavos(fcp_st_calc),
+            engine_version=ENGINE_VERSION,
+            mva_matriz_id=(mva_info.matriz_id if tem_mva else None),
+            aliquota_matriz_id=aliq_uf.matriz_id,
+            tem_protocolo=tem_protocolo,
+            protocolo_fonte=protocolo_fonte,
         )
 
-        # 10. RESPONSABILIDADE na interestadual (matriz de protocolo). Sem acordo
-        #     vigente origem→destino, o remetente NÃO é o substituto: a ST vira
-        #     antecipação do destinatário (nosso cliente recolhe via guia local).
-        if operacao.interestadual and not self.protocolo_repo.tem_protocolo(
-            operacao.uf_emit, operacao.uf_dest, operacao.data
-        ):
+        # 11. Sem acordo vigente origem→destino, o remetente NÃO é o substituto:
+        #     a ST vira antecipação do destinatário (recolhe via guia local).
+        if tem_protocolo is False:
             return self._resultado_antecipacao(item, icms_st_calc, fcp_st_calc, memoria, erros)
 
-        # 11. Com protocolo (ou operação interna): a ST é do REMETENTE — auditamos
+        # 12. Com protocolo (ou operação interna): a ST é do REMETENTE — auditamos
         #     o que veio destacado no XML contra o cálculo.
         div_bc = centavos(item.v_bc_st) - centavos(base_st_calc)
         if abs(div_bc) > TOLERANCIA_ITEM:
@@ -278,6 +311,7 @@ class StAuditEngine:
             alq_inter=ZERO, alq_intra=ZERO, base_st_calculada=ZERO, icms_st_debito=ZERO,
             deducao_aplicada=ZERO, deducao_tipo="zero", icms_st_calculado=ZERO,
             fcp_st_debito=ZERO, fcp_st_deducao=ZERO, fcp_st_calculado=ZERO,
+            engine_version=ENGINE_VERSION,
         )
         obs = (
             "ST destacado numa revenda com ST já retido (CST 60/500): pagamento a "

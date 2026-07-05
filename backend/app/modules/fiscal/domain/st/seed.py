@@ -93,6 +93,8 @@ class ProtocoloEmMemoria:
     vigente; sem nenhum par, `padrao` decide (True = assume protocolo, replicando
     o comportamento histórico do motor; False = simula antecipação)."""
 
+    fonte = "matriz"   # configurada explicitamente pelo teste = resposta consultada
+
     def __init__(self, pares: set[tuple[str, str]] | None = None, padrao: bool = True):
         self._pares = {(o.upper(), d.upper()) for (o, d) in (pares or set())}
         self._padrao = padrao

@@ -10,6 +10,7 @@ from decimal import Decimal
 import pytest
 
 from app.modules.fiscal.domain.st import (
+    ENGINE_VERSION,
     Crt,
     EnquadramentoEmMemoria,
     FcpEmMemoria,
@@ -475,3 +476,58 @@ def test_mva_trava_aliquota_inter_maior_igual(inter, intra, espera_ajuste):
         crt=Crt.NORMAL, interestadual=True,
     )
     assert r.ajustada is espera_ajuste
+
+
+def test_aliquota_vigente_por_data_al():
+    """ADR-0002 nas alíquotas: AL era 19% até 31/03/2026 e 20,5% a partir de
+    01/04/2026 (Lei 9.776/2025). A MESMA operação muda de alíquota pela data —
+    antes, a tabela fixa aplicava 20,5% a qualquer nota (falso positivo)."""
+    mva = MvaEmMemoria({("85122011", "0100100", "AL"): "40.00"})
+
+    antes = _engine(mva=mva).auditar_item(
+        _item(), Operacao(uf_emit="SP", uf_dest="AL", crt=Crt.NORMAL, data=date(2026, 3, 1))
+    )
+    depois = _engine(mva=mva).auditar_item(
+        _item(), Operacao(uf_emit="SP", uf_dest="AL", crt=Crt.NORMAL, data=date(2026, 5, 1))
+    )
+
+    assert antes.memoria.alq_intra == Decimal("19")
+    assert depois.memoria.alq_intra == Decimal("20.5")
+    assert antes.memoria.alq_intra != depois.memoria.alq_intra   # a vigência fez efeito
+
+
+def test_uf_sem_aliquota_nao_auditavel():
+    """UF de destino sem alíquota vigente (ex.: 'EX', exterior): NAO_AUDITAVEL
+    com código claro — nunca exceção que derruba o lote."""
+    op = Operacao(uf_emit="SP", uf_dest="EX", crt=Crt.NORMAL, data=DATA)
+
+    r = _engine().auditar_item(_item(), op)
+
+    assert r.status == StatusAuditoria.NAO_AUDITAVEL
+    assert "ERRO_ALIQUOTA_NAO_ENCONTRADA" in r.codigos_erro
+
+
+def test_memoria_rastreia_versao_e_fonte_do_protocolo():
+    """Defensibilidade: a memória grava a versão do motor e a FONTE da decisão
+    de protocolo — "matriz" quando consultada, "assumido" no default sem matriz
+    (o motor nunca chuta em silêncio)."""
+    op = Operacao(uf_emit="SP", uf_dest="MG", crt=Crt.NORMAL, data=DATA)
+    item = _item(v_bc_st=Decimal("1502.44"), v_icms_st=Decimal("150.44"))
+
+    com_matriz = _engine().auditar_item(item, op)          # ProtocoloEmMemoria
+    assert com_matriz.memoria.engine_version == ENGINE_VERSION
+    assert com_matriz.memoria.tem_protocolo is True
+    assert com_matriz.memoria.protocolo_fonte == "matriz"
+
+    sem_matriz = StAuditEngine(
+        MvaEmMemoria(), EnquadramentoEmMemoria(), FcpEmMemoria()
+    ).auditar_item(item, op)                               # default _AssumeProtocolo
+    assert sem_matriz.memoria.tem_protocolo is True
+    assert sem_matriz.memoria.protocolo_fonte == "assumido"
+
+    interna = _engine().auditar_item(
+        _item(v_bc_st=Decimal("1400.00"), v_icms_st=Decimal("132.00")),
+        Operacao(uf_emit="MG", uf_dest="MG", crt=Crt.NORMAL, data=DATA),
+    )
+    assert interna.memoria.tem_protocolo is None           # interna: não se aplica
+    assert interna.memoria.protocolo_fonte is None

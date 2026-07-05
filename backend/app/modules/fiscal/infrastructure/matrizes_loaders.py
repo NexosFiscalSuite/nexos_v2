@@ -9,14 +9,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
+from typing import ClassVar
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.fiscal.domain.st.enums import Regime
 from app.modules.fiscal.domain.st.model import ItemFiscal, Operacao
-from app.modules.fiscal.domain.st.ports import MvaInfo
+from app.modules.fiscal.domain.st.ports import AliquotaUf, MvaInfo
 from app.modules.fiscal.infrastructure.matrizes_models import (
+    MatrizAliquota,
     MatrizEnquadramentoSt,
     MatrizFcp,
     MatrizMva,
@@ -41,14 +43,15 @@ def _candidatos_ncm(ncm: str) -> list[str]:
 # --------------------------------------------------------------------------- #
 @dataclass(frozen=True, slots=True)
 class _MvaSnapshot:
-    dados: dict[tuple[str, str, str], Decimal]   # (ncm, cest, uf) -> MVA
+    dados: dict[tuple[str, str, str], tuple[Decimal, int]]   # (ncm, cest, uf) -> (MVA, id)
 
     def buscar(self, ncm: str, cest: str, uf_dest: str, data: date) -> MvaInfo | None:
         cest_l, uf = only_digits(cest), uf_dest.upper()
         for c in _candidatos_ncm(ncm):
-            mva = self.dados.get((c, cest_l, uf))
-            if mva is not None:
-                return MvaInfo(mva_original=mva, ncm_casado=c)
+            par = self.dados.get((c, cest_l, uf))
+            if par is not None:
+                mva, linha_id = par
+                return MvaInfo(mva_original=mva, ncm_casado=c, matriz_id=linha_id)
         return None
 
 
@@ -81,9 +84,18 @@ class _FcpSnapshot:
 @dataclass(frozen=True, slots=True)
 class _ProtocoloSnapshot:
     pares: frozenset[tuple[str, str]]            # (uf_orig, uf_dest) com acordo vigente
+    fonte: ClassVar[str] = "matriz"              # resposta consultada (vai à memória)
 
     def tem_protocolo(self, uf_orig: str, uf_dest: str, data: date) -> bool:
         return (uf_orig.upper(), uf_dest.upper()) in self.pares
+
+
+@dataclass(frozen=True, slots=True)
+class _AliquotaSnapshot:
+    dados: dict[str, AliquotaUf]                 # UF -> alíquota vigente na data
+
+    def buscar(self, uf_dest: str, data: date) -> AliquotaUf | None:
+        return self.dados.get(uf_dest.upper())
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,6 +106,7 @@ class MatrizesHidratadas:
     enquadramento: _EnquadramentoSnapshot
     fcp: _FcpSnapshot
     protocolo: _ProtocoloSnapshot
+    aliquota: _AliquotaSnapshot
 
 
 # --------------------------------------------------------------------------- #
@@ -118,6 +131,7 @@ class MatrizesLoader:
             enquadramento=await self._enquadramento(uf, ncms, cests, data),
             fcp=await self._fcp(uf, ncms, data),
             protocolo=await self._protocolo(operacao.uf_emit.upper(), uf, data),
+            aliquota=await self._aliquota(uf, data),
         )
 
     async def _mva(self, uf, ncms, cests, data) -> _MvaSnapshot:
@@ -131,7 +145,9 @@ class MatrizesLoader:
             data,
         )
         rows = (await self.session.execute(stmt)).scalars().all()
-        return _MvaSnapshot({(r.ncm, r.cest, r.uf_destino): r.mva_original for r in rows})
+        return _MvaSnapshot(
+            {(r.ncm, r.cest, r.uf_destino): (r.mva_original, r.id) for r in rows}
+        )
 
     async def _enquadramento(self, uf, ncms, cests, data) -> _EnquadramentoSnapshot:
         stmt = filtrar_vigencia(
@@ -174,3 +190,22 @@ class MatrizesLoader:
         )
         rows = (await self.session.execute(stmt)).scalars().all()
         return _ProtocoloSnapshot(frozenset((r.uf_origem, r.uf_destino) for r in rows))
+
+    async def _aliquota(self, uf: str, data) -> _AliquotaSnapshot:
+        stmt = (
+            filtrar_vigencia(
+                select(MatrizAliquota).where(MatrizAliquota.uf_destino == uf),
+                MatrizAliquota,
+                data,
+            )
+            # Desempate (ADR-0002): se houver sobreposição indevida, vence a
+            # vigência mais recente — a validação de carga é quem impede o caso.
+            .order_by(MatrizAliquota.data_inicio_vigencia.desc())
+            .limit(1)
+        )
+        row = (await self.session.execute(stmt)).scalars().first()
+        if row is None:
+            return _AliquotaSnapshot({})
+        return _AliquotaSnapshot({row.uf_destino: AliquotaUf(
+            modal=row.aliq_modal, fcp_integrado=row.aliq_fcp_integrado, matriz_id=row.id,
+        )})

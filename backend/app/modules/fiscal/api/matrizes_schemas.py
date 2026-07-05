@@ -116,6 +116,39 @@ class MatrizFcpResponse(_MatrizFcpCampos):
     model_config = {"from_attributes": True}
 
 
+# ── Alíquota modal do ICMS por UF de destino (com FCP integrado à modal) ─────
+class _MatrizAliquotaCampos(BaseModel):
+    uf_destino: str = Field(..., min_length=2, max_length=2, examples=["MG"])
+    aliq_modal: Decimal = Field(..., gt=0, le=100, examples=["18.00"],
+                                description="Alíquota modal — débito do ST (sem FCP)")
+    aliq_fcp_integrado: Decimal = Field(
+        default=Decimal("0"), ge=0, le=100, examples=["2.00"],
+        description="FCP integrado à modal — só na carga efetiva do ajuste de MVA",
+    )
+    base_legal: str | None = Field(default=None, examples=["Lei 9.776/2025 (AL)"])
+    data_inicio_vigencia: date
+    data_fim_vigencia: date | None = None
+
+    def normalizado(self) -> dict:
+        d = self.model_dump()
+        d["uf_destino"] = self.uf_destino.upper()
+        return d
+
+
+class MatrizAliquotaCreate(_MatrizAliquotaCampos):
+    pass
+
+
+class MatrizAliquotaUpdate(_MatrizAliquotaCampos):
+    pass
+
+
+class MatrizAliquotaResponse(_MatrizAliquotaCampos):
+    id: int
+
+    model_config = {"from_attributes": True}
+
+
 # ── Protocolo / Convênio (ativa a ST interestadual no par UF origem→destino) ──
 class _MatrizProtocoloCampos(BaseModel):
     uf_origem: str = Field(..., min_length=2, max_length=2, examples=["SP"])

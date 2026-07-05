@@ -64,6 +64,12 @@ class ErroST(_Erro, Enum):
         "NCM/CEST/UF na data — auditoria não confiável, não calculada.",
         "Cadastrar a MVA (com vigência) na matriz e reauditar.",
     )
+    ALIQUOTA_NAO_ENCONTRADA = (
+        "ERRO_ALIQUOTA_NAO_ENCONTRADA",
+        "Sem alíquota modal vigente para a UF de destino na data de emissão — "
+        "o motor não assume a taxa atual, não calculada.",
+        "Cadastrar a alíquota da UF (com vigência) na matriz de alíquotas e reauditar.",
+    )
     ST_INDEVIDO_REVENDA = (
         "ERRO_110_ST_INDEVIDO_REVENDA",
         "Revenda de produto com ST já retido (CST 60 / CSOSN 500) destacou "
