@@ -10,16 +10,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import Response
 
 from app.core.exceptions import NotFoundError
-from app.core.rbac import Role, require_role
 from app.core.rls import tenant_session
 from app.core.security import TokenClaims, get_current_claims
+from app.modules.fiscal.api.curadoria import require_curador
 from app.modules.fiscal.api.matrizes_schemas import (
+    MatrizAliquotaCreate,
     MatrizEnquadramentoCreate,
     MatrizFcpCreate,
     MatrizMvaCreate,
     MatrizProtocoloCreate,
 )
 from app.modules.fiscal.infrastructure.matrizes_models import (
+    MatrizAliquota,
     MatrizEnquadramentoSt,
     MatrizFcp,
     MatrizMva,
@@ -41,6 +43,8 @@ MATRIZES: dict[str, BulkSpec] = {
                     ("uf_destino", "ncm", "data_inicio_vigencia"), _NORM),
     "protocolos": BulkSpec(MatrizProtocoloSt, MatrizProtocoloCreate,
                            ("uf_origem", "uf_destino", "numero_acordo", "data_inicio_vigencia"), _NORM),
+    "aliquotas": BulkSpec(MatrizAliquota, MatrizAliquotaCreate,
+                          ("uf_destino", "data_inicio_vigencia"), _NORM),
 }
 
 
@@ -69,7 +73,7 @@ async def exportar_matriz(
 async def importar_matriz(
     tipo: str,
     arquivo: UploadFile = File(...),
-    claims: TokenClaims = Depends(require_role(Role.ADMIN)),
+    claims: TokenClaims = Depends(require_curador),
     session: AsyncSession = Depends(tenant_session),
 ):
     resumo = await importar_csv(session, _spec(tipo), await arquivo.read())

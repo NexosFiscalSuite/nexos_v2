@@ -18,6 +18,8 @@ from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.shared.domain.vigencia import intervalos_conflitam
+
 _NUM_VIRGULA = re.compile(r"^\d+,\d+$")
 
 
@@ -68,7 +70,7 @@ async def importar_csv(session: AsyncSession, spec: BulkSpec, conteudo: bytes) -
     leitor = csv.DictReader(io.StringIO(texto), delimiter=";")
 
     erros: list[dict] = []
-    validos: list[dict] = []
+    validos: list[tuple[int, dict]] = []            # (nº da linha no arquivo, dados)
     for i, linha in enumerate(leitor, start=2):     # linha 1 = cabeçalho
         bruto = {}
         for c in cols:
@@ -77,24 +79,52 @@ async def importar_csv(session: AsyncSession, spec: BulkSpec, conteudo: bytes) -
                 continue                            # omite → schema aplica default / acusa se required
             bruto[c] = v.replace(",", ".") if _NUM_VIRGULA.match(v) else v
         try:
-            validos.append(spec.normalizar(spec.schema(**bruto)))
+            validos.append((i, spec.normalizar(spec.schema(**bruto))))
         except ValidationError as e:
             erros.append({"linha": i, "erro": _resumo_erro(e)})
 
-    resumo = await _upsert(session, spec, validos)
+    resumo = await _upsert(session, spec, validos, erros)
     return {"linhas_validas": len(validos), **resumo, "erros": erros}
 
 
-async def _upsert(session: AsyncSession, spec: BulkSpec, validos: list[dict]) -> dict:
+async def _upsert(
+    session: AsyncSession, spec: BulkSpec, validos: list[tuple[int, dict]], erros: list[dict]
+) -> dict:
     existentes: dict[tuple, object] = {}
     for obj in (await session.execute(select(spec.modelo))).scalars():
         existentes[tuple(getattr(obj, k) for k in spec.chave)] = obj
 
+    # Modelos com vigência (ADR-0002) validam a não-sobreposição por família:
+    # linha que conflita vira erro relatado (linha + motivo), não entra no lote.
+    chave_vig: tuple[str, ...] | None = getattr(spec.modelo, "CHAVE_VIGENCIA", None)
+    familias: dict[tuple, list] = {}
+    if chave_vig:
+        for obj in existentes.values():
+            familias.setdefault(tuple(getattr(obj, c) for c in chave_vig), []).append(obj)
+
     nao_chave = [c for c in spec.colunas if c not in spec.chave]
     inseridos = atualizados = 0
-    for d in validos:
+    for linha_num, d in validos:
         chave = tuple(d[k] for k in spec.chave)
         atual = existentes.get(chave)
+        if chave_vig:
+            fam = familias.get(tuple(d[c] for c in chave_vig), [])
+            conflito = next(
+                (o for o in fam if o is not atual and intervalos_conflitam(
+                    o.data_inicio_vigencia, o.data_fim_vigencia,
+                    d["data_inicio_vigencia"], d.get("data_fim_vigencia"),
+                )),
+                None,
+            )
+            if conflito is not None:
+                fim = conflito.data_fim_vigencia or "em aberto"
+                erros.append({
+                    "linha": linha_num,
+                    "erro": "vigência sobrepõe linha existente "
+                            f"({conflito.data_inicio_vigencia} – {fim}) — "
+                            "encerre a vigência antiga e insira uma nova (ADR-0002)",
+                })
+                continue
         if atual is not None:
             for c in nao_chave:
                 if c in d:
@@ -104,6 +134,8 @@ async def _upsert(session: AsyncSession, spec: BulkSpec, validos: list[dict]) ->
             novo = spec.modelo(**{c: d[c] for c in spec.colunas if c in d})
             session.add(novo)
             existentes[chave] = novo                # evita duplicar dentro do mesmo arquivo
+            if chave_vig:
+                familias.setdefault(tuple(d[c] for c in chave_vig), []).append(novo)
             inseridos += 1
     await session.flush()
     return {"inseridos": inseridos, "atualizados": atualizados}

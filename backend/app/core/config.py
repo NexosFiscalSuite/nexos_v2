@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     # UF do nicho do escritório alvo do upsert das matrizes (job agendado).
     crawler_uf_alvo: str = "MG"
 
+    # Curadoria das matrizes fiscais -------------------------------------------
+    # E-mails (separados por vírgula) autorizados a ESCREVER nas matrizes
+    # globais. Vazio = qualquer ADMIN (comportamento histórico).
+    matriz_curadores: str = ""
+
     # CORS --------------------------------------------------------------------
     cors_origins: str = ""
 
@@ -69,6 +74,10 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def matriz_curadores_list(self) -> list[str]:
+        return [e.strip().lower() for e in self.matriz_curadores.split(",") if e.strip()]
 
     @property
     def is_production(self) -> bool:

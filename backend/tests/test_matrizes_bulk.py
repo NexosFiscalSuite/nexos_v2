@@ -49,3 +49,25 @@ async def test_import_valida_upserta_e_relata_erros(sessao):
     # E a vírgula virou ponto (42,00 → 42.00) na persistência.
     export = await exportar_csv(sessao, _MVA)
     assert "40111000;0100500;MG;42.00" in export
+
+
+async def test_import_rejeita_vigencia_sobreposta(sessao):
+    """ADR-0002: linha cuja vigência sobrepõe outra da mesma chave vira erro
+    relatado (linha + motivo) e fica FORA do lote — nunca corrompe a matriz."""
+    cab = b"ncm;cest;uf_destino;mva_original;base_legal;data_inicio_vigencia;data_fim_vigencia\n"
+    r1 = await importar_csv(sessao, _MVA, cab + b"40111000;0100500;MG;42.00;Pneu;2024-01-01;\n")
+    assert r1["inseridos"] == 1
+
+    # Nova vigência SEM encerrar a antiga (aberta) → sobreposição → rejeitada.
+    r2 = await importar_csv(sessao, _MVA, cab + b"40111000;0100500;MG;50.00;Pneu;2026-01-01;\n")
+    assert r2["inseridos"] == 0
+    assert len(r2["erros"]) == 1
+    assert "sobrep" in r2["erros"][0]["erro"]
+
+    # Fluxo correto NO MESMO arquivo: encerra a antiga e insere a nova.
+    r3 = await importar_csv(sessao, _MVA, cab
+        + b"40111000;0100500;MG;42.00;Pneu;2024-01-01;2025-12-31\n"
+        + b"40111000;0100500;MG;50.00;Pneu 2026;2026-01-01;\n")
+    assert r3["atualizados"] == 1
+    assert r3["inseridos"] == 1
+    assert r3["erros"] == []

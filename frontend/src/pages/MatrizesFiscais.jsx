@@ -97,6 +97,26 @@ const ABAS = [
     ],
   },
   {
+    id: 'aliquotas', label: 'Alíquotas', icon: 'ti-receipt-tax',
+    api: { list: api.matrizesAliquotas, create: api.criarMatrizAliquota, update: api.editarMatrizAliquota, remove: api.removerMatrizAliquota },
+    descricao: 'Alíquota modal do ICMS por UF de destino (com FCP integrado) — vigente na data de emissão da nota',
+    empty: { icon: 'ti-receipt-tax', title: 'Nenhuma alíquota cadastrada', sub: 'Cadastre a alíquota modal de cada UF (com vigência). Sem ela, o motor não audita notas para a UF.' },
+    colunas: [
+      { key: 'uf_destino', label: 'UF', render: (m) => badge(m.uf_destino) },
+      { key: 'aliq_modal', label: 'Modal', align: 'right', strong: true, render: (m) => pct(m.aliq_modal) },
+      { key: 'aliq_fcp_integrado', label: 'FCP integrado', align: 'right', muted: true, render: (m) => pct(m.aliq_fcp_integrado) },
+      { key: 'base_legal', label: 'Base Legal', muted: true },
+      { key: 'vigencia', label: 'Vigência', muted: true, small: true, render: vigencia },
+    ],
+    campos: [
+      { key: 'uf_destino', label: 'UF destino', uf: true, required: true, placeholder: 'MG' },
+      { key: 'aliq_modal', label: 'Alíquota modal (%)', type: 'number', required: true, placeholder: '18.00' },
+      { key: 'aliq_fcp_integrado', label: 'FCP integrado (%)', type: 'number', placeholder: '0.00' },
+      { key: 'base_legal', label: 'Base Legal', full: true, placeholder: 'Lei 9.776/2025 (AL)' },
+      ...VIGENCIA_CAMPOS,
+    ],
+  },
+  {
     id: 'protocolos', label: 'Protocolos', icon: 'ti-license',
     api: { list: api.matrizesProtocolos, create: api.criarMatrizProtocolo, update: api.editarMatrizProtocolo, remove: api.removerMatrizProtocolo },
     descricao: 'Protocolos e Convênios que ativam a ST interestadual — define o par UF origem → destino com acordo',
@@ -116,7 +136,99 @@ const ABAS = [
       ...VIGENCIA_CAMPOS,
     ],
   },
+  {
+    id: 'cobertura', label: 'Cobertura', icon: 'ti-radar-2', custom: true,
+    descricao: 'O que a carteira movimenta × o que as matrizes cobrem — a fila de curadoria, ordenada por valor',
+  },
 ]
+
+// ── Cobertura: fila de curadoria dirigida pelos próprios XMLs ──
+const brl = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+const STATUS_COBERTURA = {
+  SEM_ENQUADRAMENTO: { label: 'Sem enquadramento', tone: 'err' },
+  SEM_ALIQUOTA: { label: 'Sem alíquota na UF', tone: 'err' },
+  ST_SEM_MVA: { label: 'ST sem MVA', tone: 'warn' },
+  TN: { label: 'TN (fora do motor)', tone: 'info' },
+  OK: { label: 'Auditável', tone: 'ok' },
+}
+
+function CoberturaPanel() {
+  const { toasts, toast } = useToast()
+  const [dados, setDados] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [filtroUf, setFiltroUf] = useState('')
+
+  const carregar = useCallback(async () => {
+    setLoading(true)
+    try { setDados(await api.coberturaMatrizes({ uf: filtroUf || undefined })) }
+    catch (e) { toast(e.message, 'error') }
+    finally { setLoading(false) }
+  }, [filtroUf, toast])
+
+  useEffect(() => { carregar() }, [carregar])
+
+  if (loading) return <div className="center-loader"><div className="spinner" /></div>
+  const resumo = dados?.resumo || {}
+  const grupos = dados?.grupos || []
+
+  return (
+    <div>
+      <ToastContainer toasts={toasts} />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
+        <input value={filtroUf} onChange={e => setFiltroUf(e.target.value.toUpperCase())} maxLength={2}
+          placeholder="Filtrar por UF…" style={{ width: 160 }} />
+        <div style={{ display: 'flex', gap: 18, alignItems: 'baseline' }}>
+          <span style={{ color: 'var(--text-3)', fontSize: 13 }}>
+            {resumo.grupos || 0} grupos · {brl(resumo.valor_total)}
+          </span>
+          <span style={{ fontWeight: 700, fontSize: 18, color: (resumo.pct_valor_coberto ?? 100) >= 90 ? 'var(--ok-text)' : 'var(--err-text)' }}>
+            {resumo.pct_valor_coberto ?? 100}% do valor coberto
+          </span>
+        </div>
+      </div>
+
+      {grupos.length === 0 ? (
+        <div className="empty-state">
+          <i className="ti ti-radar-2" />
+          <p className="empty-title">Nada a analisar</p>
+          <p className="empty-subtitle">Importe XMLs para medir a cobertura das matrizes sobre a carteira real.</p>
+        </div>
+      ) : (
+        <div className="card" style={{ padding: 0 }}>
+          <div className="tbl-wrap">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>UF</th><th>NCM</th><th>CEST</th>
+                  <th style={{ textAlign: 'right' }}>Itens</th>
+                  <th style={{ textAlign: 'right' }}>Valor movimentado</th>
+                  <th>Situação</th><th>Regime</th><th>Última emissão</th>
+                </tr>
+              </thead>
+              <tbody>
+                {grupos.map((g, i) => {
+                  const st = STATUS_COBERTURA[g.status] || { label: g.status, tone: 'info' }
+                  return (
+                    <tr key={`${g.uf}-${g.ncm}-${g.cest}-${i}`}>
+                      <td>{badge(g.uf)}</td>
+                      <td className="mono">{g.ncm}</td>
+                      <td className="mono">{g.cest || '—'}</td>
+                      <td style={{ textAlign: 'right' }}>{g.itens}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 600 }}>{brl(g.valor)}</td>
+                      <td>{badge(st.label, st.tone)}</td>
+                      <td style={{ color: 'var(--text-3)' }}>{g.regime || '—'}</td>
+                      <td style={{ color: 'var(--text-3)', fontSize: 12 }}>{dataBr(g.data_ref)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 function vazioDe(campos) {
   return Object.fromEntries(campos.map(c => [c.key, c.type === 'select' ? (c.options[0]?.value || '') : '']))
@@ -304,14 +416,16 @@ export default function MatrizesFiscais() {
           <h1 className="page-title">Matrizes Fiscais</h1>
           <p className="page-breadcrumb">{aba.descricao}</p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-secondary" disabled={bulkBusy} onClick={exportar}>
-            <i className="ti ti-file-spreadsheet" /> Exportar Planilha
-          </button>
-          <button className="btn btn-secondary" disabled={bulkBusy} onClick={() => fileRef.current?.click()}>
-            <i className="ti ti-upload" /> Importar Planilha
-          </button>
-        </div>
+        {!aba.custom && (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-secondary" disabled={bulkBusy} onClick={exportar}>
+              <i className="ti ti-file-spreadsheet" /> Exportar Planilha
+            </button>
+            <button className="btn btn-secondary" disabled={bulkBusy} onClick={() => fileRef.current?.click()}>
+              <i className="ti ti-upload" /> Importar Planilha
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Abas: as fontes que o motor de ICMS-ST consome */}
@@ -324,7 +438,9 @@ export default function MatrizesFiscais() {
         ))}
       </div>
 
-      <CrudMatriz key={`${tab}:${bulkVersion}`} aba={aba} />
+      {aba.custom
+        ? <CoberturaPanel key={`${tab}:${bulkVersion}`} />
+        : <CrudMatriz key={`${tab}:${bulkVersion}`} aba={aba} />}
       {resultado && <ResumoImportModal r={resultado} onClose={() => setResultado(null)} />}
     </div>
   )

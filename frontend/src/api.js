@@ -176,6 +176,20 @@ export const api = {
   editarMatrizProtocolo: (id, data) => request('PATCH', `/matrizes/protocolos/${id}`, data),
   removerMatrizProtocolo: (id) => request('DELETE', `/matrizes/protocolos/${id}`),
 
+  matrizesAliquotas: (params = {}) => {
+    const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
+    return request('GET', '/matrizes/aliquotas' + (q ? `?${q}` : ''))
+  },
+  criarMatrizAliquota: (data) => request('POST', '/matrizes/aliquotas', data),
+  editarMatrizAliquota: (id, data) => request('PATCH', `/matrizes/aliquotas/${id}`, data),
+  removerMatrizAliquota: (id) => request('DELETE', `/matrizes/aliquotas/${id}`),
+
+  // Cobertura: o que a carteira movimenta × o que as matrizes cobrem (fila de curadoria)
+  coberturaMatrizes: (params = {}) => {
+    const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
+    return request('GET', '/matrizes/cobertura' + (q ? `?${q}` : ''))
+  },
+
   // Bulk (planilha CSV) — export = template/base; import = upsert por chave
   exportarMatriz: (tipo) => downloadBlob(`/matrizes/${tipo}/export`, { fallback: `matriz_${tipo}.csv` }),
   importarMatriz: (tipo, file) => {

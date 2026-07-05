@@ -8,12 +8,25 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+import pytest_asyncio
 from sqlalchemy import create_engine, func, select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session
 
 from app.core.database import Base
-from app.modules.fiscal.infrastructure.matrizes_models import MatrizMva
-from app.modules.fiscal.infrastructure.vigencia import filtrar_vigencia
+from app.modules.fiscal.domain.st import Crt, Operacao
+from app.modules.fiscal.infrastructure.matrizes_loaders import MatrizesLoader
+from app.modules.fiscal.infrastructure.matrizes_models import (
+    MatrizAliquota,
+    MatrizEnquadramentoSt,
+    MatrizFcp,
+    MatrizMva,
+    MatrizProtocoloSt,
+)
+from app.modules.fiscal.infrastructure.vigencia import (
+    filtrar_vigencia,
+    sobreposicao_existente,
+)
 
 
 @pytest.fixture
@@ -93,3 +106,86 @@ def test_fallback_ncm_8_6_4(sessao):
     # NCM sem específica -> cai na regra geral de 4 dígitos (30%).
     geral = _mva_vigente(sessao, "85129999", "0100100", "MG", date(2025, 1, 1))
     assert geral.mva_original == Decimal("30.00")
+
+
+# ── Loader async: alíquota modal com vigência (caminho de produção) ──────────
+@pytest_asyncio.fixture
+async def sessao_async():
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    tabelas = [
+        MatrizMva.__table__, MatrizEnquadramentoSt.__table__, MatrizFcp.__table__,
+        MatrizProtocoloSt.__table__, MatrizAliquota.__table__,
+    ]
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all, tables=tabelas)
+    async with async_sessionmaker(engine, class_=AsyncSession)() as s:
+        yield s
+    await engine.dispose()
+
+
+async def test_loader_aliquota_respeita_vigencia(sessao_async):
+    """O snapshot hidratado devolve a alíquota VIGENTE NA DATA da operação —
+    AL 19% em março/2026 e 20,5% em maio/2026 — e rastreia a linha usada."""
+    sessao_async.add_all([
+        MatrizAliquota(
+            uf_destino="AL", aliq_modal=Decimal("19.00"), aliq_fcp_integrado=Decimal("1.00"),
+            data_inicio_vigencia=date(2024, 1, 1), data_fim_vigencia=date(2026, 3, 31),
+        ),
+        MatrizAliquota(
+            uf_destino="AL", aliq_modal=Decimal("20.50"), aliq_fcp_integrado=Decimal("1.00"),
+            data_inicio_vigencia=date(2026, 4, 1), data_fim_vigencia=None,
+        ),
+    ])
+    await sessao_async.flush()
+
+    loader = MatrizesLoader(sessao_async)
+    op_antes = Operacao(uf_emit="SP", uf_dest="AL", crt=Crt.NORMAL, data=date(2026, 3, 1))
+    op_depois = Operacao(uf_emit="SP", uf_dest="AL", crt=Crt.NORMAL, data=date(2026, 5, 1))
+
+    antes = (await loader.hidratar([], op_antes)).aliquota.buscar("AL", op_antes.data)
+    depois = (await loader.hidratar([], op_depois)).aliquota.buscar("AL", op_depois.data)
+
+    assert antes.modal == Decimal("19.00")
+    assert antes.efetiva == Decimal("20.00")            # modal + FCP integrado
+    assert depois.modal == Decimal("20.50")
+    assert antes.matriz_id != depois.matriz_id          # linhas distintas rastreadas
+
+    # UF sem linha vigente: snapshot vazio → motor classifica como não auditável.
+    op_2022 = Operacao(uf_emit="SP", uf_dest="AL", crt=Crt.NORMAL, data=date(2022, 1, 1))
+    assert (await loader.hidratar([], op_2022)).aliquota.buscar("AL", op_2022.data) is None
+
+
+async def test_sobreposicao_de_vigencia_e_erro_de_carga(sessao_async):
+    """ADR-0002 (regra 4): duas linhas vigentes na mesma data para a mesma chave
+    é erro de carga — mudança de taxa = encerrar a antiga e inserir uma nova."""
+    linha = MatrizAliquota(
+        uf_destino="MG", aliq_modal=Decimal("18.00"),
+        aliq_fcp_integrado=Decimal("0"), data_inicio_vigencia=date(2024, 1, 1),
+    )
+    sessao_async.add(linha)
+    await sessao_async.flush()
+
+    nova = {"uf_destino": "MG", "data_inicio_vigencia": date(2026, 1, 1),
+            "data_fim_vigencia": None}
+
+    # Vigência aberta existente × nova aberta a partir de 2026 → conflito.
+    conflito = await sobreposicao_existente(sessao_async, MatrizAliquota, nova)
+    assert conflito is not None and conflito.id == linha.id
+
+    # UF diferente nunca conflita (chave de identidade distinta).
+    assert await sobreposicao_existente(
+        sessao_async, MatrizAliquota, {**nova, "uf_destino": "SP"}
+    ) is None
+
+    # Fluxo correto: encerra a antiga → a nova passa a ser válida.
+    linha.data_fim_vigencia = date(2025, 12, 31)
+    await sessao_async.flush()
+    assert await sobreposicao_existente(sessao_async, MatrizAliquota, nova) is None
+
+    # Editar a própria linha não conflita consigo mesma (excluir_id).
+    assert await sobreposicao_existente(
+        sessao_async, MatrizAliquota,
+        {"uf_destino": "MG", "data_inicio_vigencia": date(2024, 1, 1),
+         "data_fim_vigencia": date(2025, 12, 31)},
+        excluir_id=linha.id,
+    ) is None
