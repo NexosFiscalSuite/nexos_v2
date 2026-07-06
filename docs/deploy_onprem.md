@@ -4,6 +4,10 @@ Como subir o **Sol Contabilidade** (sistema fiscal) num servidor local do
 escritório, acessível de qualquer lugar **sem VPN no PC do usuário** e **sem abrir
 porta no roteador**, usando Cloudflare Tunnel.
 
+> 🪟 **Servidor Windows (Windows Server 2025)?** Comece por
+> [deploy_windows_server_2025.md](deploy_windows_server_2025.md): a stack roda
+> numa VM Ubuntu no Hyper-V e este guia vale integralmente DENTRO da VM.
+
 **Domínio:** `solsistema.com.br` (dedicado aos sistemas internos) · **Acesso:** `https://fiscal.solsistema.com.br`
 
 > 🌂 **Domínio guarda-chuva.** `solsistema.com.br` é uma zona nova só para os
