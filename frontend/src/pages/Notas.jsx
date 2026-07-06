@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import Dropdown from '../components/Dropdown'
+import ErroCarga from '../components/ErroCarga'
 import { api, saveBlob } from '../api'
 import { useEmpresa } from '../context/EmpresaContext'
 import { useCompetencia } from '../context/CompetenciaContext'
@@ -65,6 +66,7 @@ export default function Notas() {
   const [page, setPage] = useState(1)
   const [data, setData] = useState({ total: 0, notas: [], page: 1, page_size: 20 })
   const [loading, setLoading] = useState(false)
+  const [erro, setErro] = useState(null)   // falha de carga NÃO pode parecer "sem notas"
   const [selected, setSelected] = useState(new Set())
   const [op, setOp] = useState('')
   const [busy, setBusy] = useState(false)
@@ -83,10 +85,11 @@ export default function Notas() {
   const carregar = useCallback(async () => {
     if (!selectedEmpresa) { setData({ total: 0, notas: [], page: 1, page_size: 20 }); return }
     setLoading(true)
+    setErro(null)
     try {
       const p = abaParams(tab, subServ)
       setData(await api.notas(selectedEmpresa.id, { ...p, status_: status, ano, mes, sort, order, page, page_size: 20 }))
-    } catch { setData({ total: 0, notas: [], page: 1, page_size: 20 }) }
+    } catch (e) { setErro(e.message); setData({ total: 0, notas: [], page: 1, page_size: 20 }) }
     finally { setLoading(false) }
   }, [selectedEmpresa, tab, subServ, status, ano, mes, sort, order, page, dataVersion])
 
@@ -252,6 +255,8 @@ export default function Notas() {
 
       {loading ? (
         <div className="center-loader"><div className="spinner" /></div>
+      ) : erro ? (
+        <ErroCarga mensagem={erro} onRetry={carregar} />
       ) : data.notas.length === 0 ? (
         <div className="empty-state"><i className="ti ti-file-off" /><p>Nenhuma nota nesta competência.</p></div>
       ) : (

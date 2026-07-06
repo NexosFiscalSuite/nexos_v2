@@ -28,6 +28,8 @@ dependencies = [
     # Storage de XML (S3/MinIO) + geração de relatórios Excel
     "boto3==1.35.92",
     "openpyxl==3.1.5",
+    # Observabilidade (opt-in via NEXOS_SENTRY_DSN; sem DSN é no-op)
+    "sentry-sdk==2.64.0",
 ]
 
 [project.optional-dependencies]

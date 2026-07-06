@@ -37,6 +37,10 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
+    # Sentry (opcional, NEXOS_SENTRY_DSN) — antes de tudo para capturar até
+    # falha de preflight/startup.
+    from app.core.observability import init_sentry
+    init_sentry()
     # Preflight de segurança (fail-fast em produção): segredo JWT forte + a role
     # de runtime do app não pode ter SUPERUSER/BYPASSRLS (senão a RLS é ignorada).
     from app.core.preflight import run_preflight

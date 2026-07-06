@@ -3,8 +3,10 @@ from celery import Celery
 from celery.schedules import crontab
 
 from app.core.config import get_settings
+from app.core.observability import init_sentry
 
 settings = get_settings()
+init_sentry()   # no-op sem NEXOS_SENTRY_DSN; captura erros de task no worker
 
 celery_app = Celery(
     "nexos",

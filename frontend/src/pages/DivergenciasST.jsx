@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { api } from '../api'
+import ErroCarga from '../components/ErroCarga'
 import { useEmpresa } from '../context/EmpresaContext'
 import { useCompetencia } from '../context/CompetenciaContext'
 import { useToast, ToastContainer } from '../hooks/useToast'
@@ -65,18 +66,20 @@ export default function DivergenciasST() {
   const [tab, setTab] = useState('entrada')   // Entradas (tpNF=0) × Saídas (tpNF=1)
   const [data, setData] = useState({ total: 0, itens: [] })
   const [loading, setLoading] = useState(false)
+  const [erro, setErro] = useState(null)      // falha de carga NÃO vira "lista vazia"
   const [expandido, setExpandido] = useState(() => new Set())
   const [detalhe, setDetalhe] = useState(null)
 
   const carregar = useCallback(async () => {
     if (!selectedEmpresa) { setData({ total: 0, itens: [] }); return }
     setLoading(true)
+    setErro(null)
     try {
       setData(await api.stDivergencias(selectedEmpresa.id, {
         fluxo: tab, data_inicio: `${ano}-${mes}-01`, data_fim: `${ano}-${mes}-31`, page_size: PAGE_SIZE,
       }))
     } catch (e) {
-      toast(e.message, 'error'); setData({ total: 0, itens: [] })
+      setErro(e.message); setData({ total: 0, itens: [] })
     } finally { setLoading(false) }
   }, [selectedEmpresa, ano, mes, tab])
 
@@ -119,6 +122,8 @@ export default function DivergenciasST() {
 
       {loading ? (
         <div className="center-loader"><div className="spinner" /></div>
+      ) : erro ? (
+        <ErroCarga mensagem={erro} onRetry={carregar} />
       ) : notas.length === 0 ? (
         <div className="empty-state"><i className="ti ti-circle-check" /><p>Nenhuma divergência de ST nesta competência. 🎉</p></div>
       ) : (

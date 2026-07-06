@@ -64,6 +64,8 @@ class Settings(BaseSettings):
     # Webhook (POST JSON) notificado quando um job assíncrono falha — ntfy.sh,
     # Slack/Teams incoming webhook etc. Vazio = só log CRITICAL.
     alert_webhook_url: str = ""
+    # DSN do Sentry (erros da API e do worker). Vazio = desabilitado.
+    sentry_dsn: str = ""
 
     # CORS --------------------------------------------------------------------
     cors_origins: str = ""

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Dropdown from '../components/Dropdown'
+import ErroCarga from '../components/ErroCarga'
 import ResumoImportModal from '../components/ResumoImportModal'
 import { api, saveBlob } from '../api'
 import { useToast, ToastContainer } from '../hooks/useToast'
@@ -153,21 +154,24 @@ const STATUS_COBERTURA = {
 }
 
 function CoberturaPanel() {
-  const { toasts, toast } = useToast()
+  const { toasts } = useToast()
   const [dados, setDados] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [erro, setErro] = useState(null)
   const [filtroUf, setFiltroUf] = useState('')
 
   const carregar = useCallback(async () => {
     setLoading(true)
+    setErro(null)
     try { setDados(await api.coberturaMatrizes({ uf: filtroUf || undefined })) }
-    catch (e) { toast(e.message, 'error') }
+    catch (e) { setErro(e.message) }
     finally { setLoading(false) }
-  }, [filtroUf, toast])
+  }, [filtroUf])
 
   useEffect(() => { carregar() }, [carregar])
 
   if (loading) return <div className="center-loader"><div className="spinner" /></div>
+  if (erro) return <ErroCarga mensagem={erro} onRetry={carregar} />
   const resumo = dados?.resumo || {}
   const grupos = dados?.grupos || []
 
@@ -251,6 +255,7 @@ function CrudMatriz({ aba }) {
   const { toasts, toast } = useToast()
   const [lista, setLista] = useState([])
   const [loading, setLoading] = useState(true)
+  const [erro, setErro] = useState(null)
   const [filtroUf, setFiltroUf] = useState('')
   const [modal, setModal] = useState(false)
   const [editId, setEditId] = useState(null)
@@ -259,10 +264,11 @@ function CrudMatriz({ aba }) {
 
   const carregar = useCallback(async () => {
     setLoading(true)
+    setErro(null)
     try { setLista(await aba.api.list({ uf: filtroUf || undefined }) || []) }
-    catch (e) { toast(e.message, 'error') }
+    catch (e) { setErro(e.message) }
     finally { setLoading(false) }
-  }, [aba, filtroUf, toast])
+  }, [aba, filtroUf])
 
   useEffect(() => { carregar() }, [carregar])
 
@@ -300,6 +306,8 @@ function CrudMatriz({ aba }) {
 
       {loading ? (
         <div className="center-loader"><div className="spinner" /></div>
+      ) : erro ? (
+        <ErroCarga mensagem={erro} onRetry={carregar} />
       ) : lista.length === 0 ? (
         <div className="empty-state">
           <i className={`ti ${aba.empty.icon}`} />
