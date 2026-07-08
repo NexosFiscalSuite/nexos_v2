@@ -248,3 +248,50 @@ class UserService:
         # o commit acontece ao fim do request, no dependency tenant_session.
         await self.session.flush()
         return _to_view(user)
+
+    async def update_user(
+        self,
+        *,
+        tenant_id: UUID,
+        user_id: UUID,
+        editor_id: UUID,
+        full_name: str | None = None,
+        role: str | None = None,
+        password: str | None = None,
+        is_active: bool | None = None,
+    ) -> UserView:
+        """Edita nome/papel/senha e ativa/inativa, com travas de lockout:
+        ninguém se inativa nem se rebaixa, e o escritório nunca fica sem um
+        administrador ativo. Inativo não loga nem renova sessão (auth já barra)."""
+        user = await self.users.by_id(user_id)
+        if user is None or user.tenant_id != tenant_id:
+            raise NotFoundError("Usuário não encontrado.")
+        if role is not None and role not in (r.value for r in Role):
+            raise DomainError(f"Papel inválido: {role}.")
+
+        if user.id == editor_id:
+            if is_active is False:
+                raise DomainError("Você não pode inativar o próprio usuário.")
+            if role is not None and user.role == Role.ADMIN.value and role != Role.ADMIN.value:
+                raise DomainError("Você não pode rebaixar o próprio papel de administrador.")
+
+        vira_inativo = is_active is False
+        perde_admin = role is not None and role != Role.ADMIN.value
+        if user.role == Role.ADMIN.value and user.is_active and (vira_inativo or perde_admin):
+            outros_admins = [
+                u for u in await self.users.list_by_tenant(tenant_id)
+                if u.id != user.id and u.role == Role.ADMIN.value and u.is_active
+            ]
+            if not outros_admins:
+                raise DomainError("O escritório precisa de ao menos um administrador ativo.")
+
+        if full_name is not None:
+            user.full_name = full_name.strip()
+        if role is not None:
+            user.role = role
+        if password:
+            user.password_hash = hash_password(password)
+        if is_active is not None:
+            user.is_active = is_active
+        await self.session.flush()
+        return _to_view(user)

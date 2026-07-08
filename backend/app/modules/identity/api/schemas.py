@@ -40,6 +40,15 @@ class CreateUserRequest(BaseModel):
     role: str = Field(default="user", examples=["user", "supervisor", "admin"])
 
 
+class UpdateUserRequest(BaseModel):
+    """Todos opcionais: envia só o que muda. Senha em branco = mantém a atual."""
+
+    full_name: str | None = Field(default=None, min_length=2, max_length=200)
+    role: str | None = Field(default=None, examples=["user", "supervisor", "admin"])
+    password: str | None = Field(default=None, min_length=8, max_length=128)
+    is_active: bool | None = None
+
+
 class UserResponse(BaseModel):
     id: UUID
     tenant_id: UUID

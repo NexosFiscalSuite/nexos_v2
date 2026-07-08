@@ -1,4 +1,6 @@
 """Rotas do Identity: autenticação (pública) e gestão de usuários (RLS + RBAC)."""
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +15,7 @@ from app.modules.identity.api.schemas import (
     RefreshRequest,
     RegisterTenantRequest,
     TokenResponse,
+    UpdateUserRequest,
     UserResponse,
 )
 from app.modules.identity.application.auth_service import AuthService, UserService
@@ -109,5 +112,39 @@ async def create_user(
         tenant_id=claims.tid, user_id=claims.sub, acao="usuario.criar",
         entidade="usuario", entidade_id=str(user.id),
         detalhe={"email": user.email, "role": user.role},
+    )
+    return user
+
+
+@users_router.patch("/{user_id}", response_model=UserResponse)
+async def update_user(
+    user_id: UUID,
+    body: UpdateUserRequest,
+    claims: TokenClaims = Depends(require_role(Role.ADMIN)),
+    session: AsyncSession = Depends(tenant_session),
+):
+    """Edita nome/papel/senha e ativa/inativa o usuário. Inativado não loga
+    nem renova a sessão (o access token corrente expira em minutos)."""
+    user = await UserService(session).update_user(
+        tenant_id=claims.tid,
+        user_id=user_id,
+        editor_id=claims.sub,
+        full_name=body.full_name,
+        role=body.role,
+        password=body.password,
+        is_active=body.is_active,
+    )
+    from app.modules.audit.application.service import AuditService
+
+    detalhe = {
+        "full_name": body.full_name,
+        "role": body.role,
+        "is_active": body.is_active,
+        "senha_alterada": True if body.password else None,
+    }
+    await AuditService(session).registrar(
+        tenant_id=claims.tid, user_id=claims.sub, acao="usuario.editar",
+        entidade="usuario", entidade_id=str(user.id),
+        detalhe={k: v for k, v in detalhe.items() if v is not None},
     )
     return user

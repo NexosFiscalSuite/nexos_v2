@@ -136,6 +136,7 @@ export const api = {
   me: () => request('GET', '/auth/me'),
   listUsers: () => request('GET', '/users'),
   createUser: (data) => request('POST', '/users', data),
+  updateUser: (id, data) => request('PATCH', `/users/${id}`, data),
 
   // ── Empresas ──
   empresas: () => request('GET', '/empresas'),
