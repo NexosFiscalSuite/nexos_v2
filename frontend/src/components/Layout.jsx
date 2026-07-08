@@ -7,6 +7,7 @@ import { useRefresh } from '../context/RefreshContext'
 import { api } from '../api'
 import CompetenciaPicker from './CompetenciaPicker'
 import logoMarca from '../assets/sol-logo.svg'
+import logoEmblema from '../assets/sol-emblema.svg'
 
 const PAGE_TITLES = {
   '/dashboard':  'Dashboard',
@@ -281,7 +282,7 @@ export default function Layout() {
             continua a linha do "Dashboard". */}
         <div style={{ padding: collapsed ? 0 : '0 14px', height:'var(--topbar-h)', display:'flex', alignItems:'center', justifyContent: collapsed ? 'center' : 'flex-start', borderBottom:'1px solid var(--border-2)', flexShrink:0 }}>
           {collapsed
-            ? <img src={logoMarca} alt="Sol Contabilidade" style={{ height:38, width:'auto', maxWidth:46, objectFit:'contain', flexShrink:0 }} />
+            ? <img src={logoEmblema} alt="Sol Contabilidade" style={{ height:40, width:'auto', maxWidth:48, objectFit:'contain', flexShrink:0 }} />
             : <img src={logoMarca} alt="Sol Contabilidade" style={{ height:42, width:'auto', maxWidth:195, objectFit:'contain', flexShrink:0 }} />}
         </div>
 
