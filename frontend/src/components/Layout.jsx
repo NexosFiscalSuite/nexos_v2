@@ -6,7 +6,6 @@ import { useCompetencia } from '../context/CompetenciaContext'
 import { useRefresh } from '../context/RefreshContext'
 import { api } from '../api'
 import CompetenciaPicker from './CompetenciaPicker'
-import logoExtendida from '../assets/sol-logo-extendida.svg'
 import logoMarca from '../assets/sol-logo.png'
 
 const PAGE_TITLES = {
@@ -283,7 +282,7 @@ export default function Layout() {
         <div style={{ padding: collapsed ? 0 : '0 14px', height:'var(--topbar-h)', display:'flex', alignItems:'center', justifyContent: collapsed ? 'center' : 'flex-start', borderBottom:'1px solid var(--border-2)', flexShrink:0 }}>
           {collapsed
             ? <img src={logoMarca} alt="Sol Contabilidade" style={{ height:38, width:'auto', maxWidth:46, objectFit:'contain', flexShrink:0 }} />
-            : <img src={logoExtendida} alt="Sol Contabilidade" style={{ height:42, width:'auto', maxWidth:195, objectFit:'contain', flexShrink:0 }} />}
+            : <img src={logoMarca} alt="Sol Contabilidade" style={{ height:42, width:'auto', maxWidth:195, objectFit:'contain', flexShrink:0 }} />}
         </div>
 
         <nav style={{ flex:1, padding:'12px 8px', overflowY:'auto', overflowX:'hidden' }}>
