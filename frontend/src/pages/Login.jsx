@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import solLogo from '../assets/sol-logo.png'
+import solLogo from '../assets/sol-logo.svg'
 
 export default function Login() {
   const { login }   = useAuth()

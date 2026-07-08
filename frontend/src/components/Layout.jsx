@@ -6,7 +6,7 @@ import { useCompetencia } from '../context/CompetenciaContext'
 import { useRefresh } from '../context/RefreshContext'
 import { api } from '../api'
 import CompetenciaPicker from './CompetenciaPicker'
-import logoMarca from '../assets/sol-logo.png'
+import logoMarca from '../assets/sol-logo.svg'
 
 const PAGE_TITLES = {
   '/dashboard':  'Dashboard',
@@ -277,8 +277,8 @@ export default function Layout() {
         transition:'width .22s cubic-bezier(.4,0,.2,1)',
         position:'fixed', left:0, top:0, bottom:0, overflow:'hidden', zIndex:100, borderRight:'1px solid var(--hairline)',
       }}>
-        {/* Logo: mesma altura da topbar — a linha divisória continua a linha
-            do "Dashboard". Recolhida usa a marca original (PNG compacto). */}
+        {/* Logo (SVG vetorial): mesma altura da topbar — a linha divisória
+            continua a linha do "Dashboard". */}
         <div style={{ padding: collapsed ? 0 : '0 14px', height:'var(--topbar-h)', display:'flex', alignItems:'center', justifyContent: collapsed ? 'center' : 'flex-start', borderBottom:'1px solid var(--border-2)', flexShrink:0 }}>
           {collapsed
             ? <img src={logoMarca} alt="Sol Contabilidade" style={{ height:38, width:'auto', maxWidth:46, objectFit:'contain', flexShrink:0 }} />
