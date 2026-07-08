@@ -277,12 +277,12 @@ export default function Layout() {
         transition:'width .22s cubic-bezier(.4,0,.2,1)',
         position:'fixed', left:0, top:0, bottom:0, overflow:'hidden', zIndex:100, borderRight:'1px solid var(--hairline)',
       }}>
-        {/* Logo: expandida ocupa quase toda a largura; recolhida usa o sol do
-            favicon (a marca completa ficaria ilegível em 64px). */}
-        <div style={{ padding: collapsed ? '12px 0' : '16px 12px', height: collapsed ? 64 : 92, display:'flex', alignItems:'center', justifyContent:'center', borderBottom:'1px solid var(--border-2)', flexShrink:0 }}>
+        {/* Logo: expandida (marca quadrada, vetor) ocupa boa parte da sidebar;
+            recolhida usa o sol do favicon (a marca ficaria ilegível em 64px). */}
+        <div style={{ padding: collapsed ? '12px 0' : '14px 12px', height: collapsed ? 64 : 'auto', display:'flex', alignItems:'center', justifyContent:'center', borderBottom:'1px solid var(--border-2)', flexShrink:0 }}>
           {collapsed
             ? <img src="/favicon.svg" alt="Sol Contabilidade" style={{ width:36, height:36, flexShrink:0 }} />
-            : <img src={solLogo} alt="Sol Contabilidade" style={{ width:'100%', maxWidth:204, height:'auto', objectFit:'contain', flexShrink:0 }} />}
+            : <img src={solLogo} alt="Sol Contabilidade" style={{ width:'70%', maxWidth:168, height:'auto', objectFit:'contain', flexShrink:0 }} />}
         </div>
 
         <nav style={{ flex:1, padding:'12px 8px', overflowY:'auto', overflowX:'hidden' }}>
