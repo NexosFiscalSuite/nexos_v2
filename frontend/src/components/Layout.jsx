@@ -7,7 +7,7 @@ import { useRefresh } from '../context/RefreshContext'
 import { api } from '../api'
 import CompetenciaPicker from './CompetenciaPicker'
 import logoExtendida from '../assets/sol-logo-extendida.svg'
-import logoComprimida from '../assets/sol-logo-comprimida.svg'
+import logoMarca from '../assets/sol-logo.png'
 
 const PAGE_TITLES = {
   '/dashboard':  'Dashboard',
@@ -278,12 +278,12 @@ export default function Layout() {
         transition:'width .22s cubic-bezier(.4,0,.2,1)',
         position:'fixed', left:0, top:0, bottom:0, overflow:'hidden', zIndex:100, borderRight:'1px solid var(--hairline)',
       }}>
-        {/* Logo em duas versões da marca: extendida (horizontal) na sidebar
-            aberta; comprimida (emblema) na recolhida. */}
-        <div style={{ padding: collapsed ? '12px 0' : '14px 12px', height: collapsed ? 64 : 'auto', display:'flex', alignItems:'center', justifyContent:'center', borderBottom:'1px solid var(--border-2)', flexShrink:0 }}>
+        {/* Logo: mesma altura da topbar — a linha divisória continua a linha
+            do "Dashboard". Recolhida usa a marca original (PNG compacto). */}
+        <div style={{ padding: collapsed ? 0 : '0 14px', height:'var(--topbar-h)', display:'flex', alignItems:'center', justifyContent: collapsed ? 'center' : 'flex-start', borderBottom:'1px solid var(--border-2)', flexShrink:0 }}>
           {collapsed
-            ? <img src={logoComprimida} alt="Sol Contabilidade" style={{ width:44, height:44, objectFit:'contain', flexShrink:0 }} />
-            : <img src={logoExtendida} alt="Sol Contabilidade" style={{ width:'92%', maxWidth:200, height:'auto', objectFit:'contain', flexShrink:0 }} />}
+            ? <img src={logoMarca} alt="Sol Contabilidade" style={{ height:38, width:'auto', maxWidth:46, objectFit:'contain', flexShrink:0 }} />
+            : <img src={logoExtendida} alt="Sol Contabilidade" style={{ height:42, width:'auto', maxWidth:195, objectFit:'contain', flexShrink:0 }} />}
         </div>
 
         <nav style={{ flex:1, padding:'12px 8px', overflowY:'auto', overflowX:'hidden' }}>
