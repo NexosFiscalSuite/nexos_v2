@@ -256,6 +256,10 @@ def _parse_nfe(root) -> dict:
         imposto = _find_local(det, "imposto")
         icms = _find_local(imposto, "ICMS")
         ipi = _find_local(imposto, "IPI")
+        # Reforma Tributária (NT 2025.002): grupo <IBSCBS> com o destaque de
+        # IBS (UF+Mun) e CBS — obrigatório no ano-teste 2026 (ADCT art. 125).
+        # Escopado ao grupo para o vBC do IBS/CBS não colidir com o do ICMS.
+        ibscbs = _find_local(imposto, "IBSCBS")
         modbcst = _g(icms, "modBCST")
         itens.append({
             "numero_item": nitem,
@@ -297,6 +301,15 @@ def _parse_nfe(root) -> dict:
             "v_fcp_st": _f(_g(icms, "vFCPST")),
             "p_fcp_st": _f(_g(icms, "pFCPST")),
             "v_bc_fcp_st": _f(_g(icms, "vBCFCPST")),
+            # IBS/CBS (Reforma Tributária — destaque do ano-teste 2026)
+            "cst_ibs_cbs": _g(ibscbs, "CST") or None,
+            "v_bc_ibs_cbs": _f(_g(ibscbs, "vBC")),
+            "p_ibs_uf": _f(_g(ibscbs, "pIBSUF")),
+            "v_ibs_uf": _f(_g(ibscbs, "vIBSUF")),
+            "p_ibs_mun": _f(_g(ibscbs, "pIBSMun")),
+            "v_ibs_mun": _f(_g(ibscbs, "vIBSMun")),
+            "p_cbs": _f(_g(ibscbs, "pCBS")),
+            "v_cbs": _f(_g(ibscbs, "vCBS")),
         })
 
     return {

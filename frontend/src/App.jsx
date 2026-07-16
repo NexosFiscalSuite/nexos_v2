@@ -18,6 +18,7 @@ import Perfil from './pages/Perfil'
 import Conformidade from './pages/Conformidade'
 import Relatorios from './pages/Relatorios'
 import DivergenciasST from './pages/DivergenciasST'
+import VerificacaoIbsCbs from './pages/VerificacaoIbsCbs'
 import CfopRegras from './pages/CfopRegras'
 import MatrizesFiscais from './pages/MatrizesFiscais'
 
@@ -58,6 +59,7 @@ export default function App() {
                 <Route path="/matrizes-fiscais" element={<MatrizesFiscais />} />
                 <Route path="/conformidade"  element={<Conformidade />} />
                 <Route path="/divergencias-st" element={<DivergenciasST />} />
+                <Route path="/ibs-cbs"       element={<VerificacaoIbsCbs />} />
                 <Route path="/relatorios"    element={<Relatorios />} />
                 <Route path="/cfop-regras"   element={<CfopRegras />} />
                 <Route path="/empresas"      element={<AdminRoute><Empresas /></AdminRoute>} />

@@ -185,6 +185,16 @@ export const api = {
   editarMatrizAliquota: (id, data) => request('PATCH', `/matrizes/aliquotas/${id}`, data),
   removerMatrizAliquota: (id) => request('DELETE', `/matrizes/aliquotas/${id}`),
 
+  // IBS/CBS 2026: destaque das alíquotas de teste da Reforma Tributária
+  ibsCbsVerificacao: (params = {}) => {
+    const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
+    return request('GET', '/fiscal/ibs-cbs/verificacao' + (q ? `?${q}` : ''))
+  },
+  ibsCbsReprocessar: (params = {}) => {
+    const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
+    return request('POST', '/fiscal/ibs-cbs/reprocessar' + (q ? `?${q}` : ''))
+  },
+
   // Cobertura: o que a carteira movimenta × o que as matrizes cobrem (fila de curadoria)
   coberturaMatrizes: (params = {}) => {
     const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()

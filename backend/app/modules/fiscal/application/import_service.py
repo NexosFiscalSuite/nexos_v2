@@ -223,6 +223,15 @@ class ImportService:
                     v_fcp_st=_dec(it.get("v_fcp_st")),
                     p_fcp_st=_dec(it.get("p_fcp_st")),
                     v_bc_fcp_st=_dec(it.get("v_bc_fcp_st")),
+                    # IBS/CBS (destaque do ano-teste 2026)
+                    cst_ibs_cbs=it.get("cst_ibs_cbs"),
+                    v_bc_ibs_cbs=_dec(it.get("v_bc_ibs_cbs")),
+                    p_ibs_uf=_dec(it.get("p_ibs_uf")),
+                    v_ibs_uf=_dec(it.get("v_ibs_uf")),
+                    p_ibs_mun=_dec(it.get("p_ibs_mun")),
+                    v_ibs_mun=_dec(it.get("v_ibs_mun")),
+                    p_cbs=_dec(it.get("p_cbs")),
+                    v_cbs=_dec(it.get("v_cbs")),
                 )
             )
 

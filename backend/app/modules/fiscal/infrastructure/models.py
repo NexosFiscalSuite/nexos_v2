@@ -127,6 +127,16 @@ class NotaItem(Base):
     p_fcp_st: Mapped[Decimal] = mapped_column(_PCT, default=Decimal("0"))
     v_bc_fcp_st: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
 
+    # --- IBS/CBS (Reforma Tributária — destaque do ano-teste 2026) ---
+    cst_ibs_cbs: Mapped[str | None] = mapped_column(String(3), nullable=True)
+    v_bc_ibs_cbs: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+    p_ibs_uf: Mapped[Decimal] = mapped_column(_PCT, default=Decimal("0"))
+    v_ibs_uf: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+    p_ibs_mun: Mapped[Decimal] = mapped_column(_PCT, default=Decimal("0"))
+    v_ibs_mun: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+    p_cbs: Mapped[Decimal] = mapped_column(_PCT, default=Decimal("0"))
+    v_cbs: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+
 
 class NfeCteVinculo(Base):
     """Vínculo N:N entre NF-e e CT-e (ADR-0001), por CHAVE — tolera órfão.

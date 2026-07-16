@@ -15,6 +15,7 @@ const PAGE_TITLES = {
   '/notas':      'Notas Fiscais',
   '/conformidade': 'Conformidade',
   '/divergencias-st': 'Divergências de ICMS-ST',
+  '/ibs-cbs': 'IBS/CBS — Ano-teste 2026',
   '/relatorios': 'Relatórios',
   '/cadastros':  'Clientes e Fornecedores',
   '/matrizes-fiscais': 'Matrizes Fiscais',
@@ -35,6 +36,7 @@ const NAV = [
   ] },
   { to:'/conformidade', icon:'ti-shield-check',   label:'Conformidade' },
   { to:'/divergencias-st', icon:'ti-alert-triangle', label:'Divergências ST' },
+  { to:'/ibs-cbs', icon:'ti-flask', label:'IBS/CBS 2026' },
   { to:'/cadastros-grp', icon:'ti-address-book', label:'Cadastros', subItems: [
     { to:'/cadastros',        icon:'ti-users',         label:'Clientes e Fornecedores' },
     { to:'/matrizes-fiscais', icon:'ti-table-options', label:'Matrizes Fiscais' },
