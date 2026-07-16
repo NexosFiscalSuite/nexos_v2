@@ -9,10 +9,11 @@ suportar o fallback por hierarquia na busca.
 """
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal
 from typing import ClassVar
 
-from sqlalchemy import Index, Numeric, String, UniqueConstraint
+from sqlalchemy import DateTime, Index, Numeric, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -21,7 +22,16 @@ from app.modules.fiscal.infrastructure.vigencia import VigenciaTemporal
 _PCT = Numeric(5, 2)
 
 
-class MatrizMva(Base, VigenciaTemporal):
+class CriadoEm:
+    """Carimbo de quando a linha foi CADASTRADA no sistema (difere da vigência,
+    que é quando a regra vale no mundo real — ADR-0002)."""
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class MatrizMva(Base, VigenciaTemporal, CriadoEm):
     """MVA Original por NCM+CEST+UF destino (alimenta o MvaRepository)."""
 
     __tablename__ = "matriz_mva"
@@ -42,7 +52,7 @@ class MatrizMva(Base, VigenciaTemporal):
     base_legal: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
 
-class MatrizEnquadramentoSt(Base, VigenciaTemporal):
+class MatrizEnquadramentoSt(Base, VigenciaTemporal, CriadoEm):
     """Regime do item (ST | TN | ST_ENTRADA) por NCM+CEST+UF destino."""
 
     __tablename__ = "matriz_enquadramento_st"
@@ -63,7 +73,7 @@ class MatrizEnquadramentoSt(Base, VigenciaTemporal):
     base_legal: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
 
-class MatrizProtocoloSt(Base, VigenciaTemporal):
+class MatrizProtocoloSt(Base, VigenciaTemporal, CriadoEm):
     """Protocolos/Convênios que ativam a ST interestadual (par UF origem→destino)."""
 
     __tablename__ = "matriz_protocolo_st"
@@ -82,7 +92,7 @@ class MatrizProtocoloSt(Base, VigenciaTemporal):
     situacao: Mapped[str] = mapped_column(String(10), default="ATIVO")
 
 
-class MatrizAliquota(Base, VigenciaTemporal):
+class MatrizAliquota(Base, VigenciaTemporal, CriadoEm):
     """Alíquota modal do ICMS por UF de destino (alimenta o AliquotaRepository).
 
     `aliq_modal` é o débito do ST (sem FCP); `aliq_fcp_integrado` só compõe a
@@ -105,7 +115,7 @@ class MatrizAliquota(Base, VigenciaTemporal):
     base_legal: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
 
-class MatrizFcp(Base, VigenciaTemporal):
+class MatrizFcp(Base, VigenciaTemporal, CriadoEm):
     """Alíquota de FCP por UF+NCM (alimenta o FcpRepository). NCM pode ser 'GERAL'."""
 
     __tablename__ = "matriz_fcp"

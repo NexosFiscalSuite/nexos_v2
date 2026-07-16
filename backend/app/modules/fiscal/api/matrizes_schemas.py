@@ -1,5 +1,5 @@
 """Schemas do CRUD de Matrizes Fiscais (V1: MVA Original)."""
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, Field, field_validator
@@ -34,6 +34,7 @@ class MatrizMvaUpdate(_MatrizMvaCampos):
 
 class MatrizMvaResponse(_MatrizMvaCampos):
     id: int
+    created_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -78,6 +79,7 @@ class MatrizEnquadramentoUpdate(_MatrizEnquadramentoCampos):
 
 class MatrizEnquadramentoResponse(_MatrizEnquadramentoCampos):
     id: int
+    created_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -112,6 +114,7 @@ class MatrizFcpUpdate(_MatrizFcpCampos):
 
 class MatrizFcpResponse(_MatrizFcpCampos):
     id: int
+    created_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -145,6 +148,7 @@ class MatrizAliquotaUpdate(_MatrizAliquotaCampos):
 
 class MatrizAliquotaResponse(_MatrizAliquotaCampos):
     id: int
+    created_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -177,5 +181,6 @@ class MatrizProtocoloUpdate(_MatrizProtocoloCampos):
 
 class MatrizProtocoloResponse(_MatrizProtocoloCampos):
     id: int
+    created_at: datetime | None = None
 
     model_config = {"from_attributes": True}

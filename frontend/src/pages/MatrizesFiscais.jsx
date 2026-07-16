@@ -9,6 +9,8 @@ const pct = (v) => (v == null || v === '' ? '—' : `${Number(v).toFixed(2)}%`)
 const dataBr = (s) => (s ? s.split('-').reverse().join('/') : '—')
 const vigencia = (m) =>
   `${dataBr(m.data_inicio_vigencia)} ${m.data_fim_vigencia ? `– ${dataBr(m.data_fim_vigencia)}` : '(em aberto)'}`
+const dataCadastro = (m) =>
+  m.created_at ? new Date(m.created_at).toLocaleDateString('pt-BR') : '—'
 
 const REGIME_OPTS = [
   { value: 'ST', label: 'ST — Substituição Tributária' },
@@ -41,6 +43,7 @@ const ABAS = [
       { key: 'mva_original', label: 'MVA Original', align: 'right', strong: true, render: (m) => pct(m.mva_original) },
       { key: 'base_legal', label: 'Base Legal', muted: true },
       { key: 'vigencia', label: 'Vigência', muted: true, small: true, render: vigencia },
+      { key: 'created_at', label: 'Cadastro', muted: true, small: true, render: dataCadastro },
     ],
     campos: [
       { key: 'ncm', label: 'NCM', required: true, placeholder: '40111000' },
@@ -64,6 +67,7 @@ const ABAS = [
       { key: 'segmento', label: 'Segmento', muted: true },
       { key: 'base_legal', label: 'Base Legal', muted: true },
       { key: 'vigencia', label: 'Vigência', muted: true, small: true, render: vigencia },
+      { key: 'created_at', label: 'Cadastro', muted: true, small: true, render: dataCadastro },
     ],
     campos: [
       { key: 'ncm', label: 'NCM', required: true, placeholder: '40111000' },
@@ -87,6 +91,7 @@ const ABAS = [
       { key: 'aliq_fcp_interno', label: 'FCP interno', align: 'right', muted: true, render: (m) => pct(m.aliq_fcp_interno) },
       { key: 'base_legal', label: 'Base Legal', muted: true },
       { key: 'vigencia', label: 'Vigência', muted: true, small: true, render: vigencia },
+      { key: 'created_at', label: 'Cadastro', muted: true, small: true, render: dataCadastro },
     ],
     campos: [
       { key: 'uf_destino', label: 'UF', uf: true, required: true, placeholder: 'MG' },
@@ -108,6 +113,7 @@ const ABAS = [
       { key: 'aliq_fcp_integrado', label: 'FCP integrado', align: 'right', muted: true, render: (m) => pct(m.aliq_fcp_integrado) },
       { key: 'base_legal', label: 'Base Legal', muted: true },
       { key: 'vigencia', label: 'Vigência', muted: true, small: true, render: vigencia },
+      { key: 'created_at', label: 'Cadastro', muted: true, small: true, render: dataCadastro },
     ],
     campos: [
       { key: 'uf_destino', label: 'UF destino', uf: true, required: true, placeholder: 'MG' },
@@ -128,6 +134,7 @@ const ABAS = [
       { key: 'numero_acordo', label: 'Acordo', strong: true },
       { key: 'base_legal', label: 'Base Legal', muted: true },
       { key: 'vigencia', label: 'Vigência', muted: true, small: true, render: vigencia },
+      { key: 'created_at', label: 'Cadastro', muted: true, small: true, render: dataCadastro },
     ],
     campos: [
       { key: 'uf_origem', label: 'UF Origem', uf: true, required: true, placeholder: 'SP' },
