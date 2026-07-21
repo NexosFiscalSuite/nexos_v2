@@ -28,7 +28,7 @@ const pctCurto = (v) => `${Number(v).toLocaleString('pt-BR', { maximumFractionDi
 
 // Rótulo cinza que nomeia cada linha da célula ("VEIO" / "DEVIDO").
 const Rotulo = ({ children }) => (
-  <span style={{ color: 'var(--text-4)', fontWeight: 600, fontSize: 9.5, marginRight: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>{children}</span>
+  <span style={{ color: 'var(--text-4)', fontWeight: 600, fontSize: 9.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>{children}</span>
 )
 
 // Linha rotulada do balão de confronto (rótulo à esquerda, valor à direita).
@@ -72,20 +72,24 @@ function Comparativo({ tributo, pVeio, vVeio, pEsp, vEsp, conforme, pEfet, pRed,
   return (
     <span className="balao-classif" style={{ position: 'relative' }}>
       <div ref={ref} onClick={alternar} title="Clique para ver o detalhamento"
-        style={{ lineHeight: 1.5, whiteSpace: 'nowrap', textAlign: 'right', cursor: 'pointer' }}>
-        <div style={{ color: conforme ? 'var(--ok-text)' : 'var(--err-text)', fontWeight: 600 }}>
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+        <div style={{ display: 'inline-grid', gridTemplateColumns: 'auto max-content', justifyContent: 'end',
+                      columnGap: 7, rowGap: 1, alignItems: 'baseline', lineHeight: 1.5,
+                      whiteSpace: 'nowrap' }}>
           <Rotulo>veio</Rotulo>
-          {conforme && '✔ '}
-          {pEfet != null
-            ? <>nom {pct(pVeio)}{pRed != null && <span style={{ fontWeight: 400, opacity: .75 }}> −{pctCurto(pRed)}</span>} → ef {pct(pEfet)}</>
-            : pct(pVeio)}
-          {' · '}{brl(vVeio)}
-          {' '}<i className="ti ti-info-circle" style={{ fontSize: 11, opacity: .5 }} />
-        </div>
-        <div style={{ color: 'var(--ok-text)', fontSize: 11.5 }}>
+          <span style={{ color: conforme ? 'var(--ok-text)' : 'var(--err-text)', fontWeight: 600, textAlign: 'right' }}>
+            {conforme && '✔ '}
+            {pEfet != null
+              ? <>nom {pct(pVeio)}{pRed != null && <span style={{ fontWeight: 400, opacity: .75 }}> −{pctCurto(pRed)}</span>} → ef {pct(pEfet)}</>
+              : pct(pVeio)}
+            {' · '}{brl(vVeio)}
+          </span>
           <Rotulo>devido</Rotulo>
-          {pEsp == null ? 'sem régua percentual' : <>{pct(pEsp)} · {brl(vEsp)}</>}
+          <span style={{ color: 'var(--ok-text)', fontSize: 11.5, textAlign: 'right' }}>
+            {pEsp == null ? 'sem régua percentual' : <>{pct(pEsp)} · {brl(vEsp)}</>}
+          </span>
         </div>
+        <i className="ti ti-info-circle" style={{ fontSize: 12, opacity: .5, flexShrink: 0 }} />
       </div>
       {aberto && pos && (
         <div className="balao-classif" style={{
