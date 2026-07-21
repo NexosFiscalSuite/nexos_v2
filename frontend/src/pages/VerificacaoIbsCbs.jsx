@@ -31,29 +31,88 @@ const Rotulo = ({ children }) => (
   <span style={{ color: 'var(--text-4)', fontWeight: 600, fontSize: 9.5, marginRight: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>{children}</span>
 )
 
+// Linha rotulada do balão de confronto (rótulo à esquerda, valor à direita).
+function LinhaBalao({ rotulo, children }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 12.5, padding: '3px 0' }}>
+      <span style={{ color: 'var(--text-3)' }}>{rotulo}</span>
+      <span style={{ fontWeight: 600, color: 'var(--text-1)', whiteSpace: 'nowrap' }}>{children}</span>
+    </div>
+  )
+}
+
 // Célula do confronto: linha VEIO (o que o XML trouxe) sobre a linha DEVIDO
 // (o que a régua do CST/cClassTrib manda). Quando a nota traz o gRed
-// (NT 2025.002), o veio abre em "nom → efet": pIBS/pCBS carregam a alíquota
-// NOMINAL de teste (obrigatória) e a carga real fica no pAliqEfet — é a
-// efetiva que se compara com o devido. "Sem régua" = monofásica/fixa.
-function Comparativo({ pVeio, vVeio, pEsp, vEsp, conforme, pEfet, pRed }) {
-  const titulo = pEfet == null ? undefined
-    : `gRed no XML: nominal ${pct(pVeio)}${pRed != null ? ` com redução de ${pctCurto(pRed)}` : ''} → alíquota efetiva ${pct(pEfet)}. A efetiva é o que se compara com o devido.`
+// (NT 2025.002), o veio abre em "nom → efet". Clicável como o balão da
+// classificação: abre o detalhamento campo a campo e fecha clicando fora.
+function Comparativo({ tributo, pVeio, vVeio, pEsp, vEsp, conforme, pEfet, pRed, vBc }) {
+  const [aberto, setAberto] = useState(false)
+  const [pos, setPos] = useState(null)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!aberto) return
+    const fechar = (e) => { if (!e.target.closest('.balao-classif')) setAberto(false) }
+    document.addEventListener('mousedown', fechar)
+    return () => document.removeEventListener('mousedown', fechar)
+  }, [aberto])
+
+  function alternar(e) {
+    e.stopPropagation()
+    if (!aberto && ref.current) {
+      const r = ref.current.getBoundingClientRect()
+      setPos({
+        top: Math.min(r.bottom + 6, window.innerHeight - 280),
+        left: Math.min(r.left - 60, window.innerWidth - 360),
+      })
+    }
+    setAberto(a => !a)
+  }
+
   return (
-    <div style={{ lineHeight: 1.5, whiteSpace: 'nowrap', textAlign: 'right' }} title={titulo}>
-      <div style={{ color: conforme ? 'var(--ok-text)' : 'var(--err-text)', fontWeight: 600 }}>
-        <Rotulo>veio</Rotulo>
-        {conforme && '✔ '}
-        {pEfet != null
-          ? <>nom {pct(pVeio)}{pRed != null && <span style={{ fontWeight: 400, opacity: .75 }}> −{pctCurto(pRed)}</span>} → ef {pct(pEfet)}</>
-          : pct(pVeio)}
-        {' · '}{brl(vVeio)}
+    <span className="balao-classif" style={{ position: 'relative' }}>
+      <div ref={ref} onClick={alternar} title="Clique para ver o detalhamento"
+        style={{ lineHeight: 1.5, whiteSpace: 'nowrap', textAlign: 'right', cursor: 'pointer' }}>
+        <div style={{ color: conforme ? 'var(--ok-text)' : 'var(--err-text)', fontWeight: 600 }}>
+          <Rotulo>veio</Rotulo>
+          {conforme && '✔ '}
+          {pEfet != null
+            ? <>nom {pct(pVeio)}{pRed != null && <span style={{ fontWeight: 400, opacity: .75 }}> −{pctCurto(pRed)}</span>} → ef {pct(pEfet)}</>
+            : pct(pVeio)}
+          {' · '}{brl(vVeio)}
+          {' '}<i className="ti ti-info-circle" style={{ fontSize: 11, opacity: .5 }} />
+        </div>
+        <div style={{ color: 'var(--ok-text)', fontSize: 11.5 }}>
+          <Rotulo>devido</Rotulo>
+          {pEsp == null ? 'sem régua percentual' : <>{pct(pEsp)} · {brl(vEsp)}</>}
+        </div>
       </div>
-      <div style={{ color: 'var(--ok-text)', fontSize: 11.5 }}>
-        <Rotulo>devido</Rotulo>
-        {pEsp == null ? 'sem régua percentual' : <>{pct(pEsp)} · {brl(vEsp)}</>}
-      </div>
-    </div>
+      {aberto && pos && (
+        <div className="balao-classif" style={{
+          position: 'fixed', top: pos.top, left: pos.left, zIndex: 2000, width: 340,
+          background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
+          boxShadow: '0 10px 30px rgba(0,0,0,.18)', padding: '13px 15px', textAlign: 'left',
+        }}>
+          <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 6 }}>
+            {tributo} — veio no XML × devido
+          </div>
+          <LinhaBalao rotulo={`Alíquota nominal (p${tributo})`}>{pct(pVeio)}</LinhaBalao>
+          <LinhaBalao rotulo="Redução declarada (pRedAliq)">{pRed != null ? pctCurto(pRed) : 'sem gRed no XML'}</LinhaBalao>
+          <LinhaBalao rotulo="Alíquota efetiva (pAliqEfet)">{pEfet != null ? pct(pEfet) : 'sem gRed no XML'}</LinhaBalao>
+          <LinhaBalao rotulo="Valor destacado">{brl(vVeio)}</LinhaBalao>
+          {vBc > 0 && <LinhaBalao rotulo="Base de cálculo (vBC)">{brl(vBc)}</LinhaBalao>}
+          <div style={{ borderTop: '1px solid var(--border-2)', margin: '7px 0' }} />
+          <LinhaBalao rotulo="Devido pela classificação">
+            {pEsp == null ? 'sem régua percentual' : <>{pct(pEsp)} · {brl(vEsp)}</>}
+          </LinhaBalao>
+          <div style={{ fontSize: 11.5, color: 'var(--text-4)', lineHeight: 1.5, marginTop: 7 }}>
+            {pEfet != null
+              ? 'Com gRed no XML, a alíquota EFETIVA é o que se compara com o devido — a nominal de teste é obrigatória na NF-e (Rejeição 1026).'
+              : 'Sem o grupo gRed no XML, a alíquota dos campos pIBS/pCBS é a própria alíquota aplicada.'}
+          </div>
+        </div>
+      )}
+    </span>
   )
 }
 
@@ -368,10 +427,10 @@ export default function VerificacaoIbsCbs() {
                                         <td><BalaoClassificacao item={i} /></td>
                                         <td style={{ textAlign: 'right' }}>{brl(i.valor_produto)}</td>
                                         <td style={{ textAlign: 'right' }}>
-                                          <Comparativo pVeio={i.p_ibs} vVeio={i.v_ibs} pEsp={i.p_ibs_esperado} vEsp={i.v_ibs_esperado} conforme={CONFORMES.includes(i.status)} pEfet={i.p_aliq_efet_ibs} pRed={i.p_red_aliq} />
+                                          <Comparativo tributo="IBS" pVeio={i.p_ibs} vVeio={i.v_ibs} pEsp={i.p_ibs_esperado} vEsp={i.v_ibs_esperado} conforme={CONFORMES.includes(i.status)} pEfet={i.p_aliq_efet_ibs} pRed={i.p_red_aliq} vBc={i.v_bc_ibs_cbs} />
                                         </td>
                                         <td style={{ textAlign: 'right' }}>
-                                          <Comparativo pVeio={i.p_cbs} vVeio={i.v_cbs} pEsp={i.p_cbs_esperado} vEsp={i.v_cbs_esperado} conforme={CONFORMES.includes(i.status)} pEfet={i.p_aliq_efet_cbs} pRed={i.p_red_aliq} />
+                                          <Comparativo tributo="CBS" pVeio={i.p_cbs} vVeio={i.v_cbs} pEsp={i.p_cbs_esperado} vEsp={i.v_cbs_esperado} conforme={CONFORMES.includes(i.status)} pEfet={i.p_aliq_efet_cbs} pRed={i.p_red_aliq} vBc={i.v_bc_ibs_cbs} />
                                         </td>
                                       </tr>
                                     ))}
