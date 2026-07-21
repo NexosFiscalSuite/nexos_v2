@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from 'react'
 import { api } from '../api'
 import ErroCarga from '../components/ErroCarga'
 import { useEmpresa } from '../context/EmpresaContext'
@@ -37,18 +37,97 @@ function Comparativo({ pVeio, vVeio, pEsp, vEsp }) {
   )
 }
 
+// Balão clicável da classificação: abre no clique com a descrição OFICIAL
+// completa e só fecha clicando fora (ou clicando de novo no gatilho).
+function BalaoClassificacao({ item }) {
+  const [aberto, setAberto] = useState(false)
+  const [pos, setPos] = useState(null)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!aberto) return
+    const fechar = (e) => { if (!e.target.closest('.balao-classif')) setAberto(false) }
+    document.addEventListener('mousedown', fechar)
+    return () => document.removeEventListener('mousedown', fechar)
+  }, [aberto])
+
+  function alternar(e) {
+    e.stopPropagation()
+    if (!aberto && ref.current) {
+      const r = ref.current.getBoundingClientRect()
+      setPos({
+        top: Math.min(r.bottom + 6, window.innerHeight - 180),
+        left: Math.min(r.left, window.innerWidth - 400),
+      })
+    }
+    setAberto(a => !a)
+  }
+
+  return (
+    <span className="balao-classif" style={{ position: 'relative' }}>
+      <button ref={ref} onClick={alternar}
+        style={{ border: '1px solid var(--border)', background: 'var(--surface-2)', borderRadius: 6,
+                 padding: '3px 8px', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap',
+                 fontFamily: 'inherit', color: 'var(--text-2)' }}>
+        <span className="mono">{item.cst || '—'}{item.c_class_trib ? ` · ${item.c_class_trib}` : ''}</span>
+        {' '}<i className="ti ti-info-circle" style={{ fontSize: 12, opacity: .55 }} />
+      </button>
+      {aberto && pos && (
+        <div className="balao-classif" style={{
+          position: 'fixed', top: pos.top, left: pos.left, zIndex: 2000, width: 380,
+          background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
+          boxShadow: '0 10px 30px rgba(0,0,0,.18)', padding: '13px 15px', textAlign: 'left',
+        }}>
+          <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 6 }}>
+            CST {item.cst || '—'} · cClassTrib {item.c_class_trib || '—'}
+          </div>
+          <div style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.55 }}>{item.regua_desc}</div>
+        </div>
+      )}
+    </span>
+  )
+}
+
+// Itens planos → notas (mestre) com seus itens (detalhe expandível).
+function agruparPorNota(itens) {
+  const mapa = new Map()
+  for (const i of itens) {
+    if (!mapa.has(i.chave_acesso)) {
+      mapa.set(i.chave_acesso, {
+        chave: i.chave_acesso, numero: i.numero_nota, emitente: i.emitente,
+        cnpj: i.cnpj_emit, data: i.data_emissao, fluxo: i.fluxo,
+        itens: [], valor: 0, situacoes: {},
+      })
+    }
+    const g = mapa.get(i.chave_acesso)
+    g.itens.push(i)
+    g.valor += i.valor_produto || 0
+    g.situacoes[i.status] = (g.situacoes[i.status] || 0) + 1
+  }
+  return [...mapa.values()]
+}
+
 export default function VerificacaoIbsCbs() {
   const { selectedEmpresa } = useEmpresa()
   const { ano, mes } = useCompetencia()
   const { toasts, toast } = useToast()
+  const [tab, setTab] = useState('entrada')   // Entradas (fornecedores) × Saídas (emissão própria)
   const [dados, setDados] = useState(null)
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [expandido, setExpandido] = useState(() => new Set())
+
+  const notasApontadas = useMemo(() => agruparPorNota(dados?.itens || []), [dados])
+  const toggle = (chave) => setExpandido(prev => {
+    const s = new Set(prev); s.has(chave) ? s.delete(chave) : s.add(chave); return s
+  })
 
   const params = useCallback(() => ({
-    empresa_id: selectedEmpresa?.id, ano, mes,
-  }), [selectedEmpresa, ano, mes])
+    empresa_id: selectedEmpresa?.id, ano, mes, fluxo: tab,
+  }), [selectedEmpresa, ano, mes, tab])
+
+  useEffect(() => { setExpandido(new Set()) }, [selectedEmpresa, ano, mes, tab])
 
   const carregar = useCallback(async () => {
     setLoading(true)
@@ -88,6 +167,16 @@ export default function VerificacaoIbsCbs() {
         <button className="btn btn-secondary" data-tour="ibscbs-atualizar" disabled={busy} onClick={reprocessar}>
           <i className="ti ti-refresh" /> {busy ? 'Atualizando…' : 'Atualizar consulta (reler XMLs)'}
         </button>
+      </div>
+
+      {/* Abas: Entradas = adequação dos FORNECEDORES; Saídas = a emissão da própria empresa */}
+      <div style={{ display: 'inline-flex', background: 'var(--surface-2)', borderRadius: 'var(--radius)', padding: 3, marginBottom: 16 }}>
+        {[['entrada', 'Entradas (fornecedores)', 'ti-arrow-down-left'], ['saida', 'Saídas (emissão própria)', 'ti-arrow-up-right']].map(([v, label, icon]) => (
+          <button key={v} onClick={() => setTab(v)} className="btn btn-sm"
+            style={{ border: 'none', background: tab === v ? 'var(--surface)' : 'transparent', color: tab === v ? 'var(--text-1)' : 'var(--text-3)', boxShadow: tab === v ? 'var(--shadow-sm)' : 'none' }}>
+            <i className={`ti ${icon}`} /> {label}
+          </button>
+        ))}
       </div>
 
       {loading ? (
@@ -145,42 +234,84 @@ export default function VerificacaoIbsCbs() {
             </div>
           )}
 
-          {/* Itens apontados */}
-          {(dados.itens || []).length > 0 && (
+          {/* Notas apontadas: mestre (nota) → detalhe (itens com o produto) */}
+          {notasApontadas.length > 0 && (
             <div className="card" style={{ padding: 0 }}>
               <div style={{ padding: '12px 16px', fontWeight: 600, borderBottom: '1px solid var(--border-2)' }}>
-                Itens apontados {dados.itens.length >= 500 ? '(primeiros 500)' : `(${dados.itens.length})`}
+                Notas apontadas ({notasApontadas.length})
+                <span style={{ fontWeight: 400, color: 'var(--text-4)', fontSize: 12 }}>
+                  {' '}· {dados.itens.length}{dados.itens.length >= 500 ? '+' : ''} item(ns) — clique na nota para ver os produtos
+                </span>
               </div>
               <div className="tbl-wrap">
                 <table className="tbl">
                   <thead>
                     <tr>
-                      <th>Situação</th><th>Emissão</th><th>NF / Item</th><th>Emitente</th>
-                      <th>Classificação</th>
-                      <th style={{ textAlign: 'right' }}>Valor item</th>
-                      <th style={{ textAlign: 'right' }}>IBS <span style={{ fontWeight: 400, color: 'var(--text-4)' }}>(veio / ✔ devido)</span></th>
-                      <th style={{ textAlign: 'right' }}>CBS <span style={{ fontWeight: 400, color: 'var(--text-4)' }}>(veio / ✔ devido)</span></th>
+                      <th style={{ width: 34 }} />
+                      <th>Emissão</th><th>NF</th><th>Emitente</th>
+                      <th>Situações</th>
+                      <th style={{ textAlign: 'right' }}>Itens</th>
+                      <th style={{ textAlign: 'right' }}>Valor apontado</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {dados.itens.map((i, idx) => (
-                      <tr key={`${i.chave_acesso}-${i.numero_item}-${idx}`}>
-                        <td>{badge(TONE[i.status]?.label || i.status, TONE[i.status]?.tone)}</td>
-                        <td style={{ whiteSpace: 'nowrap' }}>{(i.data_emissao || '').split('-').reverse().join('/')}</td>
-                        <td className="mono">{i.numero_nota} / {i.numero_item}</td>
-                        <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={i.emitente}>{i.emitente}</td>
-                        <td className="mono" title={i.regua_desc} style={{ fontSize: 12, cursor: 'help', whiteSpace: 'nowrap' }}>
-                          {i.cst || '—'}{i.c_class_trib ? ` · ${i.c_class_trib}` : ''} <i className="ti ti-info-circle" style={{ opacity: .45, fontSize: 12 }} />
-                        </td>
-                        <td style={{ textAlign: 'right' }}>{brl(i.valor_produto)}</td>
-                        <td style={{ textAlign: 'right' }}>
-                          <Comparativo pVeio={i.p_ibs} vVeio={i.v_ibs} pEsp={i.p_ibs_esperado} vEsp={i.v_ibs_esperado} />
-                        </td>
-                        <td style={{ textAlign: 'right' }}>
-                          <Comparativo pVeio={i.p_cbs} vVeio={i.v_cbs} pEsp={i.p_cbs_esperado} vEsp={i.v_cbs_esperado} />
-                        </td>
-                      </tr>
-                    ))}
+                    {notasApontadas.map(n => {
+                      const aberto = expandido.has(n.chave)
+                      return (
+                        <Fragment key={n.chave}>
+                          <tr style={{ cursor: 'pointer' }} onClick={() => toggle(n.chave)}>
+                            <td><i className={`ti ti-chevron-${aberto ? 'down' : 'right'}`} style={{ color: 'var(--text-4)' }} /></td>
+                            <td style={{ whiteSpace: 'nowrap' }}>{(n.data || '').split('-').reverse().join('/')}</td>
+                            <td className="mono">{n.numero}</td>
+                            <td>
+                              <div style={{ fontWeight: 500, color: 'var(--text-1)', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={n.emitente}>{n.emitente}</div>
+                              <div className="mono" style={{ fontSize: 11, color: 'var(--text-4)' }}>{cnpjFmt(n.cnpj)}</div>
+                            </td>
+                            <td>{Object.entries(n.situacoes).map(([s, q]) => (
+                              <span key={s} style={{ marginRight: 6 }}>{badge(`${TONE[s]?.label || s}${q > 1 ? ` ×${q}` : ''}`, TONE[s]?.tone)}</span>
+                            ))}</td>
+                            <td style={{ textAlign: 'right' }}>{n.itens.length}</td>
+                            <td style={{ textAlign: 'right', fontWeight: 600 }}>{brl(n.valor)}</td>
+                          </tr>
+                          {aberto && (
+                            <tr>
+                              <td colSpan={7} style={{ padding: 0, background: 'var(--surface-2)' }}>
+                                <table className="tbl" style={{ margin: 0 }}>
+                                  <thead>
+                                    <tr>
+                                      <th style={{ width: 46 }}>Item</th>
+                                      <th>Produto</th>
+                                      <th>Situação</th>
+                                      <th>Classificação</th>
+                                      <th style={{ textAlign: 'right' }}>Valor</th>
+                                      <th style={{ textAlign: 'right' }}>IBS <span style={{ fontWeight: 400, color: 'var(--text-4)' }}>(veio / ✔ devido)</span></th>
+                                      <th style={{ textAlign: 'right' }}>CBS <span style={{ fontWeight: 400, color: 'var(--text-4)' }}>(veio / ✔ devido)</span></th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {n.itens.map((i, idx) => (
+                                      <tr key={`${i.numero_item}-${idx}`}>
+                                        <td className="mono">{i.numero_item}</td>
+                                        <td style={{ maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 500, color: 'var(--text-1)' }} title={i.descricao}>{i.descricao || '—'}</td>
+                                        <td>{badge(TONE[i.status]?.label || i.status, TONE[i.status]?.tone)}</td>
+                                        <td><BalaoClassificacao item={i} /></td>
+                                        <td style={{ textAlign: 'right' }}>{brl(i.valor_produto)}</td>
+                                        <td style={{ textAlign: 'right' }}>
+                                          <Comparativo pVeio={i.p_ibs} vVeio={i.v_ibs} pEsp={i.p_ibs_esperado} vEsp={i.v_ibs_esperado} />
+                                        </td>
+                                        <td style={{ textAlign: 'right' }}>
+                                          <Comparativo pVeio={i.p_cbs} vVeio={i.v_cbs} pEsp={i.p_cbs_esperado} vEsp={i.v_cbs_esperado} />
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
