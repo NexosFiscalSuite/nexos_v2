@@ -71,9 +71,9 @@ def test_textos_entrada_e_saida():
     assert "essa empresa" in t_saida and "V.Sa." not in t_saida
 
 
-def test_produto_repetido_em_varias_notas_vira_uma_linha():
-    """Corrigir a parametrização de 1 produto conserta todas as notas — a carta
-    lista o produto uma vez, com as notas em que ele aparece."""
+def test_detalhe_completo_mais_resumo_por_produto():
+    """A carta traz o quadro completo nota a nota (dimensão do problema) E o
+    resumo com cada produto uma única vez (o que corrigir no emissor)."""
     mesmo = dict(descricao="CAFE TORRADO 500G", chave_acesso=None)
     itens = [
         _item(1, numero_nota="111", **mesmo),
@@ -88,10 +88,11 @@ def test_produto_repetido_em_varias_notas_vira_uma_linha():
 
     t = _texto(_gerar(itens=itens))
     # parênteses são escapados nos literais do PDF — casamos sem eles
-    assert "2 produto" in t and "em 3 nota" in t
-    assert "111, 222, 333" in t
-    assert t.count("CAFE TORRADO 500G") == 1
-    assert "uma única vez" in t          # nota de rodapé explicando o agrupamento
+    assert "4 item" in t and "em 3 nota" in t          # quadro completo
+    assert "Resumo para correção" in t and "2 produto" in t
+    assert "111, 222, 333" in t                        # coluna Nota(s) do resumo
+    assert t.count("CAFE TORRADO 500G") == 4           # 3 no detalhe + 1 no resumo
+    assert "uma única vez" in t                        # rodapé explicando o resumo
 
 
 def test_mesmo_produto_com_situacao_diferente_nao_agrupa():

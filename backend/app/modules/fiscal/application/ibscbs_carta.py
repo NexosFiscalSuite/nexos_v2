@@ -149,7 +149,7 @@ def gerar_carta(
         )
         pedido = (
             "Solicitamos a adequação da parametrização do sistema emissor para as "
-            "próximas emissões, conforme o quadro acima, evitando notificações e "
+            "próximas emissões, conforme o resumo acima, evitando notificações e "
             "rejeições futuras pelo Fisco."
         )
     else:
@@ -161,7 +161,7 @@ def gerar_carta(
         )
         pedido = (
             "Solicitamos a gentileza de ajustar a parametrização do sistema emissor "
-            "para as próximas emissões, conforme o quadro acima. Permanecemos à "
+            "para as próximas emissões, conforme o resumo acima. Permanecemos à "
             "disposição para alinhamento técnico."
         )
 
@@ -177,58 +177,93 @@ def gerar_carta(
         pdf.multi_cell(0, 5.4, _t(paragrafo))
         pdf.ln(2)
 
-    # Quadro de apontamentos — 1 linha por produto (repetiu em outras notas,
-    # não repete aqui: a correção do produto vale para todas).
     grupos = _agrupar_por_produto(itens)
     n_notas = len({i.get("chave_acesso") or i.get("numero_nota") for i in itens})
+
+    # Quadro 1 — todos os apontamentos, nota a nota: o destinatário enxerga a
+    # extensão do problema (quantas notas e quais itens).
     pdf.ln(1)
     pdf.set_font("helvetica", "B", 10.5)
     pdf.set_text_color(*NAVY)
-    pdf.cell(0, 7, _t(f"Itens apontados ({len(grupos)} produto(s) em {n_notas} nota(s))"),
+    pdf.cell(0, 7, _t(f"Itens apontados ({len(itens)} item(ns) em {n_notas} nota(s))"),
              new_x="LMARGIN", new_y="NEXT")
     pdf.set_text_color(30, 30, 30)
     pdf.set_font("helvetica", "", 7.4)
 
     with pdf.table(
-        col_widths=(48, 20, 30, 30, 22, 32),
-        text_align=("LEFT", "CENTER", "RIGHT", "RIGHT", "CENTER", "CENTER"),
+        col_widths=(15, 16, 48, 21, 30, 30, 22),
+        text_align=("CENTER", "CENTER", "LEFT", "CENTER", "RIGHT", "RIGHT", "CENTER"),
         borders_layout="HORIZONTAL_LINES",
         line_height=3.6,
         headings_style=FontFace(emphasis="BOLD", color=NAVY),
         padding=1.2,
     ) as table:
         cab = table.row()
-        for h in ("Produto", "Classif.", "Veio (IBS / CBS)", "Devido (IBS / CBS)",
-                  "Situação", "Nota(s)"):
+        for h in ("NF / Item", "Emissão", "Produto", "Classif.", "Veio (IBS / CBS)",
+                  "Devido (IBS / CBS)", "Situação"):
             cab.cell(_t(h))
-        for g in grupos:
-            veio = (f"{_pct(g.get('p_ibs'))} · {_brl(g.get('v_ibs'))}\n"
-                    f"{_pct(g.get('p_cbs'))} · {_brl(g.get('v_cbs'))}")
-            if g.get("p_ibs_esperado") is None:
+        for i in itens:
+            data_br = "/".join(reversed((i.get("data_emissao") or "").split("-")))
+            veio = (f"{_pct(i.get('p_ibs'))} · {_brl(i.get('v_ibs'))}\n"
+                    f"{_pct(i.get('p_cbs'))} · {_brl(i.get('v_cbs'))}")
+            if i.get("p_ibs_esperado") is None:
                 devido = "sem régua\npercentual"
             else:
-                devido = (f"{_pct(g.get('p_ibs_esperado'))} · {_brl(g.get('v_ibs_esperado'))}\n"
-                          f"{_pct(g.get('p_cbs_esperado'))} · {_brl(g.get('v_cbs_esperado'))}")
+                devido = (f"{_pct(i.get('p_ibs_esperado'))} · {_brl(i.get('v_ibs_esperado'))}\n"
+                          f"{_pct(i.get('p_cbs_esperado'))} · {_brl(i.get('v_cbs_esperado'))}")
+            linha = table.row()
+            linha.cell(_t(f"{i.get('numero_nota') or '—'} / {i.get('numero_item')}"))
+            linha.cell(_t(data_br))
+            linha.cell(_t((i.get("descricao") or "—")[:60]))
+            linha.cell(_t(f"{i.get('cst') or '—'}\n{i.get('c_class_trib') or ''}"))
+            linha.cell(_t(veio))
+            linha.cell(_t(devido))
+            linha.cell(_t(_STATUS.get(i.get("status"), i.get("status") or "")))
+
+    # Quadro 2 — resumo por produto: o que efetivamente precisa ser corrigido.
+    # Corrigida a parametrização do produto, todas as notas seguintes saem certas.
+    pdf.ln(4)
+    pdf.set_font("helvetica", "B", 10.5)
+    pdf.set_text_color(*NAVY)
+    pdf.cell(0, 7, _t(f"Resumo para correção ({len(grupos)} produto(s))"),
+             new_x="LMARGIN", new_y="NEXT")
+    pdf.set_text_color(30, 30, 30)
+    pdf.set_font("helvetica", "", 7.4)
+
+    with pdf.table(
+        col_widths=(58, 22, 34, 26, 42),
+        text_align=("LEFT", "CENTER", "CENTER", "CENTER", "CENTER"),
+        borders_layout="HORIZONTAL_LINES",
+        line_height=3.6,
+        headings_style=FontFace(emphasis="BOLD", color=NAVY),
+        padding=1.2,
+    ) as table:
+        cab = table.row()
+        for h in ("Produto", "Classif.", "Devido (IBS / CBS)", "Situação", "Nota(s)"):
+            cab.cell(_t(h))
+        for g in grupos:
+            if g.get("p_ibs_esperado") is None:
+                devido = "sem régua percentual"
+            else:
+                devido = (f"IBS {_pct(g.get('p_ibs_esperado'))} · "
+                          f"CBS {_pct(g.get('p_cbs_esperado'))}")
             nfs = g["notas"]
             notas = ", ".join(nfs[:3]) + (f" +{len(nfs) - 3}" if len(nfs) > 3 else "")
             linha = table.row()
             linha.cell(_t((g.get("descricao") or "—")[:60]))
             linha.cell(_t(f"{g.get('cst') or '—'}\n{g.get('c_class_trib') or ''}"))
-            linha.cell(_t(veio))
             linha.cell(_t(devido))
             linha.cell(_t(_STATUS.get(g.get("status"), g.get("status") or "")))
             linha.cell(_t(notas))
 
-    if any(len(g["notas"]) > 1 for g in grupos):
-        pdf.ln(2)
-        pdf.set_font("helvetica", "I", 8)
-        pdf.set_text_color(*CINZA)
-        pdf.multi_cell(0, 4.2, _t(
-            "Produtos presentes em mais de uma nota aparecem uma única vez: corrigida a "
-            "parametrização do produto, as demais emissões ficam automaticamente corretas. "
-            "Os valores em R$ referem-se à primeira nota listada."
-        ))
-        pdf.set_text_color(30, 30, 30)
+    pdf.ln(2)
+    pdf.set_font("helvetica", "I", 8)
+    pdf.set_text_color(*CINZA)
+    pdf.multi_cell(0, 4.2, _t(
+        "No resumo, cada produto aparece uma única vez: corrigida a parametrização do "
+        "produto no sistema emissor, todas as próximas emissões saem corretas."
+    ))
+    pdf.set_text_color(30, 30, 30)
 
     pdf.ln(5)
     pdf.set_font("helvetica", "", 10)
