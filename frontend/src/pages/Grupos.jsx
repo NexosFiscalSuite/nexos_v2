@@ -5,9 +5,10 @@ import { useToast, ToastContainer } from '../hooks/useToast'
 
 const novoForm = () => ({ nome: '', descricao: '', empresa_ids: [], user_ids: [], supervisor_id: '' })
 
-// Seleção por chips (como no exemplo do escritório): tags removíveis que
-// quebram linha + busca inline que sugere e adiciona — sem rolagem lateral.
-function ChipsPicker({ itens, selecionados, fixos = [], onAdd, onRemove, placeholder }) {
+// Seleção por chips (como no exemplo do escritório): o retângulo mostra só as
+// tags removíveis (quebrando linha); adicionar é um campo PRÓPRIO logo abaixo,
+// com sugestões clicáveis — sem rolagem lateral.
+function ChipsPicker({ itens, selecionados, fixos = [], onAdd, onRemove, placeholder, vazio }) {
   const [busca, setBusca] = useState('')
   const [aberto, setAberto] = useState(false)
   const ref = useRef()
@@ -25,8 +26,8 @@ function ChipsPicker({ itens, selecionados, fixos = [], onAdd, onRemove, placeho
   )
 
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <div className="chips-box" onClick={() => setAberto(true)}>
+    <div>
+      <div className="chips-box">
         {fixos.map(f => (
           <span key={f.id} className="chip-tag chip-fixa" title={f.hint}>
             <span>{f.label}</span>
@@ -35,27 +36,30 @@ function ChipsPicker({ itens, selecionados, fixos = [], onAdd, onRemove, placeho
         {selecionados.map(id => (
           <span key={id} className="chip-tag" title={porId.get(id)?.label}>
             <span>{porId.get(id)?.label || '…'}</span>
-            <button type="button" aria-label="Remover" onClick={(e) => { e.stopPropagation(); onRemove(id) }}>
+            <button type="button" aria-label="Remover" onClick={() => onRemove(id)}>
               <i className="ti ti-x" />
             </button>
           </span>
         ))}
+        {fixos.length + selecionados.length === 0 && <span className="chips-vazio">{vazio}</span>}
+      </div>
+      <div ref={ref} style={{ position: 'relative', marginTop: 8 }}>
         <input
           value={busca}
           placeholder={placeholder}
           onChange={e => { setBusca(e.target.value); setAberto(true) }}
           onFocus={() => setAberto(true)}
         />
+        {aberto && (
+          <div className="chips-sugestoes">
+            {disponiveis.length === 0
+              ? <div className="cs-vazio">{busca ? 'Nada encontrado.' : 'Todos já estão no grupo.'}</div>
+              : disponiveis.map(i => (
+                <div key={i.id} onClick={() => { onAdd(i.id); setBusca('') }}>{i.label}</div>
+              ))}
+          </div>
+        )}
       </div>
-      {aberto && (
-        <div className="chips-sugestoes">
-          {disponiveis.length === 0
-            ? <div className="cs-vazio">{busca ? 'Nada encontrado.' : 'Todos já estão no grupo.'}</div>
-            : disponiveis.map(i => (
-              <div key={i.id} onClick={() => { onAdd(i.id); setBusca('') }}>{i.label}</div>
-            ))}
-        </div>
-      )}
     </div>
   )
 }
@@ -190,6 +194,7 @@ export default function Grupos() {
                     onAdd={id => add('empresa_ids', id)}
                     onRemove={id => remove('empresa_ids', id)}
                     placeholder="Adicionar uma empresa…"
+                    vazio="Nenhuma empresa no grupo ainda."
                   />
                 </div>
 
@@ -205,6 +210,7 @@ export default function Grupos() {
                     onAdd={id => add('user_ids', id)}
                     onRemove={id => remove('user_ids', id)}
                     placeholder="Adicionar um usuário…"
+                    vazio="Nenhum membro no grupo ainda."
                   />
                 </div>
                 <p style={{ fontSize: 11.5, color: 'var(--text-4)', marginTop: 4 }}>Admins e supervisores enxergam todas as empresas. Usuários comuns só veem as empresas dos grupos a que pertencem.</p>

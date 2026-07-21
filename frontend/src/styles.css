@@ -513,7 +513,7 @@ input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible {
   overflow-y: auto;
   background: var(--surface);
 }
-.chips-box:focus-within { border-color: var(--primary); }
+.chips-vazio { font: 400 12.5px var(--font); color: var(--text-4); padding: 3px 4px; }
 .chip-tag {
   display: inline-flex;
   align-items: center;
@@ -532,16 +532,6 @@ input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible {
   color: inherit; opacity: .6; font-size: 12px; line-height: 1; display: flex;
 }
 .chip-tag button:hover { opacity: 1; }
-.chips-box input {
-  flex: 1;
-  min-width: 150px;
-  border: none;
-  outline: none;
-  padding: 5px 4px;
-  font: 400 13px var(--font);
-  color: var(--text-1);
-  background: transparent;
-}
 .chips-sugestoes {
   position: absolute;
   left: 0; right: 0; top: calc(100% + 4px);
