@@ -225,6 +225,7 @@ class ImportService:
                     v_bc_fcp_st=_dec(it.get("v_bc_fcp_st")),
                     # IBS/CBS (destaque do ano-teste 2026)
                     cst_ibs_cbs=it.get("cst_ibs_cbs"),
+                    c_class_trib=it.get("c_class_trib"),
                     v_bc_ibs_cbs=_dec(it.get("v_bc_ibs_cbs")),
                     p_ibs_uf=_dec(it.get("p_ibs_uf")),
                     v_ibs_uf=_dec(it.get("v_ibs_uf")),

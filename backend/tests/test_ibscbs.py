@@ -15,6 +15,7 @@ from app.modules.fiscal.application.ibscbs_service import (
     DISPENSADO,
     OK,
     SEM_DESTAQUE,
+    TRATAMENTO_DIFERENCIADO,
     VALOR_DIVERGENTE,
     IbsCbsService,
     classificar_item,
@@ -61,6 +62,7 @@ def test_parser_extrai_grupo_ibscbs():
     parsed = parse_xml(_nfe("1" * 44, _IBSCBS_OK))
     item = parsed["itens"][0]
     assert item["cst_ibs_cbs"] == "000"
+    assert item["c_class_trib"] == "000001"
     assert item["v_bc_ibs_cbs"] == 1000.0
     assert item["p_ibs_uf"] == 0.10
     assert item["v_ibs_uf"] == 1.0
@@ -123,6 +125,24 @@ def test_aliquota_certa_mas_conta_errada_diverge():
     assert _cls(v_ibs_uf=_D("0.10")) == VALOR_DIVERGENTE      # 1000×0,1% = 1,00
 
 
+def test_cst_integral_000_exige_aliquotas_de_teste():
+    """CST 000 (tributação integral) segue a régua cheia."""
+    assert _cls(cst="000") == OK
+    assert _cls(cst="000", p_cbs=_D("1.50")) == ALIQUOTA_DIVERGENTE
+
+
+def test_cst_diferenciado_nao_e_apontado():
+    """CST ≠ 000 (isenção 400, imunidade 410, diferimento 510, monofásica 620…):
+    alíquota zerada é o comportamento LEGÍTIMO — nunca vira apontamento."""
+    zeros = dict(p_ibs_uf=_D("0"), v_ibs_uf=_D("0"), p_cbs=_D("0"), v_cbs=_D("0"))
+    for cst in ("400", "410", "510", "620", "200"):
+        assert _cls(cst=cst, c_class_trib="410004", **zeros) == TRATAMENTO_DIFERENCIADO
+    # Mesmo com valores destacados, CST diferenciado não passa pela régua cheia.
+    assert _cls(cst="200", p_cbs=_D("0.45"), v_cbs=_D("4.50")) == TRATAMENTO_DIFERENCIADO
+    # Simples continua vencendo qualquer CST (dispensa vem primeiro).
+    assert _cls(crt_emit="1", cst="410", **zeros) == DISPENSADO
+
+
 # --------------------------------------------------------------------------- #
 # Serviço (sqlite) + backfill
 # --------------------------------------------------------------------------- #
@@ -148,14 +168,14 @@ def _nota(tenant, empresa, chave, crt="3", storage_key=None):
     )
 
 
-def _item(tenant, nota, destaque: bool):
+def _item(tenant, nota, destaque: bool, cst: str | None = None):
     kw = {}
     if destaque:
         kw = dict(v_bc_ibs_cbs=_D("1000"), p_ibs_uf=_D("0.10"), v_ibs_uf=_D("1.00"),
                   p_cbs=_D("0.90"), v_cbs=_D("9.00"))
     return NotaItem(
         id=uuid4(), tenant_id=tenant, nota_id=nota.id, numero_item=1,
-        descricao="Produto", valor_produto=_D("1000"), **kw,
+        descricao="Produto", valor_produto=_D("1000"), cst_ibs_cbs=cst, **kw,
     )
 
 
@@ -164,19 +184,22 @@ async def test_verificar_agrega_e_ranqueia(sessao):
     ok = _nota(tenant, empresa, "1" * 44)                 # normal com destaque
     sem = _nota(tenant, empresa, "2" * 44)                # normal SEM destaque
     simples = _nota(tenant, empresa, "3" * 44, crt="1")   # Simples sem destaque
-    sessao.add_all([ok, sem, simples,
+    imune = _nota(tenant, empresa, "5" * 44)              # CST 410: zerado legítimo
+    sessao.add_all([ok, sem, simples, imune,
                     _item(tenant, ok, True), _item(tenant, sem, False),
-                    _item(tenant, simples, False)])
+                    _item(tenant, simples, False),
+                    _item(tenant, imune, False, cst="410")])
     await sessao.flush()
 
     r = await IbsCbsService(sessao).verificar(empresa_id=empresa)
 
-    assert r["total_itens"] == 3
+    assert r["total_itens"] == 4
     assert r["resumo"][OK]["itens"] == 1
     assert r["resumo"][SEM_DESTAQUE]["itens"] == 1
     assert r["resumo"][DISPENSADO]["itens"] == 1
-    assert r["pct_conforme"] == 66.7                       # OK + DISPENSADO
-    assert len(r["itens"]) == 1                            # só o problema real
+    assert r["resumo"][TRATAMENTO_DIFERENCIADO]["itens"] == 1
+    assert r["pct_conforme"] == 75.0            # OK + DISPENSADO + DIFERENCIADO
+    assert len(r["itens"]) == 1                 # só o problema real (sem destaque)
     assert r["itens"][0]["status"] == SEM_DESTAQUE
     assert r["ranking_emitentes"][0]["cnpj"] == sem.cnpj_emit
 
@@ -203,3 +226,7 @@ async def test_reprocessar_preenche_notas_antigas(sessao):
 
     v = await IbsCbsService(sessao).verificar(empresa_id=empresa)
     assert v["resumo"][OK]["itens"] == 1                   # antes era SEM_DESTAQUE
+
+    from sqlalchemy import select
+    item = (await sessao.execute(select(NotaItem))).scalars().first()
+    assert item.c_class_trib == "000001"                   # backfill preencheu o cClassTrib

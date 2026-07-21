@@ -11,11 +11,12 @@ const cnpjFmt = (c) => (c && c.length === 14 ? c.replace(/(\d{2})(\d{3})(\d{3})(
 
 // Ordem de exibição dos cards + tom visual de cada situação.
 const STATUS_INFO = [
-  ['SEM_DESTAQUE',        { label: 'Sem destaque',       tone: 'err',  icon: 'ti-file-off',        desc: 'Regime normal sem o grupo IBS/CBS no XML' }],
-  ['ALIQUOTA_DIVERGENTE', { label: 'Alíquota errada',    tone: 'warn', icon: 'ti-percentage',      desc: 'Fora dos 0,1% (IBS) + 0,9% (CBS) de teste' }],
-  ['VALOR_DIVERGENTE',    { label: 'Valor não fecha',    tone: 'warn', icon: 'ti-calculator-off',  desc: 'Alíquota certa, mas base × alíquota ≠ destacado' }],
-  ['OK',                  { label: 'Corretos',           tone: 'ok',   icon: 'ti-circle-check',    desc: 'Destaque presente e conferido' }],
-  ['DISPENSADO',          { label: 'Dispensados',        tone: 'info', icon: 'ti-user-check',      desc: 'Emitente do Simples/MEI (CRT 1/4)' }],
+  ['SEM_DESTAQUE',           { label: 'Sem destaque',        tone: 'err',  icon: 'ti-file-off',        desc: 'Regime normal sem o grupo IBS/CBS no XML' }],
+  ['ALIQUOTA_DIVERGENTE',    { label: 'Alíquota errada',     tone: 'warn', icon: 'ti-percentage',      desc: 'CST 000 fora dos 0,1% (IBS) + 0,9% (CBS) de teste' }],
+  ['VALOR_DIVERGENTE',       { label: 'Valor não fecha',     tone: 'warn', icon: 'ti-calculator-off',  desc: 'Alíquota certa, mas base × alíquota ≠ destacado' }],
+  ['OK',                     { label: 'Corretos',            tone: 'ok',   icon: 'ti-circle-check',    desc: 'Destaque presente e conferido' }],
+  ['TRATAMENTO_DIFERENCIADO',{ label: 'Trat. diferenciado',  tone: 'info', icon: 'ti-scale',           desc: 'CST ≠ 000: isenção, imunidade, alíquota zero, diferimento… — zerado é legítimo' }],
+  ['DISPENSADO',             { label: 'Dispensados',         tone: 'info', icon: 'ti-user-check',      desc: 'Emitente do Simples/MEI (CRT 1/4)' }],
 ]
 const TONE = Object.fromEntries(STATUS_INFO)
 
@@ -72,7 +73,7 @@ export default function VerificacaoIbsCbs() {
           </p>
         </div>
         <button className="btn btn-secondary" disabled={busy} onClick={reprocessar}>
-          <i className="ti ti-refresh" /> {busy ? 'Reprocessando…' : 'Reprocessar XMLs'}
+          <i className="ti ti-refresh" /> {busy ? 'Atualizando…' : 'Atualizar consulta (reler XMLs)'}
         </button>
       </div>
 

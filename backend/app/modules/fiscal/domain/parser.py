@@ -303,6 +303,7 @@ def _parse_nfe(root) -> dict:
             "v_bc_fcp_st": _f(_g(icms, "vBCFCPST")),
             # IBS/CBS (Reforma Tributária — destaque do ano-teste 2026)
             "cst_ibs_cbs": _g(ibscbs, "CST") or None,
+            "c_class_trib": _g(ibscbs, "cClassTrib") or None,
             "v_bc_ibs_cbs": _f(_g(ibscbs, "vBC")),
             "p_ibs_uf": _f(_g(ibscbs, "pIBSUF")),
             "v_ibs_uf": _f(_g(ibscbs, "vIBSUF")),

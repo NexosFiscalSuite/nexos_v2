@@ -9,8 +9,17 @@ Este módulo confronta o que veio nos XMLs importados:
                          emitente ainda não se adequou à NT 2025.002).
   ALIQUOTA_DIVERGENTE  — destacou, mas fora dos percentuais de teste.
   VALOR_DIVERGENTE     — alíquotas certas, mas a conta (base × alíquota) não fecha.
+  TRATAMENTO_DIFERENCIADO — CST do IBS/CBS ≠ 000 (isenção, imunidade, alíquota
+                         zero, diferimento, monofásica…): a operação NÃO está
+                         sujeita às alíquotas de teste — zerado aqui é legítimo,
+                         não é apontado como problema.
   DISPENSADO           — emitente do Simples/MEI: destaque não exigido em 2026.
   OK                   — destaque presente e correto.
+
+Só o CST 000 ("tributação integral", tabela de Classificação Tributária da
+NT 2025.002 / portal Conformidade Fácil-SVRS) exige exatamente 0,1% + 0,9%.
+A validação fina por cClassTrib (percentual de redução por código) entra
+quando embarcarmos a tabela oficial — por ora o CST decide.
 
 A classificação é query-time (nada persistido): mudou o XML/regra, muda o
 resultado — e o backfill repara notas importadas antes desta versão.
@@ -37,11 +46,13 @@ TOL_VALOR = Decimal("0.02")
 _CRT_SIMPLES = ("1", "4")          # Simples Nacional / MEI — dispensados em 2026
 _MODELOS = ("55", "65")            # NF-e / NFC-e (o grupo IBSCBS é delas)
 _INICIO_TESTE = "2026-01-01"
+CST_INTEGRAL = "000"               # único CST que exige as alíquotas cheias de teste
 
 OK = "OK"
 SEM_DESTAQUE = "SEM_DESTAQUE"
 ALIQUOTA_DIVERGENTE = "ALIQUOTA_DIVERGENTE"
 VALOR_DIVERGENTE = "VALOR_DIVERGENTE"
+TRATAMENTO_DIFERENCIADO = "TRATAMENTO_DIFERENCIADO"
 DISPENSADO = "DISPENSADO"
 
 
@@ -59,10 +70,19 @@ def classificar_item(
     p_cbs: Decimal,
     v_cbs: Decimal,
     v_bc: Decimal,
+    cst: str | None = None,
+    c_class_trib: str | None = None,
 ) -> str:
     """Classificação pura de um item (testável sem banco)."""
     if (crt_emit or "").strip() in _CRT_SIMPLES:
         return DISPENSADO
+
+    # CST ≠ 000 = operação com tratamento próprio (isenção, imunidade, alíquota
+    # zero, diferimento, monofásica...): as alíquotas de teste NÃO se aplicam —
+    # vir zerado/diferente aqui é o comportamento correto, não erro.
+    cst = (cst or "").strip()
+    if cst and cst != CST_INTEGRAL:
+        return TRATAMENTO_DIFERENCIADO
 
     p_ibs = p_ibs_uf + p_ibs_mun
     v_ibs = v_ibs_uf + v_ibs_mun
@@ -101,7 +121,7 @@ class IbsCbsService:
                 n.cnpj_emit, n.crt_emit, n.fluxo, n.data_emissao,
                 it.numero_item, it.descricao, it.valor_produto,
                 it.v_bc_ibs_cbs, it.p_ibs_uf, it.v_ibs_uf, it.p_ibs_mun,
-                it.v_ibs_mun, it.p_cbs, it.v_cbs,
+                it.v_ibs_mun, it.p_cbs, it.v_cbs, it.cst_ibs_cbs, it.c_class_trib,
             )
             .join(n, it.nota_id == n.id)
             .where(
@@ -132,6 +152,7 @@ class IbsCbsService:
                 v_ibs_uf=_d(r.v_ibs_uf), v_ibs_mun=_d(r.v_ibs_mun),
                 p_cbs=_d(r.p_cbs), v_cbs=_d(r.v_cbs),
                 v_bc=_d(r.v_bc_ibs_cbs),
+                cst=r.cst_ibs_cbs, c_class_trib=r.c_class_trib,
             )
             agg = resumo.setdefault(status, {"itens": 0, "valor": 0.0})
             agg["itens"] += 1
@@ -168,7 +189,11 @@ class IbsCbsService:
 
         ranking = sorted(emitentes.values(), key=lambda e: e["valor"], reverse=True)
         total_itens = sum(a["itens"] for a in resumo.values())
-        conformes = resumo.get(OK, {}).get("itens", 0) + resumo.get(DISPENSADO, {}).get("itens", 0)
+        conformes = (
+            resumo.get(OK, {}).get("itens", 0)
+            + resumo.get(DISPENSADO, {}).get("itens", 0)
+            + resumo.get(TRATAMENTO_DIFERENCIADO, {}).get("itens", 0)
+        )
         return {
             "aliquotas_teste": {"ibs": float(ALIQ_IBS_TESTE), "cbs": float(ALIQ_CBS_TESTE)},
             "total_itens": total_itens,
@@ -219,6 +244,7 @@ class IbsCbsService:
                 if p is None:
                     continue
                 item.cst_ibs_cbs = p.get("cst_ibs_cbs")
+                item.c_class_trib = p.get("c_class_trib")
                 item.v_bc_ibs_cbs = _d(p.get("v_bc_ibs_cbs"))
                 item.p_ibs_uf = _d(p.get("p_ibs_uf"))
                 item.v_ibs_uf = _d(p.get("v_ibs_uf"))

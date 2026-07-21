@@ -129,6 +129,7 @@ class NotaItem(Base):
 
     # --- IBS/CBS (Reforma Tributária — destaque do ano-teste 2026) ---
     cst_ibs_cbs: Mapped[str | None] = mapped_column(String(3), nullable=True)
+    c_class_trib: Mapped[str | None] = mapped_column(String(6), nullable=True)
     v_bc_ibs_cbs: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
     p_ibs_uf: Mapped[Decimal] = mapped_column(_PCT, default=Decimal("0"))
     v_ibs_uf: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
