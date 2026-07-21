@@ -58,6 +58,23 @@ def _cnpj(c) -> str:
     return c or "—"
 
 
+def _agrupar_por_produto(itens: list[dict]) -> list[dict]:
+    """Produto repetido em várias notas vira UMA linha na carta: corrigida a
+    parametrização do produto no emissor, todas as emissões seguintes saem
+    certas. Valores/percentuais exibidos são os da primeira ocorrência."""
+    grupos: dict[tuple, dict] = {}
+    for i in itens:
+        chave = ((i.get("descricao") or "").strip().upper(), i.get("cst"),
+                 i.get("c_class_trib"), i.get("status"))
+        g = grupos.get(chave)
+        if g is None:
+            g = grupos[chave] = dict(i, notas=[])
+        nf = str(i.get("numero_nota") or "—")
+        if nf not in g["notas"]:
+            g["notas"].append(nf)
+    return list(grupos.values())
+
+
 class _CartaPDF(FPDF):
     def header(self):
         # Logo quase quadrada (472×378): 30mm de largura ≈ 24mm de altura.
@@ -160,43 +177,58 @@ def gerar_carta(
         pdf.multi_cell(0, 5.4, _t(paragrafo))
         pdf.ln(2)
 
-    # Quadro de apontamentos
+    # Quadro de apontamentos — 1 linha por produto (repetiu em outras notas,
+    # não repete aqui: a correção do produto vale para todas).
+    grupos = _agrupar_por_produto(itens)
+    n_notas = len({i.get("chave_acesso") or i.get("numero_nota") for i in itens})
     pdf.ln(1)
     pdf.set_font("helvetica", "B", 10.5)
     pdf.set_text_color(*NAVY)
-    pdf.cell(0, 7, _t(f"Itens apontados ({len(itens)})"), new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 7, _t(f"Itens apontados ({len(grupos)} produto(s) em {n_notas} nota(s))"),
+             new_x="LMARGIN", new_y="NEXT")
     pdf.set_text_color(30, 30, 30)
     pdf.set_font("helvetica", "", 7.4)
 
     with pdf.table(
-        col_widths=(15, 16, 48, 21, 30, 30, 22),
-        text_align=("CENTER", "CENTER", "LEFT", "CENTER", "RIGHT", "RIGHT", "CENTER"),
+        col_widths=(48, 20, 30, 30, 22, 32),
+        text_align=("LEFT", "CENTER", "RIGHT", "RIGHT", "CENTER", "CENTER"),
         borders_layout="HORIZONTAL_LINES",
         line_height=3.6,
         headings_style=FontFace(emphasis="BOLD", color=NAVY),
         padding=1.2,
     ) as table:
         cab = table.row()
-        for h in ("NF / Item", "Emissão", "Produto", "Classif.", "Veio (IBS / CBS)",
-                  "Devido (IBS / CBS)", "Situação"):
+        for h in ("Produto", "Classif.", "Veio (IBS / CBS)", "Devido (IBS / CBS)",
+                  "Situação", "Nota(s)"):
             cab.cell(_t(h))
-        for i in itens:
-            data_br = "/".join(reversed((i.get("data_emissao") or "").split("-")))
-            veio = (f"{_pct(i.get('p_ibs'))} · {_brl(i.get('v_ibs'))}\n"
-                    f"{_pct(i.get('p_cbs'))} · {_brl(i.get('v_cbs'))}")
-            if i.get("p_ibs_esperado") is None:
+        for g in grupos:
+            veio = (f"{_pct(g.get('p_ibs'))} · {_brl(g.get('v_ibs'))}\n"
+                    f"{_pct(g.get('p_cbs'))} · {_brl(g.get('v_cbs'))}")
+            if g.get("p_ibs_esperado") is None:
                 devido = "sem régua\npercentual"
             else:
-                devido = (f"{_pct(i.get('p_ibs_esperado'))} · {_brl(i.get('v_ibs_esperado'))}\n"
-                          f"{_pct(i.get('p_cbs_esperado'))} · {_brl(i.get('v_cbs_esperado'))}")
+                devido = (f"{_pct(g.get('p_ibs_esperado'))} · {_brl(g.get('v_ibs_esperado'))}\n"
+                          f"{_pct(g.get('p_cbs_esperado'))} · {_brl(g.get('v_cbs_esperado'))}")
+            nfs = g["notas"]
+            notas = ", ".join(nfs[:3]) + (f" +{len(nfs) - 3}" if len(nfs) > 3 else "")
             linha = table.row()
-            linha.cell(_t(f"{i.get('numero_nota') or '—'} / {i.get('numero_item')}"))
-            linha.cell(_t(data_br))
-            linha.cell(_t((i.get("descricao") or "—")[:60]))
-            linha.cell(_t(f"{i.get('cst') or '—'}\n{i.get('c_class_trib') or ''}"))
+            linha.cell(_t((g.get("descricao") or "—")[:60]))
+            linha.cell(_t(f"{g.get('cst') or '—'}\n{g.get('c_class_trib') or ''}"))
             linha.cell(_t(veio))
             linha.cell(_t(devido))
-            linha.cell(_t(_STATUS.get(i.get("status"), i.get("status") or "")))
+            linha.cell(_t(_STATUS.get(g.get("status"), g.get("status") or "")))
+            linha.cell(_t(notas))
+
+    if any(len(g["notas"]) > 1 for g in grupos):
+        pdf.ln(2)
+        pdf.set_font("helvetica", "I", 8)
+        pdf.set_text_color(*CINZA)
+        pdf.multi_cell(0, 4.2, _t(
+            "Produtos presentes em mais de uma nota aparecem uma única vez: corrigida a "
+            "parametrização do produto, as demais emissões ficam automaticamente corretas. "
+            "Os valores em R$ referem-se à primeira nota listada."
+        ))
+        pdf.set_text_color(30, 30, 30)
 
     pdf.ln(5)
     pdf.set_font("helvetica", "", 10)

@@ -1,9 +1,28 @@
 """Carta timbrada de correção IBS/CBS: o PDF nasce válido, com timbre e quadro.
 
 Testa o gerador puro (sem DB): PDF bem-formado, textos de entrada × saída,
-paginação com muitos itens e tolerância a caracteres fora do latin-1.
+produto repetido em várias notas vira UMA linha, paginação com muitos itens
+e tolerância a caracteres fora do latin-1.
 """
-from app.modules.fiscal.application.ibscbs_carta import _LOGO, gerar_carta
+import re
+import zlib
+
+from app.modules.fiscal.application.ibscbs_carta import (
+    _LOGO,
+    _agrupar_por_produto,
+    gerar_carta,
+)
+
+
+def _texto(pdf: bytes) -> str:
+    """Concatena os streams descomprimidos (fpdf2 usa FlateDecode)."""
+    partes = []
+    for m in re.finditer(rb"stream\r?\n(.*?)endstream", pdf, re.DOTALL):
+        try:
+            partes.append(zlib.decompress(m.group(1)).decode("latin-1"))
+        except zlib.error:
+            pass
+    return "".join(partes)
 
 
 def _item(n: int = 1, **extra) -> dict:
@@ -44,25 +63,44 @@ def test_pdf_valido_com_conteudo():
 
 def test_textos_entrada_e_saida():
     """Entrada fala com o fornecedor; saída fala com o próprio cliente emissor."""
-    # fpdf2 comprime os streams — inspecionamos o texto descomprimido.
-    import re
-    import zlib
-
-    def texto(pdf: bytes) -> str:
-        partes = []
-        for m in re.finditer(rb"stream\r?\n(.*?)endstream", pdf, re.DOTALL):
-            try:
-                partes.append(zlib.decompress(m.group(1)).decode("latin-1"))
-            except zlib.error:
-                pass
-        return "".join(partes)
-
-    t_entrada = texto(_gerar("entrada", cliente_nome="CLIENTE MG"))
+    t_entrada = _texto(_gerar("entrada", cliente_nome="CLIENTE MG"))
     assert "V.Sa." in t_entrada and "CLIENTE MG" in t_entrada
     assert "ADCT" in t_entrada and "0,10%" in t_entrada
 
-    t_saida = texto(_gerar("saida"))
+    t_saida = _texto(_gerar("saida"))
     assert "essa empresa" in t_saida and "V.Sa." not in t_saida
+
+
+def test_produto_repetido_em_varias_notas_vira_uma_linha():
+    """Corrigir a parametrização de 1 produto conserta todas as notas — a carta
+    lista o produto uma vez, com as notas em que ele aparece."""
+    mesmo = dict(descricao="CAFE TORRADO 500G", chave_acesso=None)
+    itens = [
+        _item(1, numero_nota="111", **mesmo),
+        _item(2, numero_nota="222", **mesmo),
+        _item(1, numero_nota="333", **mesmo),
+        _item(3, numero_nota="111", chave_acesso=None, descricao="OUTRO PRODUTO"),
+    ]
+    grupos = _agrupar_por_produto(itens)
+    assert len(grupos) == 2
+    assert next(g for g in grupos if g["descricao"] == "CAFE TORRADO 500G")["notas"] == \
+        ["111", "222", "333"]
+
+    t = _texto(_gerar(itens=itens))
+    # parênteses são escapados nos literais do PDF — casamos sem eles
+    assert "2 produto" in t and "em 3 nota" in t
+    assert "111, 222, 333" in t
+    assert t.count("CAFE TORRADO 500G") == 1
+    assert "uma única vez" in t          # nota de rodapé explicando o agrupamento
+
+
+def test_mesmo_produto_com_situacao_diferente_nao_agrupa():
+    """Situações distintas pedem correções distintas — não colapsar."""
+    itens = [
+        _item(1, descricao="PRODUTO X", status="SEM_DESTAQUE"),
+        _item(2, descricao="PRODUTO X", status="ALIQUOTA_DIVERGENTE"),
+    ]
+    assert len(_agrupar_por_produto(itens)) == 2
 
 
 def test_muitos_itens_paginam_sem_quebrar():
