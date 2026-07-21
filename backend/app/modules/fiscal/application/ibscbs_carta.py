@@ -28,7 +28,7 @@ _STATUS = {
 }
 
 
-_TROCAS = str.maketrans({"—": "-", "–": "-", "’": "'", "‘": "'", "“": '"', "”": '"'})
+_TROCAS = str.maketrans({"—": "-", "–": "-", "’": "'", "‘": "'", "“": '"', "”": '"', "→": ">"})
 
 
 def _t(s) -> str:
@@ -49,6 +49,14 @@ def _pct(v) -> str:
 def _brl(v) -> str:
     s = f"{float(v or 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     return f"R$ {s}"
+
+
+def _veio_linha(nominal, efet, valor) -> str:
+    """Linha do "veio": com gRed no XML mostra nominal→efetiva (é a efetiva
+    que se compara com o devido); sem gRed, a alíquota aplicada direta."""
+    if efet is None:
+        return f"{_pct(nominal)} · {_brl(valor)}"
+    return f"{_pct(nominal)}→{_pct(efet)} · {_brl(valor)}"
 
 
 def _cnpj(c) -> str:
@@ -193,7 +201,7 @@ def gerar_carta(
     pdf.set_font("helvetica", "", 7.4)
 
     with pdf.table(
-        col_widths=(15, 16, 48, 21, 30, 30, 22),
+        col_widths=(15, 16, 44, 21, 34, 30, 22),
         text_align=("CENTER", "CENTER", "LEFT", "CENTER", "RIGHT", "RIGHT", "CENTER"),
         borders_layout="HORIZONTAL_LINES",
         line_height=3.6,
@@ -206,8 +214,11 @@ def gerar_carta(
             cab.cell(_t(h))
         for i in itens:
             data_br = "/".join(reversed((i.get("data_emissao") or "").split("-")))
-            veio = (f"{_pct(i.get('p_ibs'))} · {_brl(i.get('v_ibs'))}\n"
-                    f"{_pct(i.get('p_cbs'))} · {_brl(i.get('v_cbs'))}")
+            veio = (
+                _veio_linha(i.get("p_ibs"), i.get("p_aliq_efet_ibs"), i.get("v_ibs"))
+                + "\n"
+                + _veio_linha(i.get("p_cbs"), i.get("p_aliq_efet_cbs"), i.get("v_cbs"))
+            )
             if i.get("p_ibs_esperado") is None:
                 devido = "sem régua\npercentual"
             else:
@@ -221,6 +232,18 @@ def gerar_carta(
             linha.cell(_t(veio))
             linha.cell(_t(devido))
             linha.cell(_t(_STATUS.get(i.get("status"), i.get("status") or "")))
+
+    if any(i.get("p_aliq_efet_ibs") is not None or i.get("p_aliq_efet_cbs") is not None
+           for i in itens):
+        pdf.ln(2)
+        pdf.set_font("helvetica", "I", 8)
+        pdf.set_text_color(*CINZA)
+        pdf.multi_cell(0, 4.2, _t(
+            'Leitura "x% → y%": x é a alíquota NOMINAL de teste (obrigatória na NF-e) e '
+            "y é a alíquota EFETIVA declarada no grupo de redução (gRed) do XML - é a "
+            "efetiva que se compara com a coluna Devido."
+        ))
+        pdf.set_text_color(30, 30, 30)
 
     # Quadro 2 — resumo por produto: o que efetivamente precisa ser corrigido.
     # Corrigida a parametrização do produto, todas as notas seguintes saem certas.

@@ -24,21 +24,34 @@ const badge = (txt, tone = 'info') => (
   <span className="badge" style={{ background: `var(--${tone}-bg)`, color: `var(--${tone}-text)` }}>{txt}</span>
 )
 
-// Célula "veio ▸ esperado": o que o XML trouxe sobre o que a régua do
-// CST/cClassTrib manda. Em pendência o "veio" é vermelho; em item conforme
-// (filtro dos cards) é verde. Quando a nota traz o gRed (NT 2025.002), o
-// destaque certo é "nominal → efetiva": pIBS/pCBS carregam a alíquota de
-// teste e a carga real fica no pAliqEfet. "Sem régua" = monofásica/fixa.
+const pctCurto = (v) => `${Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`
+
+// Rótulo cinza que nomeia cada linha da célula ("VEIO" / "DEVIDO").
+const Rotulo = ({ children }) => (
+  <span style={{ color: 'var(--text-4)', fontWeight: 600, fontSize: 9.5, marginRight: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>{children}</span>
+)
+
+// Célula do confronto: linha VEIO (o que o XML trouxe) sobre a linha DEVIDO
+// (o que a régua do CST/cClassTrib manda). Quando a nota traz o gRed
+// (NT 2025.002), o veio abre em "nom → efet": pIBS/pCBS carregam a alíquota
+// NOMINAL de teste (obrigatória) e a carga real fica no pAliqEfet — é a
+// efetiva que se compara com o devido. "Sem régua" = monofásica/fixa.
 function Comparativo({ pVeio, vVeio, pEsp, vEsp, conforme, pEfet, pRed }) {
   const titulo = pEfet == null ? undefined
-    : `Nominal ${pct(pVeio)}${pRed != null ? ` · redução ${pct(pRed)}` : ''} → efetiva ${pct(pEfet)} (gRed do XML)`
+    : `gRed no XML: nominal ${pct(pVeio)}${pRed != null ? ` com redução de ${pctCurto(pRed)}` : ''} → alíquota efetiva ${pct(pEfet)}. A efetiva é o que se compara com o devido.`
   return (
-    <div style={{ lineHeight: 1.4, whiteSpace: 'nowrap', textAlign: 'right' }} title={titulo}>
+    <div style={{ lineHeight: 1.5, whiteSpace: 'nowrap', textAlign: 'right' }} title={titulo}>
       <div style={{ color: conforme ? 'var(--ok-text)' : 'var(--err-text)', fontWeight: 600 }}>
-        {conforme && '✔ '}{pct(pVeio)}{pEfet != null && <span> → {pct(pEfet)}</span>} · {brl(vVeio)}
+        <Rotulo>veio</Rotulo>
+        {conforme && '✔ '}
+        {pEfet != null
+          ? <>nom {pct(pVeio)}{pRed != null && <span style={{ fontWeight: 400, opacity: .75 }}> −{pctCurto(pRed)}</span>} → ef {pct(pEfet)}</>
+          : pct(pVeio)}
+        {' · '}{brl(vVeio)}
       </div>
       <div style={{ color: 'var(--ok-text)', fontSize: 11.5 }}>
-        {pEsp == null ? 'sem régua percentual' : <>✔ {pct(pEsp)} · {brl(vEsp)}</>}
+        <Rotulo>devido</Rotulo>
+        {pEsp == null ? 'sem régua percentual' : <>{pct(pEsp)} · {brl(vEsp)}</>}
       </div>
     </div>
   )
@@ -342,8 +355,8 @@ export default function VerificacaoIbsCbs() {
                                       <th>Situação</th>
                                       <th>Classificação</th>
                                       <th style={{ textAlign: 'right' }}>Valor</th>
-                                      <th style={{ textAlign: 'right' }}>IBS <span style={{ fontWeight: 400, color: 'var(--text-4)' }}>(veio / ✔ devido)</span></th>
-                                      <th style={{ textAlign: 'right' }}>CBS <span style={{ fontWeight: 400, color: 'var(--text-4)' }}>(veio / ✔ devido)</span></th>
+                                      <th style={{ textAlign: 'right' }}>IBS</th>
+                                      <th style={{ textAlign: 'right' }}>CBS</th>
                                     </tr>
                                   </thead>
                                   <tbody>

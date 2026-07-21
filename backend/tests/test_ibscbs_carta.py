@@ -113,6 +113,21 @@ def test_muitos_itens_paginam_sem_quebrar():
     assert pdf[:5] == b"%PDF-" and paginas >= 2
 
 
+def test_gred_no_veio_e_legenda():
+    """Item com gRed no XML: o veio abre em nominal→efetiva ("0,10%>0,00%")
+    e a carta ganha a legenda explicando a leitura."""
+    itens = [_item(1, p_ibs=0.10, p_cbs=0.90,
+                   p_aliq_efet_ibs=0.0, p_aliq_efet_cbs=0.0, p_red_aliq=100.0,
+                   status="ALIQUOTA_DIVERGENTE")]
+    t = _texto(_gerar(itens=itens))
+    assert "0,10%>0,00%" in t and "0,90%>0,00%" in t
+    assert "NOMINAL" in t and "EFETIVA" in t and "gRed" in t
+
+    # Sem gRed: formato clássico, sem legenda.
+    t2 = _texto(_gerar())
+    assert ">0," not in t2 and "gRed" not in t2
+
+
 def test_caracteres_fora_do_latin1_nao_derrubam():
     pdf = _gerar(itens=[_item(descricao="PRODUTO → TESTE 数据 ©", c_class_trib=None)])
     assert pdf[:5] == b"%PDF-"
