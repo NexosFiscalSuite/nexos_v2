@@ -72,7 +72,7 @@ export default function VerificacaoIbsCbs() {
             {selectedEmpresa ? selectedEmpresa.razao_social : 'todas as empresas'} · {mes}/{ano}
           </p>
         </div>
-        <button className="btn btn-secondary" disabled={busy} onClick={reprocessar}>
+        <button className="btn btn-secondary" data-tour="ibscbs-atualizar" disabled={busy} onClick={reprocessar}>
           <i className="ti ti-refresh" /> {busy ? 'Atualizando…' : 'Atualizar consulta (reler XMLs)'}
         </button>
       </div>

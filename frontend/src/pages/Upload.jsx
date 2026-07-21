@@ -100,6 +100,7 @@ export default function Upload() {
 
         <div
           className={`upload-zone ${drag ? 'drag' : ''}`}
+          data-tour="upload-area"
           onClick={() => inputRef.current?.click()}
           onDragOver={e => { e.preventDefault(); setDrag(true) }}
           onDragLeave={() => setDrag(false)}

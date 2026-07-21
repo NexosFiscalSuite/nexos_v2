@@ -8,6 +8,7 @@ import { api } from '../api'
 import CompetenciaPicker from './CompetenciaPicker'
 import logoMarca from '../assets/sol-logo.svg'
 import logoEmblema from '../assets/sol-emblema.svg'
+import { iniciarTour } from '../tour'
 
 const PAGE_TITLES = {
   '/dashboard':  'Dashboard',
@@ -89,7 +90,7 @@ function NavItem({ to, icon, label, collapsed, subItems, badge }) {
 
   if (subItems?.length) return (
     <div>
-      <div style={base(isActive)} onClick={() => setOpen(o => !o)}>
+      <div style={base(isActive)} data-tour={'nav' + to.replace(/\//g, '-')} onClick={() => setOpen(o => !o)}>
         <i className={`ti ${icon}`} style={{ fontSize:18, flexShrink:0 }} />
         {!collapsed && (
           <>
@@ -120,7 +121,7 @@ function NavItem({ to, icon, label, collapsed, subItems, badge }) {
   )
 
   return (
-    <NavLink to={to} style={({ isActive: a }) => base(a)}>
+    <NavLink to={to} style={({ isActive: a }) => base(a)} data-tour={'nav' + to.replace(/\//g, '-')}>
       <i className={`ti ${icon}`} style={{ fontSize:18, flexShrink:0 }} />
       {!collapsed && <span style={{ whiteSpace:'nowrap' }}>{label}</span>}
       <Dot />
@@ -256,7 +257,24 @@ export default function Layout() {
   const location  = useLocation()
   const [collapsed, setCollapsed] = useState(false)
   const [quebraCount, setQuebraCount] = useState(0)
+  const [boasVindas, setBoasVindas] = useState(false)
   const pageTitle = PAGE_TITLES[location.pathname] || 'Sol'
+
+  // Primeiro acesso deste usuário neste navegador? Oferece o tour guiado.
+  const chaveTour = user ? `sol_tour_v1_${user.id}` : null
+  useEffect(() => {
+    if (chaveTour && !localStorage.getItem(chaveTour)) setBoasVindas(true)
+  }, [chaveTour])
+
+  function responderTour(fazer) {
+    localStorage.setItem(chaveTour, fazer ? 'feito' : 'pulado')
+    setBoasVindas(false)
+    if (fazer) {
+      setCollapsed(false)
+      navigate('/dashboard')
+      setTimeout(iniciarTour, 350)   // espera o modal fechar e a rota assentar
+    }
+  }
 
   // Conta as quebras de sequência da empresa + competência selecionada (badge).
   // Reavalia ao trocar empresa/competência, ao navegar e após importações (dataVersion).
@@ -317,10 +335,16 @@ export default function Layout() {
           <div style={{ fontWeight:600, fontSize:15, color:'var(--text-1)', flex:1 }}>{pageTitle}</div>
 
           {/* Competencia global */}
-          <CompetenciaPickerTopbar />
+          <div data-tour="topbar-competencia"><CompetenciaPickerTopbar /></div>
 
           {/* Seletor de empresa global */}
-          <EmpresaTopbar />
+          <div data-tour="topbar-empresa"><EmpresaTopbar /></div>
+
+          {/* Ajuda: refaz o tour guiado a qualquer momento */}
+          <button className="btn btn-ghost btn-sm" data-tour="topbar-ajuda" title="Refazer o tour guiado"
+            onClick={() => { setCollapsed(false); iniciarTour() }} style={{ color:'var(--text-3)' }}>
+            <i className="ti ti-help-circle" style={{ fontSize:17 }} />
+          </button>
 
           {/* Divider */}
           <div style={{ width:1, height:28, background:'var(--border)', flexShrink:0 }} />
@@ -346,6 +370,30 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
+
+      {/* Boas-vindas do primeiro acesso: oferece (não impõe) o tour guiado */}
+      {boasVindas && (
+        <div className="modal-overlay" style={{ zIndex: 10000 }}>
+          <div className="modal" style={{ maxWidth: 440, textAlign: 'center' }}>
+            <div className="modal-body" style={{ padding: '30px 28px 24px' }}>
+              <img src={logoEmblema} alt="" style={{ width: 72, height: 'auto', marginBottom: 14 }} />
+              <h2 style={{ margin: '0 0 8px', fontSize: 19 }}>Bem-vindo(a), {user?.full_name?.split(' ')[0]}! 👋</h2>
+              <p style={{ margin: 0, fontSize: 13.5, color: 'var(--text-3)', lineHeight: 1.55 }}>
+                Primeira vez por aqui? Em <b>2 minutos</b> o tour guiado te mostra onde
+                cada coisa vive — apontando na tela, passo a passo. Se você já conhece
+                o sistema, é só pular (dá para refazer depois no botão
+                {' '}<i className="ti ti-help-circle" /> do topo).
+              </p>
+            </div>
+            <div className="modal-footer" style={{ justifyContent: 'center', gap: 10 }}>
+              <button className="btn btn-ghost" onClick={() => responderTour(false)}>Já conheço, pular</button>
+              <button className="btn btn-primary" onClick={() => responderTour(true)}>
+                <i className="ti ti-route" /> Fazer o tour
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

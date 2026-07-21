@@ -14,6 +14,7 @@
     "@fontsource/jetbrains-mono": "^5.2.8",
     "@fontsource/plus-jakarta-sans": "^5.2.8",
     "@tabler/icons-webfont": "^3.3.0",
+    "driver.js": "^1.8.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.23.1",
