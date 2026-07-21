@@ -31,21 +31,12 @@ const Rotulo = ({ children }) => (
   <span style={{ color: 'var(--text-4)', fontWeight: 600, fontSize: 9.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>{children}</span>
 )
 
-// Linha rotulada do balão de confronto (rótulo à esquerda, valor à direita).
-function LinhaBalao({ rotulo, children }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 12.5, padding: '3px 0' }}>
-      <span style={{ color: 'var(--text-3)' }}>{rotulo}</span>
-      <span style={{ fontWeight: 600, color: 'var(--text-1)', whiteSpace: 'nowrap' }}>{children}</span>
-    </div>
-  )
-}
-
-// Célula do confronto: linha VEIO (o que o XML trouxe) sobre a linha DEVIDO
-// (o que a régua do CST/cClassTrib manda). Quando a nota traz o gRed
-// (NT 2025.002), o veio abre em "nom → efet". Clicável como o balão da
-// classificação: abre o detalhamento campo a campo e fecha clicando fora.
-function Comparativo({ tributo, pVeio, vVeio, pEsp, vEsp, conforme, pEfet, pRed, vBc }) {
+// Confronto IBS + CBS numa célula só: uma linha compacta por tributo —
+// "0,10%→0,00% · R$ 0,00" (nominal→efetiva quando o XML traz o gRed), com
+// ✓ quando confere com a régua ou "▸ devido" quando não. O detalhamento
+// completo (nominal, redução, efetiva, base, devido) vive no balão clicável,
+// no mesmo padrão do balão da classificação.
+function ConfrontoIbsCbs({ item, conforme }) {
   const [aberto, setAberto] = useState(false)
   const [pos, setPos] = useState(null)
   const ref = useRef(null)
@@ -62,55 +53,82 @@ function Comparativo({ tributo, pVeio, vVeio, pEsp, vEsp, conforme, pEfet, pRed,
     if (!aberto && ref.current) {
       const r = ref.current.getBoundingClientRect()
       setPos({
-        top: Math.min(r.bottom + 6, window.innerHeight - 280),
-        left: Math.min(r.left - 60, window.innerWidth - 360),
+        top: Math.min(r.bottom + 6, window.innerHeight - 300),
+        left: Math.min(r.left - 120, window.innerWidth - 480),
       })
     }
     setAberto(a => !a)
   }
 
+  const pernas = [
+    { nome: 'IBS', pVeio: item.p_ibs, vVeio: item.v_ibs, pEfet: item.p_aliq_efet_ibs,
+      pEsp: item.p_ibs_esperado, vEsp: item.v_ibs_esperado },
+    { nome: 'CBS', pVeio: item.p_cbs, vVeio: item.v_cbs, pEfet: item.p_aliq_efet_cbs,
+      pEsp: item.p_cbs_esperado, vEsp: item.v_cbs_esperado },
+  ]
+  const celBalao = { padding: '3px 0', whiteSpace: 'nowrap' }
+  const cabBalao = { ...celBalao, color: 'var(--text-4)', fontWeight: 600, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.4 }
+
   return (
     <span className="balao-classif" style={{ position: 'relative' }}>
       <div ref={ref} onClick={alternar} title="Clique para ver o detalhamento"
-        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-        <div style={{ display: 'inline-grid', gridTemplateColumns: 'auto max-content', justifyContent: 'end',
-                      columnGap: 7, rowGap: 1, alignItems: 'baseline', lineHeight: 1.5,
-                      whiteSpace: 'nowrap' }}>
-          <Rotulo>veio</Rotulo>
-          <span style={{ color: conforme ? 'var(--ok-text)' : 'var(--err-text)', fontWeight: 600, textAlign: 'right' }}>
-            {conforme && '✔ '}
-            {pEfet != null
-              ? <>nom {pct(pVeio)}{pRed != null && <span style={{ fontWeight: 400, opacity: .75 }}> −{pctCurto(pRed)}</span>} → ef {pct(pEfet)}</>
-              : pct(pVeio)}
-            {' · '}{brl(vVeio)}
-          </span>
-          <Rotulo>devido</Rotulo>
-          <span style={{ color: 'var(--ok-text)', fontSize: 11.5, textAlign: 'right' }}>
-            {pEsp == null ? 'sem régua percentual' : <>{pct(pEsp)} · {brl(vEsp)}</>}
-          </span>
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 7, cursor: 'pointer' }}>
+        <div style={{ display: 'inline-grid', gridTemplateColumns: 'auto auto auto', justifyContent: 'end',
+                      columnGap: 8, rowGap: 2, alignItems: 'baseline', whiteSpace: 'nowrap', lineHeight: 1.45 }}>
+          {pernas.map(p => (
+            <Fragment key={p.nome}>
+              <Rotulo>{p.nome}</Rotulo>
+              <span style={{ fontWeight: 600, fontSize: 12.5, color: conforme ? 'var(--ok-text)' : 'var(--err-text)' }}>
+                {p.pEfet != null
+                  ? <>{pct(p.pVeio)}<span style={{ opacity: .55, fontWeight: 400 }}>→</span>{pct(p.pEfet)}</>
+                  : pct(p.pVeio)}
+                {' · '}{brl(p.vVeio)}
+              </span>
+              <span style={{ color: 'var(--ok-text)', fontSize: 12 }}>
+                {conforme ? '✓' : (p.pEsp == null ? '▸ sem régua' : <>▸ {pct(p.pEsp)} · {brl(p.vEsp)}</>)}
+              </span>
+            </Fragment>
+          ))}
         </div>
         <i className="ti ti-info-circle" style={{ fontSize: 12, opacity: .5, flexShrink: 0 }} />
       </div>
+
       {aberto && pos && (
         <div className="balao-classif" style={{
-          position: 'fixed', top: pos.top, left: pos.left, zIndex: 2000, width: 340,
+          position: 'fixed', top: pos.top, left: pos.left, zIndex: 2000, width: 460,
           background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
           boxShadow: '0 10px 30px rgba(0,0,0,.18)', padding: '13px 15px', textAlign: 'left',
         }}>
-          <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 6 }}>
-            {tributo} — veio no XML × devido
+          <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 8 }}>
+            Destaque IBS/CBS — veio no XML × devido pela classificação
           </div>
-          <LinhaBalao rotulo={`Alíquota nominal (p${tributo})`}>{pct(pVeio)}</LinhaBalao>
-          <LinhaBalao rotulo="Redução declarada (pRedAliq)">{pRed != null ? pctCurto(pRed) : 'sem gRed no XML'}</LinhaBalao>
-          <LinhaBalao rotulo="Alíquota efetiva (pAliqEfet)">{pEfet != null ? pct(pEfet) : 'sem gRed no XML'}</LinhaBalao>
-          <LinhaBalao rotulo="Valor destacado">{brl(vVeio)}</LinhaBalao>
-          {vBc > 0 && <LinhaBalao rotulo="Base de cálculo (vBC)">{brl(vBc)}</LinhaBalao>}
-          <div style={{ borderTop: '1px solid var(--border-2)', margin: '7px 0' }} />
-          <LinhaBalao rotulo="Devido pela classificação">
-            {pEsp == null ? 'sem régua percentual' : <>{pct(pEsp)} · {brl(vEsp)}</>}
-          </LinhaBalao>
+          <div style={{ display: 'grid', gridTemplateColumns: 'auto repeat(5, max-content)', columnGap: 13, fontSize: 12 }}>
+            <span style={cabBalao} />
+            <span style={cabBalao}>Nominal</span>
+            <span style={cabBalao}>Redução</span>
+            <span style={cabBalao}>Efetiva</span>
+            <span style={cabBalao}>Destacado</span>
+            <span style={cabBalao}>Devido</span>
+            {pernas.map(p => (
+              <Fragment key={p.nome}>
+                <span style={{ ...celBalao, fontWeight: 700 }}>{p.nome}</span>
+                <span style={celBalao}>{pct(p.pVeio)}</span>
+                <span style={celBalao}>{item.p_red_aliq != null && p.pEfet != null ? `−${pctCurto(item.p_red_aliq)}` : '—'}</span>
+                <span style={celBalao}>{p.pEfet != null ? pct(p.pEfet) : '—'}</span>
+                <span style={celBalao}>{brl(p.vVeio)}</span>
+                <span style={{ ...celBalao, color: 'var(--ok-text)', fontWeight: 600 }}>
+                  {p.pEsp == null ? 'sem régua' : <>{pct(p.pEsp)} · {brl(p.vEsp)}</>}
+                </span>
+              </Fragment>
+            ))}
+          </div>
+          {item.v_bc_ibs_cbs > 0 && (
+            <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 8 }}>
+              Base de cálculo (vBC): <strong>{brl(item.v_bc_ibs_cbs)}</strong>
+            </div>
+          )}
           <div style={{ fontSize: 11.5, color: 'var(--text-4)', lineHeight: 1.5, marginTop: 7 }}>
-            {pEfet != null
+            {(item.p_aliq_efet_ibs != null || item.p_aliq_efet_cbs != null)
               ? 'Com gRed no XML, a alíquota EFETIVA é o que se compara com o devido — a nominal de teste é obrigatória na NF-e (Rejeição 1026).'
               : 'Sem o grupo gRed no XML, a alíquota dos campos pIBS/pCBS é a própria alíquota aplicada.'}
           </div>
@@ -418,8 +436,7 @@ export default function VerificacaoIbsCbs() {
                                       <th>Situação</th>
                                       <th>Classificação</th>
                                       <th style={{ textAlign: 'right' }}>Valor</th>
-                                      <th style={{ textAlign: 'right' }}>IBS</th>
-                                      <th style={{ textAlign: 'right' }}>CBS</th>
+                                      <th style={{ textAlign: 'right' }}>IBS / CBS <span style={{ fontWeight: 400, color: 'var(--text-4)' }}>(veio ▸ devido)</span></th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -431,10 +448,7 @@ export default function VerificacaoIbsCbs() {
                                         <td><BalaoClassificacao item={i} /></td>
                                         <td style={{ textAlign: 'right' }}>{brl(i.valor_produto)}</td>
                                         <td style={{ textAlign: 'right' }}>
-                                          <Comparativo tributo="IBS" pVeio={i.p_ibs} vVeio={i.v_ibs} pEsp={i.p_ibs_esperado} vEsp={i.v_ibs_esperado} conforme={CONFORMES.includes(i.status)} pEfet={i.p_aliq_efet_ibs} pRed={i.p_red_aliq} vBc={i.v_bc_ibs_cbs} />
-                                        </td>
-                                        <td style={{ textAlign: 'right' }}>
-                                          <Comparativo tributo="CBS" pVeio={i.p_cbs} vVeio={i.v_cbs} pEsp={i.p_cbs_esperado} vEsp={i.v_cbs_esperado} conforme={CONFORMES.includes(i.status)} pEfet={i.p_aliq_efet_cbs} pRed={i.p_red_aliq} vBc={i.v_bc_ibs_cbs} />
+                                          <ConfrontoIbsCbs item={i} conforme={CONFORMES.includes(i.status)} />
                                         </td>
                                       </tr>
                                     ))}
