@@ -1,0 +1,76 @@
+"""Carta timbrada de correção IBS/CBS: o PDF nasce válido, com timbre e quadro.
+
+Testa o gerador puro (sem DB): PDF bem-formado, textos de entrada × saída,
+paginação com muitos itens e tolerância a caracteres fora do latin-1.
+"""
+from app.modules.fiscal.application.ibscbs_carta import _LOGO, gerar_carta
+
+
+def _item(n: int = 1, **extra) -> dict:
+    base = {
+        "numero_nota": "1234", "numero_item": n, "data_emissao": "2026-06-15",
+        "descricao": f"CAFÉ TORRADO E MOÍDO 500G — item {n}",
+        "cst": "000", "c_class_trib": "000001", "status": "SEM_DESTAQUE",
+        "p_ibs": 0, "v_ibs": 0, "p_cbs": 0, "v_cbs": 0,
+        "p_ibs_esperado": 0.10, "v_ibs_esperado": 0.10,
+        "p_cbs_esperado": 0.90, "v_cbs_esperado": 0.90,
+        "valor_produto": 100.0,
+    }
+    base.update(extra)
+    return base
+
+
+def _gerar(fluxo="entrada", itens=None, **kw) -> bytes:
+    return gerar_carta(
+        destinatario_nome="FORNECEDOR AGRO LTDA",
+        destinatario_cnpj="11111111000111",
+        fluxo=fluxo,
+        competencia="06/2026",
+        itens=itens or [_item()],
+        **kw,
+    )
+
+
+def test_logo_do_timbrado_esta_no_pacote():
+    """O asset extraído do cabecalhosol 2.0.docx precisa viajar com o app."""
+    assert _LOGO.exists() and _LOGO.stat().st_size > 10_000
+
+
+def test_pdf_valido_com_conteudo():
+    pdf = _gerar(cliente_nome="CLIENTE MG LTDA")
+    assert pdf[:5] == b"%PDF-"
+    assert len(pdf) > 3_000
+
+
+def test_textos_entrada_e_saida():
+    """Entrada fala com o fornecedor; saída fala com o próprio cliente emissor."""
+    # fpdf2 comprime os streams — inspecionamos o texto descomprimido.
+    import re
+    import zlib
+
+    def texto(pdf: bytes) -> str:
+        partes = []
+        for m in re.finditer(rb"stream\r?\n(.*?)endstream", pdf, re.DOTALL):
+            try:
+                partes.append(zlib.decompress(m.group(1)).decode("latin-1"))
+            except zlib.error:
+                pass
+        return "".join(partes)
+
+    t_entrada = texto(_gerar("entrada", cliente_nome="CLIENTE MG"))
+    assert "V.Sa." in t_entrada and "CLIENTE MG" in t_entrada
+    assert "ADCT" in t_entrada and "0,10%" in t_entrada
+
+    t_saida = texto(_gerar("saida"))
+    assert "essa empresa" in t_saida and "V.Sa." not in t_saida
+
+
+def test_muitos_itens_paginam_sem_quebrar():
+    pdf = _gerar(itens=[_item(i, status="ALIQUOTA_DIVERGENTE") for i in range(1, 201)])
+    paginas = pdf.count(b"/Type /Page") - pdf.count(b"/Type /Pages")
+    assert pdf[:5] == b"%PDF-" and paginas >= 2
+
+
+def test_caracteres_fora_do_latin1_nao_derrubam():
+    pdf = _gerar(itens=[_item(descricao="PRODUTO → TESTE 数据 ©", c_class_trib=None)])
+    assert pdf[:5] == b"%PDF-"

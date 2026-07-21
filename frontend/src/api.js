@@ -194,6 +194,11 @@ export const api = {
     const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
     return request('POST', '/fiscal/ibs-cbs/reprocessar' + (q ? `?${q}` : ''))
   },
+  // Carta timbrada (PDF) pedindo a correção dos itens do emitente — p/ enviar ao cliente
+  ibsCbsCarta: (params = {}) => {
+    const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
+    return downloadBlob('/fiscal/ibs-cbs/carta' + (q ? `?${q}` : ''), { fallback: 'carta-ibscbs.pdf' })
+  },
 
   // Cobertura: o que a carteira movimenta × o que as matrizes cobrem (fila de curadoria)
   coberturaMatrizes: (params = {}) => {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from 'react'
-import { api } from '../api'
+import { api, saveBlob } from '../api'
 import ErroCarga from '../components/ErroCarga'
 import { useEmpresa } from '../context/EmpresaContext'
 import { useCompetencia } from '../context/CompetenciaContext'
@@ -139,6 +139,18 @@ export default function VerificacaoIbsCbs() {
 
   useEffect(() => { carregar() }, [carregar])
 
+  // Carta timbrada (PDF) pedindo a correção — por emitente do ranking.
+  const [cartaBusy, setCartaBusy] = useState(null)
+  async function gerarCarta(cnpj) {
+    setCartaBusy(cnpj)
+    try {
+      const { blob, filename } = await api.ibsCbsCarta({ ...params(), cnpj_emit: cnpj })
+      saveBlob(blob, filename)
+      toast('Carta gerada — pronta para encaminhar ao cliente.', 'ok')
+    } catch (e) { toast(e.message, 'error') }
+    finally { setCartaBusy(null) }
+  }
+
   async function reprocessar() {
     if (!confirm('Reler os XMLs armazenados do período para preencher os campos de IBS/CBS? (necessário só para notas importadas antes deste módulo existir)')) return
     setBusy(true)
@@ -215,7 +227,7 @@ export default function VerificacaoIbsCbs() {
               </div>
               <div className="tbl-wrap">
                 <table className="tbl">
-                  <thead><tr><th>Emitente</th><th>CNPJ</th><th style={{ textAlign: 'right' }}>Itens</th><th style={{ textAlign: 'right' }}>Valor movimentado</th><th>Situações</th></tr></thead>
+                  <thead><tr><th>Emitente</th><th>CNPJ</th><th style={{ textAlign: 'right' }}>Itens</th><th style={{ textAlign: 'right' }}>Valor movimentado</th><th>Situações</th><th /></tr></thead>
                   <tbody>
                     {dados.ranking_emitentes.map(e => (
                       <tr key={e.cnpj}>
@@ -226,6 +238,14 @@ export default function VerificacaoIbsCbs() {
                         <td>{Object.entries(e.status).map(([s, n]) => (
                           <span key={s} style={{ marginRight: 6 }}>{badge(`${TONE[s]?.label || s}: ${n}`, TONE[s]?.tone)}</span>
                         ))}</td>
+                        <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                          <button className="btn btn-secondary btn-sm" disabled={cartaBusy === e.cnpj}
+                            title="Gera a carta timbrada (PDF) solicitando a correção dos itens deste emitente"
+                            onClick={() => gerarCarta(e.cnpj)}>
+                            <i className={`ti ${cartaBusy === e.cnpj ? 'ti-loader-2' : 'ti-file-type-pdf'}`} />
+                            {cartaBusy === e.cnpj ? ' Gerando…' : ' Carta PDF'}
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
