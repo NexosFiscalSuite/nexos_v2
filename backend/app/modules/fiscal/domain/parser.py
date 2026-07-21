@@ -76,6 +76,14 @@ def _f(s: str) -> float:
         return 0.0
 
 
+def _fn(s: str) -> float | None:
+    """Como _f, mas ausência vira None — para campo opcional onde "não veio"
+    difere de "veio zerado" (ex.: pAliqEfet do gRed, NT 2025.002)."""
+    if not s:
+        return None
+    return _f(s)
+
+
 def _i(s: str) -> int:
     if not s:
         return 0
@@ -260,6 +268,11 @@ def _parse_nfe(root) -> dict:
         # IBS (UF+Mun) e CBS — obrigatório no ano-teste 2026 (ADCT art. 125).
         # Escopado ao grupo para o vBC do IBS/CBS não colidir com o do ICMS.
         ibscbs = _find_local(imposto, "IBSCBS")
+        # gRed (redução de alíquota) existe POR PERNA — pRedAliq/pAliqEfet
+        # repetem o nome dentro de gIBSUF, gIBSMun e gCBS: escopa cada grupo.
+        g_ibs_uf = _find_local(ibscbs, "gIBSUF")
+        g_ibs_mun = _find_local(ibscbs, "gIBSMun")
+        g_cbs = _find_local(ibscbs, "gCBS")
         modbcst = _g(icms, "modBCST")
         itens.append({
             "numero_item": nitem,
@@ -311,6 +324,14 @@ def _parse_nfe(root) -> dict:
             "v_ibs_mun": _f(_g(ibscbs, "vIBSMun")),
             "p_cbs": _f(_g(ibscbs, "pCBS")),
             "v_cbs": _f(_g(ibscbs, "vCBS")),
+            # gRed (NT 2025.002): a nominal fica em pIBS*/pCBS e a carga REAL
+            # em pAliqEfet (= nominal × (1 − pRedAliq)). None = grupo ausente.
+            "p_red_aliq_ibs_uf": _fn(_g(g_ibs_uf, "pRedAliq")),
+            "p_aliq_efet_ibs_uf": _fn(_g(g_ibs_uf, "pAliqEfet")),
+            "p_red_aliq_ibs_mun": _fn(_g(g_ibs_mun, "pRedAliq")),
+            "p_aliq_efet_ibs_mun": _fn(_g(g_ibs_mun, "pAliqEfet")),
+            "p_red_aliq_cbs": _fn(_g(g_cbs, "pRedAliq")),
+            "p_aliq_efet_cbs": _fn(_g(g_cbs, "pAliqEfet")),
         })
 
     return {

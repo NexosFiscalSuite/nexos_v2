@@ -113,14 +113,40 @@ def classificar_item(
     v_bc: Decimal,
     cst: str | None = None,
     c_class_trib: str | None = None,
+    p_aliq_efet_ibs: Decimal | None = None,
+    p_aliq_efet_cbs: Decimal | None = None,
 ) -> str:
-    """Classificação pura de um item (testável sem banco)."""
+    """Classificação pura de um item (testável sem banco).
+
+    Dois estilos de XML convivem no ano-teste (NT 2025.002):
+      - COM gRed: pIBS*/pCBS trazem a alíquota NOMINAL de teste (obrigatória —
+        Rejeição 1026) e a carga real vem em pAliqEfet (`p_aliq_efet_*`);
+      - SEM gRed (None): a alíquota aplicada está nos próprios pIBS*/pCBS.
+    Comparar a nominal com a régua efetiva apontava "alíquota errada" em nota
+    CORRETA de redução 100% (caso Alto Cafezal, cClassTrib 200003)."""
     if (crt_emit or "").strip() in _CRT_SIMPLES:
         return DISPENSADO
 
     p_ibs = p_ibs_uf + p_ibs_mun
     v_ibs = v_ibs_uf + v_ibs_mun
     zerado = p_ibs == 0 and p_cbs == 0 and v_ibs == 0 and v_cbs == 0
+
+    tem_efet = p_aliq_efet_ibs is not None or p_aliq_efet_cbs is not None
+    efet_ibs = p_aliq_efet_ibs if p_aliq_efet_ibs is not None else Decimal("0")
+    efet_cbs = p_aliq_efet_cbs if p_aliq_efet_cbs is not None else Decimal("0")
+    nominal_de_teste = (abs(p_ibs - ALIQ_IBS_TESTE) <= TOL_PCT
+                        and abs(p_cbs - ALIQ_CBS_TESTE) <= TOL_PCT)
+
+    def zerado_legitimo() -> bool:
+        """Carga esperada = ZERO (isenção/imunidade ou redução de 100%).
+        Correto pela NT: nominal de teste + pAliqEfet zerada + valores zerados.
+        Tolera o estilo antigo (tudo zerado) e o emitente que zerou os valores
+        com a nominal de teste sem mandar o gRed."""
+        if v_ibs != 0 or v_cbs != 0:
+            return False
+        if tem_efet:
+            return nominal_de_teste and efet_ibs <= TOL_PCT and efet_cbs <= TOL_PCT
+        return (p_ibs == 0 and p_cbs == 0) or nominal_de_teste
 
     regra = tabela_classtrib().get((c_class_trib or "").strip())
     if regra is None:
@@ -138,19 +164,28 @@ def classificar_item(
         # percentual não descreve — registra sem apontar.
         return TRATAMENTO_DIFERENCIADO
     elif regra["modo"] == "zero":
-        # Isenção/imunidade/não-incidência: o destaque DEVE vir zerado.
-        return TRATAMENTO_DIFERENCIADO if zerado else ALIQUOTA_DIVERGENTE
+        # Isenção/imunidade/não-incidência: a CARGA deve ser zero.
+        return TRATAMENTO_DIFERENCIADO if zerado_legitimo() else ALIQUOTA_DIVERGENTE
     else:  # modo "padrao" — com ou sem redução percentual
         exp_ibs = ALIQ_IBS_TESTE * (100 - regra["red_ibs"]) / 100
         exp_cbs = ALIQ_CBS_TESTE * (100 - regra["red_cbs"]) / 100
         reduzido = regra["red_ibs"] > 0 or regra["red_cbs"] > 0
-        if exp_ibs == 0 and exp_cbs == 0:      # redução de 100% = espera zero
-            return TRATAMENTO_DIFERENCIADO if zerado else ALIQUOTA_DIVERGENTE
+        if exp_ibs == 0 and exp_cbs == 0:      # redução de 100% = carga zero
+            return TRATAMENTO_DIFERENCIADO if zerado_legitimo() else ALIQUOTA_DIVERGENTE
         if zerado:
             # Declarou a classificação mas não aplicou as alíquotas devidas.
             return ALIQUOTA_DIVERGENTE
 
-    if abs(p_ibs - exp_ibs) > TOL_PCT or abs(p_cbs - exp_cbs) > TOL_PCT:
+    # Alíquota confere? Estilo NT: nominal de teste + efetiva do gRed na régua;
+    # estilo direto (sem gRed): a alíquota aplicada nos próprios pIBS/pCBS.
+    if tem_efet:
+        aliquota_ok = (nominal_de_teste
+                       and abs(efet_ibs - exp_ibs) <= TOL_PCT
+                       and abs(efet_cbs - exp_cbs) <= TOL_PCT)
+    else:
+        aliquota_ok = (abs(p_ibs - exp_ibs) <= TOL_PCT
+                       and abs(p_cbs - exp_cbs) <= TOL_PCT)
+    if not aliquota_ok:
         return ALIQUOTA_DIVERGENTE
 
     # Matemática do destaque (só quando a base veio no XML).
@@ -185,6 +220,9 @@ class IbsCbsService:
                 it.numero_item, it.codigo, it.descricao, it.valor_produto,
                 it.v_bc_ibs_cbs, it.p_ibs_uf, it.v_ibs_uf, it.p_ibs_mun,
                 it.v_ibs_mun, it.p_cbs, it.v_cbs, it.cst_ibs_cbs, it.c_class_trib,
+                it.p_red_aliq_ibs_uf, it.p_aliq_efet_ibs_uf,
+                it.p_red_aliq_ibs_mun, it.p_aliq_efet_ibs_mun,
+                it.p_red_aliq_cbs, it.p_aliq_efet_cbs,
             )
             .join(n, it.nota_id == n.id)
             .where(
@@ -209,6 +247,11 @@ class IbsCbsService:
         emitentes: dict[str, dict] = {}
         problemas: list[dict] = []
         for r in rows:
+            # gRed: efetiva do IBS soma as pernas UF+Mun; None = grupo ausente.
+            efet_ibs = None
+            if r.p_aliq_efet_ibs_uf is not None or r.p_aliq_efet_ibs_mun is not None:
+                efet_ibs = _d(r.p_aliq_efet_ibs_uf) + _d(r.p_aliq_efet_ibs_mun)
+            efet_cbs = _d(r.p_aliq_efet_cbs) if r.p_aliq_efet_cbs is not None else None
             status = classificar_item(
                 crt_emit=r.crt_emit,
                 p_ibs_uf=_d(r.p_ibs_uf), p_ibs_mun=_d(r.p_ibs_mun),
@@ -216,6 +259,7 @@ class IbsCbsService:
                 p_cbs=_d(r.p_cbs), v_cbs=_d(r.v_cbs),
                 v_bc=_d(r.v_bc_ibs_cbs),
                 cst=r.cst_ibs_cbs, c_class_trib=r.c_class_trib,
+                p_aliq_efet_ibs=efet_ibs, p_aliq_efet_cbs=efet_cbs,
             )
             agg = resumo.setdefault(status, {"itens": 0, "valor": 0.0})
             agg["itens"] += 1
@@ -266,6 +310,14 @@ class IbsCbsService:
                         "v_ibs": float(_d(r.v_ibs_uf) + _d(r.v_ibs_mun)),
                         "p_cbs": float(r.p_cbs or 0),
                         "v_cbs": float(r.v_cbs or 0),
+                        # gRed do XML (quando veio): a carga real declarada
+                        "p_aliq_efet_ibs": None if efet_ibs is None else float(efet_ibs),
+                        "p_aliq_efet_cbs": None if efet_cbs is None else float(efet_cbs),
+                        "p_red_aliq": (
+                            None if r.p_red_aliq_ibs_uf is None and r.p_red_aliq_cbs is None
+                            else float(_d(r.p_red_aliq_ibs_uf if r.p_red_aliq_ibs_uf
+                                          is not None else r.p_red_aliq_cbs))
+                        ),
                         # "veio ▸ esperado": régua devida ao CST/cClassTrib do item
                         "cst": r.cst_ibs_cbs,
                         "c_class_trib": r.c_class_trib,
@@ -343,6 +395,11 @@ class IbsCbsService:
                 item.v_ibs_mun = _d(p.get("v_ibs_mun"))
                 item.p_cbs = _d(p.get("p_cbs"))
                 item.v_cbs = _d(p.get("v_cbs"))
+                for campo in ("p_red_aliq_ibs_uf", "p_aliq_efet_ibs_uf",
+                              "p_red_aliq_ibs_mun", "p_aliq_efet_ibs_mun",
+                              "p_red_aliq_cbs", "p_aliq_efet_cbs"):
+                    valor = p.get(campo)
+                    setattr(item, campo, None if valor is None else _d(valor))
             atualizadas += 1
         await self.session.flush()
         return {"notas_reprocessadas": atualizadas, "falhas_leitura": falhas}

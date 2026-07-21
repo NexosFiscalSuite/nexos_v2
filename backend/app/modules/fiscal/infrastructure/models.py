@@ -137,6 +137,14 @@ class NotaItem(Base):
     v_ibs_mun: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
     p_cbs: Mapped[Decimal] = mapped_column(_PCT, default=Decimal("0"))
     v_cbs: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+    # gRed (NT 2025.002): redução de alíquota por perna. NULL = grupo ausente
+    # no XML (≠ de zerado — o pAliqEfet=0,00 presente é a prova da redução 100%).
+    p_red_aliq_ibs_uf: Mapped[Decimal | None] = mapped_column(_PCT, nullable=True)
+    p_aliq_efet_ibs_uf: Mapped[Decimal | None] = mapped_column(_PCT, nullable=True)
+    p_red_aliq_ibs_mun: Mapped[Decimal | None] = mapped_column(_PCT, nullable=True)
+    p_aliq_efet_ibs_mun: Mapped[Decimal | None] = mapped_column(_PCT, nullable=True)
+    p_red_aliq_cbs: Mapped[Decimal | None] = mapped_column(_PCT, nullable=True)
+    p_aliq_efet_cbs: Mapped[Decimal | None] = mapped_column(_PCT, nullable=True)
 
 
 class NfeCteVinculo(Base):

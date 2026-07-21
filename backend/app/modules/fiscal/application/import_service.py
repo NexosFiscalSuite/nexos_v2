@@ -40,6 +40,11 @@ def _dec(v) -> Decimal:
         return Decimal("0")
 
 
+def _dec_opt(v) -> Decimal | None:
+    """Preserva o None (campo opcional do XML — ex.: gRed do IBS/CBS)."""
+    return None if v is None else _dec(v)
+
+
 # ── Expansão de ZIP (worker) — guardas anti zip-bomb ─────────────────────────
 # O upload já limita o ZIP comprimido (150 MB); aqui limitamos o DESCOMPRIMIDO.
 _ZIP_MAGIC = (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08")
@@ -285,6 +290,12 @@ class ImportService:
                     v_ibs_mun=_dec(it.get("v_ibs_mun")),
                     p_cbs=_dec(it.get("p_cbs")),
                     v_cbs=_dec(it.get("v_cbs")),
+                    p_red_aliq_ibs_uf=_dec_opt(it.get("p_red_aliq_ibs_uf")),
+                    p_aliq_efet_ibs_uf=_dec_opt(it.get("p_aliq_efet_ibs_uf")),
+                    p_red_aliq_ibs_mun=_dec_opt(it.get("p_red_aliq_ibs_mun")),
+                    p_aliq_efet_ibs_mun=_dec_opt(it.get("p_aliq_efet_ibs_mun")),
+                    p_red_aliq_cbs=_dec_opt(it.get("p_red_aliq_cbs")),
+                    p_aliq_efet_cbs=_dec_opt(it.get("p_aliq_efet_cbs")),
                 )
             )
 

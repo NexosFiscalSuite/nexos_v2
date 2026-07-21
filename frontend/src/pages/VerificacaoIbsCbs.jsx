@@ -26,12 +26,16 @@ const badge = (txt, tone = 'info') => (
 
 // Célula "veio ▸ esperado": o que o XML trouxe sobre o que a régua do
 // CST/cClassTrib manda. Em pendência o "veio" é vermelho; em item conforme
-// (filtro dos cards) é verde. "Sem régua" = monofásica/fixa/diferimento.
-function Comparativo({ pVeio, vVeio, pEsp, vEsp, conforme }) {
+// (filtro dos cards) é verde. Quando a nota traz o gRed (NT 2025.002), o
+// destaque certo é "nominal → efetiva": pIBS/pCBS carregam a alíquota de
+// teste e a carga real fica no pAliqEfet. "Sem régua" = monofásica/fixa.
+function Comparativo({ pVeio, vVeio, pEsp, vEsp, conforme, pEfet, pRed }) {
+  const titulo = pEfet == null ? undefined
+    : `Nominal ${pct(pVeio)}${pRed != null ? ` · redução ${pct(pRed)}` : ''} → efetiva ${pct(pEfet)} (gRed do XML)`
   return (
-    <div style={{ lineHeight: 1.4, whiteSpace: 'nowrap', textAlign: 'right' }}>
+    <div style={{ lineHeight: 1.4, whiteSpace: 'nowrap', textAlign: 'right' }} title={titulo}>
       <div style={{ color: conforme ? 'var(--ok-text)' : 'var(--err-text)', fontWeight: 600 }}>
-        {conforme && '✔ '}{pct(pVeio)} · {brl(vVeio)}
+        {conforme && '✔ '}{pct(pVeio)}{pEfet != null && <span> → {pct(pEfet)}</span>} · {brl(vVeio)}
       </div>
       <div style={{ color: 'var(--ok-text)', fontSize: 11.5 }}>
         {pEsp == null ? 'sem régua percentual' : <>✔ {pct(pEsp)} · {brl(vEsp)}</>}
@@ -351,10 +355,10 @@ export default function VerificacaoIbsCbs() {
                                         <td><BalaoClassificacao item={i} /></td>
                                         <td style={{ textAlign: 'right' }}>{brl(i.valor_produto)}</td>
                                         <td style={{ textAlign: 'right' }}>
-                                          <Comparativo pVeio={i.p_ibs} vVeio={i.v_ibs} pEsp={i.p_ibs_esperado} vEsp={i.v_ibs_esperado} conforme={CONFORMES.includes(i.status)} />
+                                          <Comparativo pVeio={i.p_ibs} vVeio={i.v_ibs} pEsp={i.p_ibs_esperado} vEsp={i.v_ibs_esperado} conforme={CONFORMES.includes(i.status)} pEfet={i.p_aliq_efet_ibs} pRed={i.p_red_aliq} />
                                         </td>
                                         <td style={{ textAlign: 'right' }}>
-                                          <Comparativo pVeio={i.p_cbs} vVeio={i.v_cbs} pEsp={i.p_cbs_esperado} vEsp={i.v_cbs_esperado} conforme={CONFORMES.includes(i.status)} />
+                                          <Comparativo pVeio={i.p_cbs} vVeio={i.v_cbs} pEsp={i.p_cbs_esperado} vEsp={i.v_cbs_esperado} conforme={CONFORMES.includes(i.status)} pEfet={i.p_aliq_efet_cbs} pRed={i.p_red_aliq} />
                                         </td>
                                       </tr>
                                     ))}

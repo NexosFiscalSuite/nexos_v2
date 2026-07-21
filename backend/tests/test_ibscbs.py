@@ -80,6 +80,33 @@ def test_parser_sem_grupo_ibscbs_zera_campos():
     assert item["v_cbs"] == 0.0
 
 
+_IBSCBS_GRED = """<IBSCBS><CST>200</CST><cClassTrib>200003</cClassTrib>
+  <gIBSCBS><vBC>1000.00</vBC>
+    <gIBSUF><pIBSUF>0.10</pIBSUF>
+      <gRed><pRedAliq>100.00</pRedAliq><pAliqEfet>0.00</pAliqEfet></gRed>
+      <vIBSUF>0.00</vIBSUF></gIBSUF>
+    <gIBSMun><pIBSMun>0.00</pIBSMun><vIBSMun>0.00</vIBSMun></gIBSMun>
+    <gCBS><pCBS>0.90</pCBS>
+      <gRed><pRedAliq>100.00</pRedAliq><pAliqEfet>0.00</pAliqEfet></gRed>
+      <vCBS>0.00</vCBS></gCBS>
+  </gIBSCBS></IBSCBS>"""
+
+
+def test_parser_extrai_gred_por_perna():
+    """NT 2025.002: pRedAliq/pAliqEfet escopados por perna (UF/Mun/CBS);
+    perna sem gRed fica None — ausente ≠ zerado."""
+    item = parse_xml(_nfe("4" * 44, _IBSCBS_GRED))["itens"][0]
+    assert item["p_ibs_uf"] == 0.10 and item["v_ibs_uf"] == 0.0
+    assert item["p_red_aliq_ibs_uf"] == 100.0
+    assert item["p_aliq_efet_ibs_uf"] == 0.0
+    assert item["p_red_aliq_cbs"] == 100.0
+    assert item["p_aliq_efet_cbs"] == 0.0
+    assert item["p_red_aliq_ibs_mun"] is None
+
+    sem = parse_xml(_nfe("5" * 44, _IBSCBS_OK))["itens"][0]
+    assert sem["p_aliq_efet_ibs_uf"] is None and sem["p_aliq_efet_cbs"] is None
+
+
 # --------------------------------------------------------------------------- #
 # Classificação pura (o gabarito do ano-teste)
 # --------------------------------------------------------------------------- #
@@ -177,6 +204,57 @@ def test_tabela_oficial_zero_livre_e_integral():
     assert _cls(cst="000", c_class_trib="000001") == OK
     # Integral declarado mas veio tudo zerado → não aplicou as alíquotas.
     assert _cls(cst="000", c_class_trib="000001", **zeros) == ALIQUOTA_DIVERGENTE
+
+
+def test_gred_nominal_de_teste_com_efetiva_zerada_e_legitimo():
+    """Caso Alto Cafezal (jul/2026): cClassTrib 200003 com o XML CORRETO pela
+    NT — nominal de teste em pIBS/pCBS (Rejeição 1026), pAliqEfet=0 no gRed e
+    valores zerados. NÃO é 'alíquota errada'."""
+    assert _cls(cst="200", c_class_trib="200003",
+                p_ibs_uf=_D("0.10"), v_ibs_uf=_D("0"),
+                p_cbs=_D("0.90"), v_cbs=_D("0"),
+                p_aliq_efet_ibs=_D("0"), p_aliq_efet_cbs=_D("0")) \
+        == TRATAMENTO_DIFERENCIADO
+
+    # Sem o gRed mas com valores zerados e nominal de teste: também legítimo.
+    assert _cls(cst="200", c_class_trib="200003",
+                p_ibs_uf=_D("0.10"), v_ibs_uf=_D("0"),
+                p_cbs=_D("0.90"), v_cbs=_D("0")) == TRATAMENTO_DIFERENCIADO
+
+    # Cobrou imposto num código de redução 100% → continua apontado.
+    assert _cls(cst="200", c_class_trib="200003",
+                p_aliq_efet_ibs=_D("0"), p_aliq_efet_cbs=_D("0")) == ALIQUOTA_DIVERGENTE
+
+    # Isenção (modo zero, 410004) com nominal + efetiva 0: mesmo tratamento.
+    assert _cls(cst="410", c_class_trib="410004",
+                p_ibs_uf=_D("0.10"), v_ibs_uf=_D("0"),
+                p_cbs=_D("0.90"), v_cbs=_D("0"),
+                p_aliq_efet_ibs=_D("0"), p_aliq_efet_cbs=_D("0")) \
+        == TRATAMENTO_DIFERENCIADO
+
+
+def test_gred_reducao_parcial_estilo_nt():
+    """200034 (−60%) no estilo NT: nominal de teste + efetiva 0,04/0,36 no
+    gRed, valores pela efetiva. A efetiva manda na régua; a conta idem."""
+    assert _cls(cst="200", c_class_trib="200034",
+                p_ibs_uf=_D("0.10"), v_ibs_uf=_D("0.40"),
+                p_cbs=_D("0.90"), v_cbs=_D("3.60"),
+                p_aliq_efet_ibs=_D("0.04"), p_aliq_efet_cbs=_D("0.36")) \
+        == TRATAMENTO_DIFERENCIADO
+
+    # Efetiva do gRed fora da régua → alíquota divergente.
+    assert _cls(cst="200", c_class_trib="200034",
+                p_ibs_uf=_D("0.10"), v_ibs_uf=_D("0.40"),
+                p_cbs=_D("0.90"), v_cbs=_D("3.60"),
+                p_aliq_efet_ibs=_D("0.04"), p_aliq_efet_cbs=_D("0.90")) \
+        == ALIQUOTA_DIVERGENTE
+
+    # Efetiva certa mas a conta não fecha → valor divergente.
+    assert _cls(cst="200", c_class_trib="200034",
+                p_ibs_uf=_D("0.10"), v_ibs_uf=_D("0.40"),
+                p_cbs=_D("0.90"), v_cbs=_D("9.00"),
+                p_aliq_efet_ibs=_D("0.04"), p_aliq_efet_cbs=_D("0.36")) \
+        == VALOR_DIVERGENTE
 
 
 def test_regua_do_item_expoe_o_esperado():
