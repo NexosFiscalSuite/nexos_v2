@@ -131,21 +131,19 @@ def classificar_item(
     v_ibs = v_ibs_uf + v_ibs_mun
     zerado = p_ibs == 0 and p_cbs == 0 and v_ibs == 0 and v_cbs == 0
 
-    tem_efet = p_aliq_efet_ibs is not None or p_aliq_efet_cbs is not None
-    efet_ibs = p_aliq_efet_ibs if p_aliq_efet_ibs is not None else Decimal("0")
-    efet_cbs = p_aliq_efet_cbs if p_aliq_efet_cbs is not None else Decimal("0")
     nominal_de_teste = (abs(p_ibs - ALIQ_IBS_TESTE) <= TOL_PCT
                         and abs(p_cbs - ALIQ_CBS_TESTE) <= TOL_PCT)
 
     def zerado_legitimo() -> bool:
         """Carga esperada = ZERO (isenção/imunidade ou redução de 100%).
-        Correto pela NT: nominal de teste + pAliqEfet zerada + valores zerados.
-        Tolera o estilo antigo (tudo zerado) e o emitente que zerou os valores
-        com a nominal de teste sem mandar o gRed."""
+        Correto: valores zerados E nenhuma efetiva declarada acima de zero —
+        com a nominal de teste (estilo NT) ou tudo zerado (estilo antigo)."""
         if v_ibs != 0 or v_cbs != 0:
             return False
-        if tem_efet:
-            return nominal_de_teste and efet_ibs <= TOL_PCT and efet_cbs <= TOL_PCT
+        if p_aliq_efet_ibs is not None and p_aliq_efet_ibs > TOL_PCT:
+            return False
+        if p_aliq_efet_cbs is not None and p_aliq_efet_cbs > TOL_PCT:
+            return False
         return (p_ibs == 0 and p_cbs == 0) or nominal_de_teste
 
     regra = tabela_classtrib().get((c_class_trib or "").strip())
@@ -176,16 +174,19 @@ def classificar_item(
             # Declarou a classificação mas não aplicou as alíquotas devidas.
             return ALIQUOTA_DIVERGENTE
 
-    # Alíquota confere? Estilo NT: nominal de teste + efetiva do gRed na régua;
-    # estilo direto (sem gRed): a alíquota aplicada nos próprios pIBS/pCBS.
-    if tem_efet:
-        aliquota_ok = (nominal_de_teste
-                       and abs(efet_ibs - exp_ibs) <= TOL_PCT
-                       and abs(efet_cbs - exp_cbs) <= TOL_PCT)
-    else:
-        aliquota_ok = (abs(p_ibs - exp_ibs) <= TOL_PCT
-                       and abs(p_cbs - exp_cbs) <= TOL_PCT)
-    if not aliquota_ok:
+    # Alíquota confere? Decidido POR PERNA — IBS e CBS podem ter reduções
+    # DIFERENTES na tabela (ex.: 200025, IBS −60% / CBS −100%) e o gRed pode
+    # vir em só uma delas. Perna COM gRed: nominal de teste + efetiva na
+    # régua (estilo NT). Perna SEM gRed: a alíquota aplicada está no próprio
+    # pIBS/pCBS (estilo direto).
+    def perna_ok(nominal: Decimal, efet: Decimal | None,
+                 teste: Decimal, esperada: Decimal) -> bool:
+        if efet is not None:
+            return abs(nominal - teste) <= TOL_PCT and abs(efet - esperada) <= TOL_PCT
+        return abs(nominal - esperada) <= TOL_PCT
+
+    if not (perna_ok(p_ibs, p_aliq_efet_ibs, ALIQ_IBS_TESTE, exp_ibs)
+            and perna_ok(p_cbs, p_aliq_efet_cbs, ALIQ_CBS_TESTE, exp_cbs)):
         return ALIQUOTA_DIVERGENTE
 
     # Matemática do destaque (só quando a base veio no XML).

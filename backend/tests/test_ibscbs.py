@@ -257,6 +257,33 @@ def test_gred_reducao_parcial_estilo_nt():
         == VALOR_DIVERGENTE
 
 
+def test_gred_reducoes_diferentes_por_perna_200025():
+    """200025 é o único código com reduções DIFERENTES (IBS −60% / CBS −100%):
+    a régua é por perna — IBS efetiva 0,04% com valor, CBS zerada."""
+    assert _cls(cst="200", c_class_trib="200025",
+                p_ibs_uf=_D("0.10"), v_ibs_uf=_D("0.40"),
+                p_cbs=_D("0.90"), v_cbs=_D("0"),
+                p_aliq_efet_ibs=_D("0.04"), p_aliq_efet_cbs=_D("0")) \
+        == TRATAMENTO_DIFERENCIADO
+
+    # CBS cobrada num código que a zera → apontado.
+    assert _cls(cst="200", c_class_trib="200025",
+                p_ibs_uf=_D("0.10"), v_ibs_uf=_D("0.40"),
+                p_cbs=_D("0.90"), v_cbs=_D("3.60"),
+                p_aliq_efet_ibs=_D("0.04"), p_aliq_efet_cbs=_D("0.36")) \
+        == ALIQUOTA_DIVERGENTE
+
+
+def test_gred_misto_uma_perna_nt_outra_direta():
+    """gRed só numa perna: IBS no estilo NT (nominal + efetiva) e CBS no
+    estilo direto (alíquota aplicada no próprio pCBS) — cada perna na sua."""
+    assert _cls(cst="200", c_class_trib="200034",
+                p_ibs_uf=_D("0.10"), v_ibs_uf=_D("0.40"),
+                p_cbs=_D("0.36"), v_cbs=_D("3.60"),
+                p_aliq_efet_ibs=_D("0.04"), p_aliq_efet_cbs=None) \
+        == TRATAMENTO_DIFERENCIADO
+
+
 def test_regua_do_item_expoe_o_esperado():
     """Alimenta o 'veio ▸ esperado' da tela: percentuais devidos por classificação."""
     integral = regua_do_item("000", "000001")
