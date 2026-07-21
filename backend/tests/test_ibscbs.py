@@ -137,10 +137,45 @@ def test_cst_diferenciado_nao_e_apontado():
     zeros = dict(p_ibs_uf=_D("0"), v_ibs_uf=_D("0"), p_cbs=_D("0"), v_cbs=_D("0"))
     for cst in ("400", "410", "510", "620", "200"):
         assert _cls(cst=cst, c_class_trib="410004", **zeros) == TRATAMENTO_DIFERENCIADO
-    # Mesmo com valores destacados, CST diferenciado não passa pela régua cheia.
+    # Sem cClassTrib na tabela, CST diferenciado não passa pela régua cheia.
     assert _cls(cst="200", p_cbs=_D("0.45"), v_cbs=_D("4.50")) == TRATAMENTO_DIFERENCIADO
     # Simples continua vencendo qualquer CST (dispensa vem primeiro).
     assert _cls(crt_emit="1", cst="410", **zeros) == DISPENSADO
+
+
+# --------------------------------------------------------------------------- #
+# Régua fina pela tabela oficial (classtrib_2026.json — snapshot SVRS)
+# --------------------------------------------------------------------------- #
+def test_tabela_oficial_reducao_60_conferida():
+    """cClassTrib 200034 (alimentos, redução 60%): espera IBS 0,04% + CBS 0,36%."""
+    conforme = _cls(cst="200", c_class_trib="200034",
+                    p_ibs_uf=_D("0.04"), v_ibs_uf=_D("0.40"),
+                    p_cbs=_D("0.36"), v_cbs=_D("3.60"))
+    assert conforme == TRATAMENTO_DIFERENCIADO       # reduzida E conferida
+
+    # Veio com a alíquota CHEIA num código de redução → agora é apontado!
+    assert _cls(cst="200", c_class_trib="200034") == ALIQUOTA_DIVERGENTE
+
+    # Alíquota reduzida certa mas valor errado → conta não fecha.
+    assert _cls(cst="200", c_class_trib="200034",
+                p_ibs_uf=_D("0.04"), v_ibs_uf=_D("0.40"),
+                p_cbs=_D("0.36"), v_cbs=_D("9.00")) == VALOR_DIVERGENTE
+
+
+def test_tabela_oficial_zero_livre_e_integral():
+    zeros = dict(p_ibs_uf=_D("0"), v_ibs_uf=_D("0"), p_cbs=_D("0"), v_cbs=_D("0"))
+    # 410004 (exportação, "sem alíquota"): zerado = certo; taxado = errado.
+    assert _cls(cst="410", c_class_trib="410004", **zeros) == TRATAMENTO_DIFERENCIADO
+    assert _cls(cst="410", c_class_trib="410004") == ALIQUOTA_DIVERGENTE
+    # 200003 (alimentos, redução 100%): idem — zerado é o esperado.
+    assert _cls(cst="200", c_class_trib="200003", **zeros) == TRATAMENTO_DIFERENCIADO
+    # 620001 (monofásica de combustíveis): estrutura própria — nunca aponta.
+    assert _cls(cst="620", c_class_trib="620001") == TRATAMENTO_DIFERENCIADO
+    assert _cls(cst="620", c_class_trib="620001", **zeros) == TRATAMENTO_DIFERENCIADO
+    # 000001 (integral): régua cheia via tabela.
+    assert _cls(cst="000", c_class_trib="000001") == OK
+    # Integral declarado mas veio tudo zerado → não aplicou as alíquotas.
+    assert _cls(cst="000", c_class_trib="000001", **zeros) == ALIQUOTA_DIVERGENTE
 
 
 # --------------------------------------------------------------------------- #

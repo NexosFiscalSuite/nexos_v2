@@ -16,17 +16,25 @@ Este módulo confronta o que veio nos XMLs importados:
   DISPENSADO           — emitente do Simples/MEI: destaque não exigido em 2026.
   OK                   — destaque presente e correto.
 
-Só o CST 000 ("tributação integral", tabela de Classificação Tributária da
-NT 2025.002 / portal Conformidade Fácil-SVRS) exige exatamente 0,1% + 0,9%.
-A validação fina por cClassTrib (percentual de redução por código) entra
-quando embarcarmos a tabela oficial — por ora o CST decide.
+A régua fina usa a tabela oficial de Classificação Tributária (SVRS/NT
+2025.002) embarcada em domain/classtrib_2026.json — por cClassTrib:
+  modo "padrao": alíquota esperada = teste × (1 − %redução) — inclusive as
+                 reduções de 30/40/60/80% (ex.: alimentos), conferidas de fato;
+  modo "zero":   isenção/imunidade/não-incidência — o destaque deve vir zerado;
+  modo "livre":  fixa, uniforme, diferimento, monofásica — sem checagem
+                 matemática (estruturas que o destaque padrão não descreve).
+Item sem cClassTrib (ou código fora da tabela) cai no critério do CST:
+só o 000 exige as alíquotas cheias de teste.
 
 A classificação é query-time (nada persistido): mudou o XML/regra, muda o
 resultado — e o backfill repara notas importadas antes desta versão.
 """
 from __future__ import annotations
 
+import json
 from decimal import Decimal
+from functools import lru_cache
+from pathlib import Path
 from uuid import UUID
 
 from sqlalchemy import select
@@ -35,6 +43,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.storage import Storage
 from app.modules.fiscal.domain import parser as xmlparser
 from app.modules.fiscal.infrastructure.models import Nota, NotaItem
+
+_CLASSTRIB_PATH = Path(__file__).resolve().parent.parent / "domain" / "classtrib_2026.json"
+
+
+@lru_cache(maxsize=1)
+def tabela_classtrib() -> dict:
+    """Snapshot da tabela oficial de Classificação Tributária (SVRS)."""
+    return json.loads(_CLASSTRIB_PATH.read_text(encoding="utf-8"))
 
 # Alíquotas do ano-teste (ADCT art. 125): IBS 0,1% (UF+Mun) e CBS 0,9%.
 ALIQ_IBS_TESTE = Decimal("0.10")
@@ -77,28 +93,49 @@ def classificar_item(
     if (crt_emit or "").strip() in _CRT_SIMPLES:
         return DISPENSADO
 
-    # CST ≠ 000 = operação com tratamento próprio (isenção, imunidade, alíquota
-    # zero, diferimento, monofásica...): as alíquotas de teste NÃO se aplicam —
-    # vir zerado/diferente aqui é o comportamento correto, não erro.
-    cst = (cst or "").strip()
-    if cst and cst != CST_INTEGRAL:
-        return TRATAMENTO_DIFERENCIADO
-
     p_ibs = p_ibs_uf + p_ibs_mun
     v_ibs = v_ibs_uf + v_ibs_mun
-    if p_ibs == 0 and p_cbs == 0 and v_ibs == 0 and v_cbs == 0:
-        return SEM_DESTAQUE
+    zerado = p_ibs == 0 and p_cbs == 0 and v_ibs == 0 and v_cbs == 0
 
-    if abs(p_ibs - ALIQ_IBS_TESTE) > TOL_PCT or abs(p_cbs - ALIQ_CBS_TESTE) > TOL_PCT:
+    regra = tabela_classtrib().get((c_class_trib or "").strip())
+    if regra is None:
+        # Sem cClassTrib (ou código fora da tabela): o CST decide. ≠ 000 é
+        # tratamento próprio — zerado/diferente é legítimo, não erro.
+        cst = (cst or "").strip()
+        if cst and cst != CST_INTEGRAL:
+            return TRATAMENTO_DIFERENCIADO
+        if zerado:
+            return SEM_DESTAQUE
+        exp_ibs, exp_cbs = ALIQ_IBS_TESTE, ALIQ_CBS_TESTE
+        reduzido = False
+    elif regra["modo"] == "livre":
+        # Fixa/uniforme/diferimento/monofásica: estrutura que a régua
+        # percentual não descreve — registra sem apontar.
+        return TRATAMENTO_DIFERENCIADO
+    elif regra["modo"] == "zero":
+        # Isenção/imunidade/não-incidência: o destaque DEVE vir zerado.
+        return TRATAMENTO_DIFERENCIADO if zerado else ALIQUOTA_DIVERGENTE
+    else:  # modo "padrao" — com ou sem redução percentual
+        exp_ibs = ALIQ_IBS_TESTE * (100 - regra["red_ibs"]) / 100
+        exp_cbs = ALIQ_CBS_TESTE * (100 - regra["red_cbs"]) / 100
+        reduzido = regra["red_ibs"] > 0 or regra["red_cbs"] > 0
+        if exp_ibs == 0 and exp_cbs == 0:      # redução de 100% = espera zero
+            return TRATAMENTO_DIFERENCIADO if zerado else ALIQUOTA_DIVERGENTE
+        if zerado:
+            # Declarou a classificação mas não aplicou as alíquotas devidas.
+            return ALIQUOTA_DIVERGENTE
+
+    if abs(p_ibs - exp_ibs) > TOL_PCT or abs(p_cbs - exp_cbs) > TOL_PCT:
         return ALIQUOTA_DIVERGENTE
 
     # Matemática do destaque (só quando a base veio no XML).
     if v_bc > 0:
-        esperado_ibs = v_bc * ALIQ_IBS_TESTE / 100
-        esperado_cbs = v_bc * ALIQ_CBS_TESTE / 100
+        esperado_ibs = v_bc * exp_ibs / 100
+        esperado_cbs = v_bc * exp_cbs / 100
         if abs(v_ibs - esperado_ibs) > TOL_VALOR or abs(v_cbs - esperado_cbs) > TOL_VALOR:
             return VALOR_DIVERGENTE
-    return OK
+    # Conforme: alíquota cheia = OK; reduzida conferida = diferenciado (conforme).
+    return TRATAMENTO_DIFERENCIADO if reduzido else OK
 
 
 class IbsCbsService:

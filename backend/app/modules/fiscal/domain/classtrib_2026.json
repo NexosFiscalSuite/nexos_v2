@@ -1,0 +1,1150 @@
+{
+"000001": {
+"cst": "000",
+"desc": "Situações tributadas integralmente pelo IBS e CBS.",
+"modo": "padrao",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"000002": {
+"cst": "000",
+"desc": "Exploração de via, observado o art. 11 da Lei Complementar nº 214, de 2025.",
+"modo": "padrao",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"000003": {
+"cst": "000",
+"desc": "Regime automotivo - projetos incentivados, observado o art. 311 da Lei Complementar nº 214",
+"modo": "padrao",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"000004": {
+"cst": "000",
+"desc": "Regime automotivo - projetos incentivados, observado o art. 312 da Lei Complementar nº 214",
+"modo": "padrao",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"000005": {
+"cst": "000",
+"desc": "Operação com EAC destinado à mistura com gasolina A, mas com saída do biocombustível com d",
+"modo": "padrao",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"010001": {
+"cst": "010",
+"desc": "Operações do FGTS não realizadas pela Caixa Econômica Federal, observado o art. 212 da Lei",
+"modo": "livre",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"010002": {
+"cst": "010",
+"desc": "Operações do serviço financeiro",
+"modo": "livre",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"011001": {
+"cst": "011",
+"desc": "Planos de assistência funerária, observado o art. 236 da Lei Complementar nº 214, de 2025.",
+"modo": "livre",
+"red_cbs": 60,
+"red_ibs": 60
+},
+"011002": {
+"cst": "011",
+"desc": "Planos de assistência à saúde, observado o art. 237 da Lei Complementar nº 214, de 2025.",
+"modo": "livre",
+"red_cbs": 60,
+"red_ibs": 60
+},
+"011003": {
+"cst": "011",
+"desc": "Intermediação de planos de assistência à saúde, observado o art. 240 da Lei Complementar n",
+"modo": "livre",
+"red_cbs": 60,
+"red_ibs": 60
+},
+"011004": {
+"cst": "011",
+"desc": "Concursos e prognósticos, observado o art. 246 da Lei Complementar nº 214, de 2025.",
+"modo": "livre",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"011005": {
+"cst": "011",
+"desc": "Planos de assistência à saúde de animais domésticos, observado o art. 243 da Lei Complemen",
+"modo": "livre",
+"red_cbs": 30,
+"red_ibs": 30
+},
+"200001": {
+"cst": "200",
+"desc": "Serviços de transporte de bens até as zonas de processamento de exportação e bens exportad",
+"modo": "padrao",
+"red_cbs": 100,
+"red_ibs": 100
+},
+"200002": {
+"cst": "200",
+"desc": "Fornecimento ou importação de tratores, máquinas e implementos agrícolas, destinados a pro",
+"modo": "padrao",
+"red_cbs": 100,
+"red_ibs": 100
+},
+"200003": {
+"cst": "200",
+"desc": "Vendas de produtos destinados à alimentação humana relacionados no Anexo I da Lei Compleme",
+"modo": "padrao",
+"red_cbs": 100,
+"red_ibs": 100
+},
+"200004": {
+"cst": "200",
+"desc": "Fornecimento de dispositivos médicos com a especificação das respectivas classificações da",
+"modo": "padrao",
+"red_cbs": 100,
+"red_ibs": 100
+},
+"200005": {
+"cst": "200",
+"desc": "Fornecimento de dispositivos médicos com a especificação das respectivas classificações da",
+"modo": "padrao",
+"red_cbs": 100,
+"red_ibs": 100
+},
+"200006": {
+"cst": "200",
+"desc": "Situação de emergência de saúde pública reconhecida pelo Poder Legislativo federal, estadu",
+"modo": "padrao",
+"red_cbs": 100,
+"red_ibs": 100
+},
+"200007": {
+"cst": "200",
+"desc": "Fornecimento dos dispositivos de acessibilidade próprios para pessoas com deficiência rela",
+"modo": "padrao",
+"red_cbs": 100,
+"red_ibs": 100
+},
+"200008": {
+"cst": "200",
+"desc": "Fornecimento dos dispositivos de acessibilidade próprios para pessoas com deficiência rela",
+"modo": "padrao",
+"red_cbs": 100,
+"red_ibs": 100
+},
+"200009": {
+"cst": "200",
+"desc": "Fornecimento dos medicamentos registrados na Anvisa, observado o art. 146 da Lei Complemen",
+"modo": "padrao",
+"red_cbs": 100,
+"red_ibs": 100
+},
+"200010": {
+"cst": "200",
+"desc": "Fornecimento dos medicamentos registrados na Anvisa, quando adquiridos por órgãos da admin",
+"modo": "padrao",
+"red_cbs": 100,
+"red_ibs": 100
+},
+"200011": {
+"cst": "200",
+"desc": "Fornecimento das composições para nutrição enteral e parenteral, composições especiais e f",
+"modo": "padrao",
+"red_cbs": 100,
+"red_ibs": 100
+},
+"200012": {
+"cst": "200",
+"desc": "Situação de emergência de saúde pública reconhecida pelo Poder Legislativo federal, estadu",
+"modo": "padrao",
+"red_cbs": 100,
+"red_ibs": 100
+},
+"200013": {
+"cst": "200",
+"desc": "Fornecimento de tampões higiênicos, absorventes higiênicos internos ou externos, descartáv",
+"modo": "padrao",
+"red_cbs": 100,
+"red_ibs": 100
+},
+"200014": {
+"cst": "200",
+"desc": "Fornecimento dos produtos hortícolas, frutas e ovos, relacionados no Anexo XV da Lei Compl",
+"modo": "padrao",
+"red_cbs": 100,
+"red_ibs": 100
+},
+"200015": {
+"cst": "200",
+"desc": "Venda de automóveis de passageiros de fabricação nacional de, no mínimo, 4 (quatro) portas",
+"modo": "padrao",
+"red_cbs": 100,
+"red_ibs": 100
+},
+"200016": {
+"cst": "200",
+"desc": "Prestação de serviços de pesquisa e desenvolvimento por Instituição Científica, Tecnológic",
+"modo": "padrao",
+"red_cbs": 100,
+"red_ibs": 100
+},
+"200017": {
+"cst": "200",
+"desc": "Operações relacionadas ao FGTS, considerando aquelas necessárias à aplicação da Lei nº 8.0",
+"modo": "padrao",
+"red_cbs": 100,
+"red_ibs": 100
+},
+"200018": {
+"cst": "200",
+"desc": "Operações de resseguro e retrocessão ficam sujeitas à incidência à alíquota zero, inclusiv",
+"modo": "padrao",
+"red_cbs": 100,
+"red_ibs": 100
+},
+"200019": {
+"cst": "200",
+"desc": "Importador dos serviços financeiros que seja contribuinte e tenha direito de apropriação d",
+"modo": "padrao",
+"red_cbs": 100,
+"red_ibs": 100
+},
+"200020": {
+"cst": "200",
+"desc": "Operação praticada por sociedades cooperativas optantes por regime específico do IBS e CBS",
+"modo": "padrao",
+"red_cbs": 100,
+"red_ibs": 100
+},
+"200021": {
+"cst": "200",
+"desc": "Serviços de transporte público coletivo de passageiros ferroviário e hidroviário urbanos, ",
+"modo": "padrao",
+"red_cbs": 100,
+"red_ibs": 100
+},
+"200022": {
+"cst": "200",
+"desc": "Operação originada fora da Zona Franca de Manaus que destine bem material industrializado ",
+"modo": "padrao",
+"red_cbs": 100,
+"red_ibs": 100
+},
+"200023": {
+"cst": "200",
+"desc": "Operação realizada por indústria incentivada que destine bem material intermediário para o",
+"modo": "padrao",
+"red_cbs": 100,
+"red_ibs": 100
+},
+"200024": {
+"cst": "200",
+"desc": "Operação originada fora das Áreas de Livre Comércio que destine bem material industrializa",
+"modo": "padrao",
+"red_cbs": 100,
+"red_ibs": 100
+},
+"200025": {
+"cst": "200",
+"desc": "Fornecimento dos serviços de educação relacionados ao Programa Universidade para Todos (Pr",
+"modo": "padrao",
+"red_cbs": 100,
+"red_ibs": 60
+},
+"200026": {
+"cst": "200",
+"desc": "Locação de imóveis localizados nas zonas reabilitadas, pelo prazo de 5 (cinco) anos, conta",
+"modo": "padrao",
+"red_cbs": 80,
+"red_ibs": 80
+},
+"200027": {
+"cst": "200",
+"desc": "Operações de locação, cessão onerosa e arrendamento de bens imóveis, observado o art. 261 ",
+"modo": "padrao",
+"red_cbs": 70,
+"red_ibs": 70
+},
+"200028": {
+"cst": "200",
+"desc": "Fornecimento dos serviços de educação relacionados no Anexo II da Lei Complementar nº 214,",
+"modo": "padrao",
+"red_cbs": 60,
+"red_ibs": 60
+},
+"200029": {
+"cst": "200",
+"desc": "Fornecimento dos serviços de saúde humana relacionados no Anexo III da Lei Complementar nº",
+"modo": "padrao",
+"red_cbs": 60,
+"red_ibs": 60
+},
+"200030": {
+"cst": "200",
+"desc": "Venda dos dispositivos médicos relacionados no Anexo IV da Lei Complementar nº 214, de 202",
+"modo": "padrao",
+"red_cbs": 60,
+"red_ibs": 60
+},
+"200031": {
+"cst": "200",
+"desc": "Fornecimento dos dispositivos de acessibilidade próprios para pessoas com deficiência rela",
+"modo": "padrao",
+"red_cbs": 60,
+"red_ibs": 60
+},
+"200032": {
+"cst": "200",
+"desc": "Fornecimento dos medicamentos registrados na Anvisa ou produzidos por farmácias de manipul",
+"modo": "padrao",
+"red_cbs": 60,
+"red_ibs": 60
+},
+"200033": {
+"cst": "200",
+"desc": "Fornecimento das composições para nutrição enteral e parenteral, composições especiais e f",
+"modo": "padrao",
+"red_cbs": 60,
+"red_ibs": 60
+},
+"200034": {
+"cst": "200",
+"desc": "Fornecimento dos alimentos destinados ao consumo humano relacionados no Anexo VII da Lei C",
+"modo": "padrao",
+"red_cbs": 60,
+"red_ibs": 60
+},
+"200035": {
+"cst": "200",
+"desc": "Fornecimento dos produtos de higiene pessoal e limpeza relacionados no Anexo VIII da Lei C",
+"modo": "padrao",
+"red_cbs": 60,
+"red_ibs": 60
+},
+"200036": {
+"cst": "200",
+"desc": "Fornecimento de produtos agropecuários, aquícolas, pesqueiros, florestais e extrativistas ",
+"modo": "padrao",
+"red_cbs": 60,
+"red_ibs": 60
+},
+"200037": {
+"cst": "200",
+"desc": "Fornecimento de serviços ambientais de conservação ou recuperação da vegetação nativa, mes",
+"modo": "padrao",
+"red_cbs": 60,
+"red_ibs": 60
+},
+"200038": {
+"cst": "200",
+"desc": "Fornecimento dos insumos agropecuários e aquícolas relacionados no Anexo IX da Lei Complem",
+"modo": "padrao",
+"red_cbs": 60,
+"red_ibs": 60
+},
+"200039": {
+"cst": "200",
+"desc": "Fornecimento dos bens e serviços listados no Anexo X da Lei Complementar nº 214, de 2025, ",
+"modo": "padrao",
+"red_cbs": 60,
+"red_ibs": 60
+},
+"200040": {
+"cst": "200",
+"desc": "Fornec dos seguintes serv de comunic instit à admin púb direta, autarq e fund púb: serviço",
+"modo": "padrao",
+"red_cbs": 60,
+"red_ibs": 60
+},
+"200041": {
+"cst": "200",
+"desc": "Operações relacionadas às seguintes atividades desportivas: fornecimento de serviço de edu",
+"modo": "padrao",
+"red_cbs": 60,
+"red_ibs": 60
+},
+"200042": {
+"cst": "200",
+"desc": "Operações relacionadas às seguintes atividades desportivas: gestão e exploração do desport",
+"modo": "padrao",
+"red_cbs": 60,
+"red_ibs": 60
+},
+"200043": {
+"cst": "200",
+"desc": "Fornecimento à administração pública direta, autarquias e fundações púbicas dos serviços e",
+"modo": "padrao",
+"red_cbs": 60,
+"red_ibs": 60
+},
+"200044": {
+"cst": "200",
+"desc": "Operações e prestações de serviços de segurança da informação e segurança cibernética dese",
+"modo": "padrao",
+"red_cbs": 60,
+"red_ibs": 60
+},
+"200045": {
+"cst": "200",
+"desc": "Operações relacionadas a projetos de reabilitação urbana de zonas históricas e de áreas cr",
+"modo": "padrao",
+"red_cbs": 60,
+"red_ibs": 60
+},
+"200046": {
+"cst": "200",
+"desc": "Operações com bens imóveis, observado o art. 261 da Lei Complementar nº 214, de 2025.",
+"modo": "padrao",
+"red_cbs": 50,
+"red_ibs": 50
+},
+"200047": {
+"cst": "200",
+"desc": "Bares e Restaurantes, observado o art. 275 da Lei Complementar nº 214, de 2025.",
+"modo": "padrao",
+"red_cbs": 40,
+"red_ibs": 40
+},
+"200048": {
+"cst": "200",
+"desc": "Hotelaria, Parques de Diversão e Parques Temáticos, observado o art. 281 da Lei Complement",
+"modo": "padrao",
+"red_cbs": 40,
+"red_ibs": 40
+},
+"200049": {
+"cst": "200",
+"desc": "Transporte coletivo de passageiros rodoviário, ferroviário e hidroviário intermunicipais e",
+"modo": "padrao",
+"red_cbs": 40,
+"red_ibs": 40
+},
+"200050": {
+"cst": "200",
+"desc": "Serviços de transporte aéreo regional coletivo de passageiros ou de carga, observado o art",
+"modo": "padrao",
+"red_cbs": 40,
+"red_ibs": 40
+},
+"200051": {
+"cst": "200",
+"desc": "Agências de Turismo, observado o art. 289 da Lei Complementar nº 214, de 2025.",
+"modo": "padrao",
+"red_cbs": 40,
+"red_ibs": 40
+},
+"200052": {
+"cst": "200",
+"desc": "Prestação de serviços das seguintes profissões intelectuais de natureza científica, literá",
+"modo": "padrao",
+"red_cbs": 30,
+"red_ibs": 30
+},
+"200053": {
+"cst": "200",
+"desc": "Fornecimento de medicamentos registrados na Anvisa, quando  classificados como soros ou va",
+"modo": "padrao",
+"red_cbs": 100,
+"red_ibs": 100
+},
+"200054": {
+"cst": "200",
+"desc": "Fornecimento de bem material pela cooperativa de produção agropecuária a associado não suj",
+"modo": "padrao",
+"red_cbs": 100,
+"red_ibs": 100
+},
+"220001": {
+"cst": "220",
+"desc": "Incorporação imobiliária submetida ao regime especial de tributação, observado o art. 485 ",
+"modo": "livre",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"220002": {
+"cst": "220",
+"desc": "Incorporação imobiliária submetida ao regime especial de tributação, observado o art. 485 ",
+"modo": "livre",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"220003": {
+"cst": "220",
+"desc": "Alienação de imóvel decorrente de parcelamento do solo, observado o art. 486 da Lei Comple",
+"modo": "livre",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"221001": {
+"cst": "221",
+"desc": "Locação, cessão onerosa ou arrendamento de bem imóvel com alíquota sobre a receita bruta, ",
+"modo": "livre",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"221002": {
+"cst": "221",
+"desc": "Incorporação imobiliária submetida ao regime especial de tributação, observado o art. 485 ",
+"modo": "livre",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"221003": {
+"cst": "221",
+"desc": "Incorporação imobiliária submetida ao regime especial de tributação, observado o art. 485 ",
+"modo": "livre",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"221004": {
+"cst": "221",
+"desc": "Alienação de imóvel decorrente de parcelamento do solo, observado o art. 486 da Lei Comple",
+"modo": "livre",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"222001": {
+"cst": "222",
+"desc": "Transporte internacional de passageiros, caso os trechos de ida e volta sejam vendidos em ",
+"modo": "padrao",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"400001": {
+"cst": "400",
+"desc": "Fornecimento de serviços de transporte público coletivo de passageiros rodoviário e metrov",
+"modo": "padrao",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"400002": {
+"cst": "400",
+"desc": "Fornecimento de serviços de transporte público coletivo de passageiros rodoviário e metrov",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410001": {
+"cst": "410",
+"desc": "Fornecimento de bonificações quando constem do respectivo documento fiscal e que não depen",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410002": {
+"cst": "410",
+"desc": "Transferências entre estabelecimentos pertencentes ao mesmo contribuinte, observado o art.",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410003": {
+"cst": "410",
+"desc": "\"Doações que não tenham por objeto bens ou serviços que tenham permitido a apropriação de ",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410004": {
+"cst": "410",
+"desc": "Exportações de bens e serviços, observado o art. 8º da Lei Complementar nº 214, de 2025.",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410005": {
+"cst": "410",
+"desc": "Fornecimentos realizados pela União, pelos Estados, pelo Distrito Federal e pelos Municípi",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410006": {
+"cst": "410",
+"desc": "Fornecimentos realizados por entidades religiosas e templos de qualquer culto, inclusive s",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410007": {
+"cst": "410",
+"desc": "Fornecimentos realizados por partidos políticos, inclusive suas fundações, entidades sindi",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410008": {
+"cst": "410",
+"desc": "Fornecimentos de livros, jornais, periódicos e do papel destinado a sua impressão, observa",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410009": {
+"cst": "410",
+"desc": "Fornecimentos de fonogramas e videofonogramas musicais produzidos no Brasil contendo obras",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410010": {
+"cst": "410",
+"desc": "Fornecimentos de serviço de comunicação nas modalidades de radiodifusão sonora e de sons e",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410011": {
+"cst": "410",
+"desc": "Fornecimentos de ouro, quando definido em lei como ativo financeiro ou instrumento cambial",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410012": {
+"cst": "410",
+"desc": "Fornecimento de condomínio edilício não optante pelo regime regular, observado o art. 26 d",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410013": {
+"cst": "410",
+"desc": "Exportações de combustíveis, observado o art. 98 da Lei Complementar nº 214, de 2025.",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410014": {
+"cst": "410",
+"desc": "Fornecimento de produtor rural não contribuinte, observado o art. 164 da Lei Complementar ",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410015": {
+"cst": "410",
+"desc": "Fornecimento por transportador autônomo não contribuinte, observado o art. 169 da Lei Comp",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410016": {
+"cst": "410",
+"desc": "Fornecimento ou aquisição de resíduos sólidos, observado o art. 170 da Lei Complementar nº",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410017": {
+"cst": "410",
+"desc": "Aquisição de bem móvel com crédito presumido sob condição de revenda realizada, observado ",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410018": {
+"cst": "410",
+"desc": "Operações relacionadas aos fundos garantidores e executores de políticas públicas, inclusi",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410019": {
+"cst": "410",
+"desc": "Exclusão da gorjeta na base de cálculo no fornecimento de alimentação, observado o art. 27",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410020": {
+"cst": "410",
+"desc": "Exclusão do valor de intermediação na base de cálculo no fornecimento de alimentação, obse",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410021": {
+"cst": "410",
+"desc": "Contribuição de que trata o art. 149-A da Constituição Federal, observado o art. 12 da Lei",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410022": {
+"cst": "410",
+"desc": "\"Consolidação da propriedade pelo credor de bens móveis ou imóveis que tenham sido objeto ",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410023": {
+"cst": "410",
+"desc": "\"Alienação de bens móveis ou imóveis que tenham sido objeto de garantia constituída em fav",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410024": {
+"cst": "410",
+"desc": "\"Consolidação da propriedade pelo grupo de consórcio de bem que tenha sido objeto de garan",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410025": {
+"cst": "410",
+"desc": "\"Alienação de bem que tenha sido objeto de garantia constituída em favor do grupo de consó",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410026": {
+"cst": "410",
+"desc": "\"Doações sem contraprestação em benefício do doador, com anulação de crédito apropriados p",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410027": {
+"cst": "410",
+"desc": "Fornecimento de bens e serviços, desde que vinculados direta e exclusivamente à exportação",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410028": {
+"cst": "410",
+"desc": "Operações com bens imóveis realizadas por pessoas físicas não consideradas contribuintes d",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410029": {
+"cst": "410",
+"desc": "Operações não sujeitas à incidência de IBS e de CBS, alcançadas apenas por obrigação acess",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410030": {
+"cst": "410",
+"desc": "Estorno de crédito apropriado de bens adquiridos e venham a perecer, deteriorar-se ou ser ",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410031": {
+"cst": "410",
+"desc": "Fornecimento em período anterior ao início de vigência de incidências de CBS e IBS, observ",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410032": {
+"cst": "410",
+"desc": "Tributos incidentes na operação que não integram a base de cálculo do IBS e da CBS, observ",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410033": {
+"cst": "410",
+"desc": "Operações com bens imóveis, inclusive operações com direitos reais sobre bens imóveis, rea",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410034": {
+"cst": "410",
+"desc": "Fundos de investimento cujo patrimônio seja constituído exclusivamente por aplicações em p",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410035": {
+"cst": "410",
+"desc": "Fornecimento realizado por nanoempreendedor, observado o art. 26 da Lei Complementar nº 21",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410036": {
+"cst": "410",
+"desc": "Descontos incondicionais, observado o art. 12 da Lei Complementar nº 214, de 2025.",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410037": {
+"cst": "410",
+"desc": "Importação de bens materiais sem incidência de IBS e CBS, observado o art. 66 da Lei Compl",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"410999": {
+"cst": "410",
+"desc": "Operações não onerosas sem previsão de tributação, não especificadas anteriormente, observ",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"510001": {
+"cst": "510",
+"desc": "Operações, sujeitas a diferimento, com energia elétrica ou com direitos a ela relacionados",
+"modo": "livre",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"515001": {
+"cst": "515",
+"desc": "Operações, sujeitas a diferimento, com insumos agropecuários e aquícolas, observado o art.",
+"modo": "livre",
+"red_cbs": 60,
+"red_ibs": 60
+},
+"550001": {
+"cst": "550",
+"desc": "Exportações de bens materiais, observado o art. 82 da Lei Complementar nº 214, de 2025.",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"550002": {
+"cst": "550",
+"desc": "Regime de Trânsito, observado o art. 84 da Lei Complementar nº 214, de 2025.",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"550003": {
+"cst": "550",
+"desc": "Regimes de Depósito, observado o art. 85 da Lei Complementar nº 214, de 2025.",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"550004": {
+"cst": "550",
+"desc": "Regimes de Depósito, observado o art. 87 da Lei Complementar nº 214, de 2025.",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"550005": {
+"cst": "550",
+"desc": "Regimes de Depósito, observado o art. 87 da Lei Complementar nº 214, de 2025.",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"550006": {
+"cst": "550",
+"desc": "Regimes de Permanência Temporária, observado o art. 88 da Lei Complementar nº 214, de 2025",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"550007": {
+"cst": "550",
+"desc": "Regimes de Aperfeiçoamento, observado o art. 90 da Lei Complementar nº 214, de 2025.",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"550008": {
+"cst": "550",
+"desc": "Importação de bens para o Regime de Repetro-Temporário, de que tratam o inciso I do art. 9",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"550009": {
+"cst": "550",
+"desc": "GNL-Temporário, de que trata o inciso II do art. 93 da Lei Complementar nº 214, de 2025.",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"550010": {
+"cst": "550",
+"desc": "Repetro-Permanente, de que trata o inciso III do art. 93 da Lei Complementar nº 214, de 20",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"550011": {
+"cst": "550",
+"desc": "Repetro-Industrialização, de que trata o inciso IV do art. 93 da Lei Complementar nº 214, ",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"550012": {
+"cst": "550",
+"desc": "Repetro-Nacional, de que trata o inciso V do art. 93 da Lei Complementar nº 214, de 2025.",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"550013": {
+"cst": "550",
+"desc": "Repetro-Entreposto, de que trata o inciso VI do art. 93 da Lei Complementar nº 214, de 202",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"550014": {
+"cst": "550",
+"desc": "Zona de Processamento de Exportação, observado os arts. 99, 100 e 102 da Lei Complementar ",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"550015": {
+"cst": "550",
+"desc": "Regime Tributário para Incentivo à Modernização e à Ampliação da Estrutura Portuária - Rep",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"550016": {
+"cst": "550",
+"desc": "Regime Especial de Incentivos para o Desenvolvimento da Infraestrutura - Reidi, observado ",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"550017": {
+"cst": "550",
+"desc": "Regime Tributário para Incentivo à Atividade Econômica Naval – Renaval, observado o art. 1",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"550018": {
+"cst": "550",
+"desc": "Desoneração da aquisição de bens de capital, observado o art. 109 da Lei Complementar nº 2",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"550019": {
+"cst": "550",
+"desc": "Importação de bem material por indústria incentivada para utilização na Zona Franca de Man",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"550020": {
+"cst": "550",
+"desc": "Áreas de livre comércio, observado o art. 461 da Lei Complementar nº 214, de 2025.",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"550021": {
+"cst": "550",
+"desc": "\"Fornecimento de produtos agropecuários in natura para contribuinte do regime regular que ",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"550022": {
+"cst": "550",
+"desc": "Regime Especial de Incentivos para a Produção de Hidrogênio de Baixa Emissão de Carbono (R",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"550023": {
+"cst": "550",
+"desc": "Operações com hidrocarbonetos líquidos derivados de petróleo não combustíveis ou de gás na",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"550024": {
+"cst": "550",
+"desc": "Importações e nas aquisições no mercado interno de máquinas, equipamentos e veículos desti",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"550025": {
+"cst": "550",
+"desc": "Importações e nas aquisições no mercado interno de matérias-primas, produtos intermediário",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"620001": {
+"cst": "620",
+"desc": "Tributação monofásica sobre combustíveis, observados os art. 172 da Lei Complementar nº 21",
+"modo": "livre",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"620002": {
+"cst": "620",
+"desc": "Tributação monofásica com responsabilidade pela retenção sobre combustíveis, observado o a",
+"modo": "livre",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"620003": {
+"cst": "620",
+"desc": "Tributação monofásica com responsabilidade de retenção de tributos por terceiros, observad",
+"modo": "livre",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"620004": {
+"cst": "620",
+"desc": "Tributação monofásica sobre mistura de EAC com gasolina A em percentual superior ou inferi",
+"modo": "livre",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"620005": {
+"cst": "620",
+"desc": "Tributação monofásica sobre mistura de EAC com gasolina A em percentual superior ou inferi",
+"modo": "livre",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"620006": {
+"cst": "620",
+"desc": "Tributação monofásica sobre combustíveis cobrada anteriormente, observador o art. 180 da L",
+"modo": "livre",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"620007": {
+"cst": "620",
+"desc": "Perecimento, deteriorização, roubo, furto ou extravio no regime monofásico sem estorno de ",
+"modo": "livre",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"800001": {
+"cst": "800",
+"desc": "Fusão, cisão ou incorporação, observado o art. 55 da Lei Complementar nº 214, de 2025.",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"800002": {
+"cst": "800",
+"desc": "Transferência de crédito do associado, inclusive as cooperativas singulares, para cooperat",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"810001": {
+"cst": "810",
+"desc": "Crédito presumido sobre o valor apurado nos fornecimentos a partir da Zona Franca de Manau",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"811001": {
+"cst": "811",
+"desc": "\"Anulação de crédito proporcional ao valor das operações imunes e isentas, observado o art",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"811002": {
+"cst": "811",
+"desc": "\"Débitos de notas fiscais não processadas na apuração, observado o art. 45 da Lei Compleme",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"811003": {
+"cst": "811",
+"desc": "\"Débitos apurados após o desenquadramento do regime Simples Nacional, observado o art. 41 ",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"820001": {
+"cst": "820",
+"desc": "Documento com informações de fornecimento de serviços de planos de assistência à saúde ele",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"820002": {
+"cst": "820",
+"desc": "Documento com informações de fornecimento de serviços de planos de assinstência funerária,",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"820003": {
+"cst": "820",
+"desc": "Documento com informações de fornecimento de serviços de planos de assinstência à saúde de",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"820004": {
+"cst": "820",
+"desc": "Documento com informações de prestação de serviços de consursos de prognósticos, mas com t",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"820005": {
+"cst": "820",
+"desc": "Documento com informações de alienação de bens imóveis, mas com tributação realizada por o",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"820006": {
+"cst": "820",
+"desc": "\"Documento com informações de fornecimento de serviços de exploração de via, mas com tribu",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"820007": {
+"cst": "820",
+"desc": "Documento com informações de fornecimento de serviços financeiros, mas com tributação real",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"820008": {
+"cst": "820",
+"desc": "Documento com informações de fornecimento de serviço continuado, mas com tributação realiz",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"820009": {
+"cst": "820",
+"desc": "Cobrança relativa a fornecimentos declarados em outro documento, observado o art. 60 da Le",
+"modo": "zero",
+"red_cbs": 0,
+"red_ibs": 0
+},
+"830001": {
+"cst": "830",
+"desc": "Documento com  exclusão da base de cálculo da CBS e do IBS refrente à energia elétrica for",
+"modo": "padrao",
+"red_cbs": 0,
+"red_ibs": 0
+}
+}
