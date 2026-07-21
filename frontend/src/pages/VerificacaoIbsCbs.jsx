@@ -24,18 +24,23 @@ const badge = (txt, tone = 'info') => (
   <span className="badge" style={{ background: `var(--${tone}-bg)`, color: `var(--${tone}-text)` }}>{txt}</span>
 )
 
-// Célula "veio ▸ esperado": o que o XML trouxe (vermelho) sobre o que a régua
-// do CST/cClassTrib manda (verde). "Sem régua" = monofásica/fixa/diferimento.
-function Comparativo({ pVeio, vVeio, pEsp, vEsp }) {
+// Célula "veio ▸ esperado": o que o XML trouxe sobre o que a régua do
+// CST/cClassTrib manda. Em pendência o "veio" é vermelho; em item conforme
+// (filtro dos cards) é verde. "Sem régua" = monofásica/fixa/diferimento.
+function Comparativo({ pVeio, vVeio, pEsp, vEsp, conforme }) {
   return (
     <div style={{ lineHeight: 1.4, whiteSpace: 'nowrap', textAlign: 'right' }}>
-      <div style={{ color: 'var(--err-text)', fontWeight: 600 }}>{pct(pVeio)} · {brl(vVeio)}</div>
+      <div style={{ color: conforme ? 'var(--ok-text)' : 'var(--err-text)', fontWeight: 600 }}>
+        {conforme && '✔ '}{pct(pVeio)} · {brl(vVeio)}
+      </div>
       <div style={{ color: 'var(--ok-text)', fontSize: 11.5 }}>
         {pEsp == null ? 'sem régua percentual' : <>✔ {pct(pEsp)} · {brl(vEsp)}</>}
       </div>
     </div>
   )
 }
+
+const CONFORMES = ['OK', 'DISPENSADO', 'TRATAMENTO_DIFERENCIADO']
 
 // Balão clicável da classificação: abre no clique com a descrição OFICIAL
 // completa e só fecha clicando fora (ou clicando de novo no gatilho).
@@ -117,6 +122,8 @@ export default function VerificacaoIbsCbs() {
   const [erro, setErro] = useState(null)
   const [busy, setBusy] = useState(false)
   const [expandido, setExpandido] = useState(() => new Set())
+  // Card clicado no topo: filtra a lista de notas pela situação (null = pendências)
+  const [filtroStatus, setFiltroStatus] = useState(null)
 
   const notasApontadas = useMemo(() => agruparPorNota(dados?.itens || []), [dados])
   const toggle = (chave) => setExpandido(prev => {
@@ -127,15 +134,16 @@ export default function VerificacaoIbsCbs() {
     empresa_id: selectedEmpresa?.id, ano, mes, fluxo: tab,
   }), [selectedEmpresa, ano, mes, tab])
 
-  useEffect(() => { setExpandido(new Set()) }, [selectedEmpresa, ano, mes, tab])
+  useEffect(() => { setExpandido(new Set()); setFiltroStatus(null) }, [selectedEmpresa, ano, mes, tab])
+  useEffect(() => { setExpandido(new Set()) }, [filtroStatus])
 
   const carregar = useCallback(async () => {
     setLoading(true)
     setErro(null)
-    try { setDados(await api.ibsCbsVerificacao(params())) }
+    try { setDados(await api.ibsCbsVerificacao({ ...params(), status: filtroStatus })) }
     catch (e) { setErro(e.message) }
     finally { setLoading(false) }
-  }, [params])
+  }, [params, filtroStatus])
 
   useEffect(() => { carregar() }, [carregar])
 
@@ -210,13 +218,25 @@ export default function VerificacaoIbsCbs() {
               <span style={{ fontSize: 26, fontWeight: 800, color: conforme >= 90 ? 'var(--ok-text)' : 'var(--err-text)' }}>{conforme}%</span>
               <span style={{ fontSize: 11, color: 'var(--text-4)' }}>{dados.total_itens} item(ns) verificados</span>
             </div>
-            {STATUS_INFO.map(([key, info]) => (
-              <div key={key} className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ fontSize: 12, color: 'var(--text-3)' }}><i className={`ti ${info.icon}`} /> {info.label}</span>
-                <span style={{ fontSize: 22, fontWeight: 700, color: `var(--${info.tone}-text)` }}>{resumo[key]?.itens || 0}</span>
-                <span style={{ fontSize: 11, color: 'var(--text-4)' }} title={info.desc}>{brl(resumo[key]?.valor)}</span>
-              </div>
-            ))}
+            {STATUS_INFO.map(([key, info]) => {
+              const ativo = filtroStatus === key
+              return (
+                <div key={key} className="card" role="button"
+                  title={`${info.desc} — clique para ver essas notas`}
+                  onClick={() => setFiltroStatus(f => (f === key ? null : key))}
+                  style={{
+                    padding: 16, display: 'flex', flexDirection: 'column', gap: 4, cursor: 'pointer',
+                    boxShadow: ativo ? `inset 0 0 0 2px var(--${info.tone}-text)` : undefined,
+                  }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                    <i className={`ti ${info.icon}`} /> {info.label}
+                    {ativo && <i className="ti ti-filter" style={{ marginLeft: 6, color: `var(--${info.tone}-text)` }} />}
+                  </span>
+                  <span style={{ fontSize: 22, fontWeight: 700, color: `var(--${info.tone}-text)` }}>{resumo[key]?.itens || 0}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-4)' }}>{brl(resumo[key]?.valor)}</span>
+                </div>
+              )
+            })}
           </div>
 
           {/* Ranking de emitentes com problema */}
@@ -254,15 +274,29 @@ export default function VerificacaoIbsCbs() {
             </div>
           )}
 
-          {/* Notas apontadas: mestre (nota) → detalhe (itens com o produto) */}
-          {notasApontadas.length > 0 && (
+          {/* Notas: mestre (nota) → detalhe (itens). Sem filtro = pendências;
+              com card clicado = notas daquela situação (inclusive corretas). */}
+          {(notasApontadas.length > 0 || filtroStatus) && (
             <div className="card" style={{ padding: 0 }}>
-              <div style={{ padding: '12px 16px', fontWeight: 600, borderBottom: '1px solid var(--border-2)' }}>
-                Notas apontadas ({notasApontadas.length})
-                <span style={{ fontWeight: 400, color: 'var(--text-4)', fontSize: 12 }}>
-                  {' '}· {dados.itens.length}{dados.itens.length >= 500 ? '+' : ''} item(ns) — clique na nota para ver os produtos
+              <div style={{ padding: '12px 16px', fontWeight: 600, borderBottom: '1px solid var(--border-2)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span>
+                  {filtroStatus ? `Notas — ${TONE[filtroStatus]?.label || filtroStatus}` : 'Notas apontadas'} ({notasApontadas.length})
+                  <span style={{ fontWeight: 400, color: 'var(--text-4)', fontSize: 12 }}>
+                    {' '}· {dados.itens.length}{dados.itens.length >= 500 ? '+' : ''} item(ns) — clique na nota para ver os produtos
+                  </span>
                 </span>
+                {filtroStatus && (
+                  <button className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto' }} onClick={() => setFiltroStatus(null)}>
+                    <i className="ti ti-filter-off" /> Limpar filtro
+                  </button>
+                )}
               </div>
+              {notasApontadas.length === 0 && (
+                <div style={{ padding: 20, fontSize: 13, color: 'var(--text-3)' }}>
+                  Nenhuma nota na situação "{TONE[filtroStatus]?.label || filtroStatus}" neste período.
+                </div>
+              )}
+              {notasApontadas.length > 0 && (
               <div className="tbl-wrap">
                 <table className="tbl">
                   <thead>
@@ -317,10 +351,10 @@ export default function VerificacaoIbsCbs() {
                                         <td><BalaoClassificacao item={i} /></td>
                                         <td style={{ textAlign: 'right' }}>{brl(i.valor_produto)}</td>
                                         <td style={{ textAlign: 'right' }}>
-                                          <Comparativo pVeio={i.p_ibs} vVeio={i.v_ibs} pEsp={i.p_ibs_esperado} vEsp={i.v_ibs_esperado} />
+                                          <Comparativo pVeio={i.p_ibs} vVeio={i.v_ibs} pEsp={i.p_ibs_esperado} vEsp={i.v_ibs_esperado} conforme={CONFORMES.includes(i.status)} />
                                         </td>
                                         <td style={{ textAlign: 'right' }}>
-                                          <Comparativo pVeio={i.p_cbs} vVeio={i.v_cbs} pEsp={i.p_cbs_esperado} vEsp={i.v_cbs_esperado} />
+                                          <Comparativo pVeio={i.p_cbs} vVeio={i.v_cbs} pEsp={i.p_cbs_esperado} vEsp={i.v_cbs_esperado} conforme={CONFORMES.includes(i.status)} />
                                         </td>
                                       </tr>
                                     ))}
@@ -335,6 +369,7 @@ export default function VerificacaoIbsCbs() {
                   </tbody>
                 </table>
               </div>
+              )}
             </div>
           )}
         </>

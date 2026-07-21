@@ -256,6 +256,34 @@ async def test_verificar_agrega_e_ranqueia(sessao):
     assert r["ranking_emitentes"][0]["cnpj"] == sem.cnpj_emit
 
 
+async def test_verificar_filtra_por_situacao(sessao):
+    """Card clicado na tela: a lista traz SÓ a situação pedida — inclusive as
+    conformes (OK/dispensado), com a justificativa; resumo e ranking intactos."""
+    tenant, empresa = uuid4(), uuid4()
+    ok = _nota(tenant, empresa, "1" * 44)
+    sem = _nota(tenant, empresa, "2" * 44)
+    simples = _nota(tenant, empresa, "3" * 44, crt="1")
+    sessao.add_all([ok, sem, simples,
+                    _item(tenant, ok, True), _item(tenant, sem, False),
+                    _item(tenant, simples, False)])
+    await sessao.flush()
+    svc = IbsCbsService(sessao)
+
+    r_ok = await svc.verificar(empresa_id=empresa, apenas_status=OK)
+    assert [i["status"] for i in r_ok["itens"]] == [OK]
+    assert "integral" in r_ok["itens"][0]["regua_desc"].lower()   # o porquê de estar OK
+    assert r_ok["total_itens"] == 3                               # agregados não mudam
+    assert r_ok["ranking_emitentes"][0]["cnpj"] == sem.cnpj_emit
+
+    r_disp = await svc.verificar(empresa_id=empresa, apenas_status=DISPENSADO)
+    assert len(r_disp["itens"]) == 1
+    assert "Simples" in r_disp["itens"][0]["regua_desc"]
+    assert r_disp["itens"][0]["p_ibs_esperado"] is None           # destaque não exigido
+
+    r_sem = await svc.verificar(empresa_id=empresa, apenas_status=SEM_DESTAQUE)
+    assert [i["status"] for i in r_sem["itens"]] == [SEM_DESTAQUE]
+
+
 class StorageFake:
     def __init__(self, dados):
         self.dados = dados

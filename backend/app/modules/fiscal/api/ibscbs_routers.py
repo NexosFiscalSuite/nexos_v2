@@ -22,14 +22,18 @@ async def verificacao(
     ano: str | None = Query(default=None, description="Competência: ano (AAAA)"),
     mes: str | None = Query(default=None, description="Competência: mês (MM)"),
     fluxo: str | None = Query(default=None, description="entrada | saida"),
+    status: str | None = Query(default=None,
+                               description="Lista itens só desta situação (ex.: OK)"),
     claims: TokenClaims = Depends(get_current_claims),
     session: AsyncSession = Depends(tenant_session),
 ):
     """Confronta o destaque de IBS/CBS dos XMLs com as alíquotas de teste de
     2026 (IBS 0,1% + CBS 0,9%): sem destaque, alíquota errada ou conta que não
-    fecha viram apontamento, com ranking de emitentes problemáticos."""
+    fecha viram apontamento, com ranking de emitentes problemáticos. Com
+    `status`, a lista de itens traz a situação pedida (inclusive OK/dispensado,
+    com a justificativa da classificação) — resumo e ranking não mudam."""
     return await IbsCbsService(session).verificar(
-        empresa_id=empresa_id, ano=ano, mes=mes, fluxo=fluxo
+        empresa_id=empresa_id, ano=ano, mes=mes, fluxo=fluxo, apenas_status=status
     )
 
 

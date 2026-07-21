@@ -70,6 +70,7 @@ ALIQUOTA_DIVERGENTE = "ALIQUOTA_DIVERGENTE"
 VALOR_DIVERGENTE = "VALOR_DIVERGENTE"
 TRATAMENTO_DIFERENCIADO = "TRATAMENTO_DIFERENCIADO"
 DISPENSADO = "DISPENSADO"
+_COM_PROBLEMA = (SEM_DESTAQUE, ALIQUOTA_DIVERGENTE, VALOR_DIVERGENTE)
 
 
 def _d(v) -> Decimal:
@@ -173,6 +174,7 @@ class IbsCbsService:
         ano: str | None = None,
         mes: str | None = None,
         fluxo: str | None = None,
+        apenas_status: str | None = None,
         limite_itens: int = 500,
     ) -> dict:
         n, it = Nota, NotaItem
@@ -219,7 +221,8 @@ class IbsCbsService:
             agg["itens"] += 1
             agg["valor"] += float(r.valor_produto or 0)
 
-            if status in (SEM_DESTAQUE, ALIQUOTA_DIVERGENTE, VALOR_DIVERGENTE):
+            # Ranking de emitentes: sempre e somente pendências reais.
+            if status in _COM_PROBLEMA:
                 chave_emit = r.cnpj_emit or "sem-cnpj"
                 e = emitentes.setdefault(chave_emit, {
                     "cnpj": r.cnpj_emit, "nome": r.nome_emit,
@@ -229,8 +232,21 @@ class IbsCbsService:
                 e["valor"] += float(r.valor_produto or 0)
                 e["status"][status] = e["status"].get(status, 0) + 1
 
+            # Lista de itens: por padrão só as pendências (é o que alimenta a
+            # carta); com apenas_status, a situação pedida — inclusive OK e
+            # dispensados, para a tela não ficar cega sobre o que passou.
+            incluir = (status == apenas_status) if apenas_status \
+                else status in _COM_PROBLEMA
+            if incluir:
                 if len(problemas) < limite_itens:
                     regua = regua_do_item(r.cst_ibs_cbs, r.c_class_trib)
+                    if status == DISPENSADO:
+                        regua = {
+                            "desc": (f"Emitente do Simples Nacional/MEI (CRT "
+                                     f"{r.crt_emit}) — dispensado do destaque de "
+                                     "IBS/CBS no ano-teste de 2026."),
+                            "p_ibs": None, "p_cbs": None,
+                        }
                     v_bc = _d(r.v_bc_ibs_cbs)
                     base_esp = v_bc if v_bc > 0 else _d(r.valor_produto)
                     problemas.append({
