@@ -70,6 +70,12 @@ class ErroST(_Erro, Enum):
         "o motor não assume a taxa atual, não calculada.",
         "Cadastrar a alíquota da UF (com vigência) na matriz de alíquotas e reauditar.",
     )
+    ENQUADRAMENTO_NAO_CADASTRADO = (
+        "ERRO_ENQUADRAMENTO_NAO_CADASTRADO",
+        "NCM/CEST sem enquadramento cadastrado na matriz para a UF de destino "
+        "na data — o motor não sabe se o produto é ST e não audita (fail-closed).",
+        "Cadastrar o enquadramento (ST ou TN, com vigência) nas Matrizes Fiscais e reauditar.",
+    )
     ST_INDEVIDO_REVENDA = (
         "ERRO_110_ST_INDEVIDO_REVENDA",
         "Revenda de produto com ST já retido (CST 60 / CSOSN 500) destacou "

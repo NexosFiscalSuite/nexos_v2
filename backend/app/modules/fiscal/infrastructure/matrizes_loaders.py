@@ -52,6 +52,18 @@ class _MvaSnapshot:
             if par is not None:
                 mva, linha_id = par
                 return MvaInfo(mva_original=mva, ncm_casado=c, matriz_id=linha_id)
+        if not cest_l:
+            # XML sem a tag CEST (típico de emitente que nem tratou o item como
+            # ST): casa pelo NCM. MVA única no NCM → usa; MVAs distintas por
+            # CEST → ambíguo, fail-closed (None trava com o erro de MVA).
+            for c in _candidatos_ncm(ncm):
+                pares = [v for (n, _ce, u), v in self.dados.items() if n == c and u == uf]
+                if pares:
+                    mvas = {p[0] for p in pares}
+                    if len(mvas) == 1:
+                        mva, linha_id = pares[0]
+                        return MvaInfo(mva_original=mva, ncm_casado=c, matriz_id=linha_id)
+                    return None
         return None
 
 
@@ -65,7 +77,35 @@ class _EnquadramentoSnapshot:
             reg = self.dados.get((c, cest_l, uf))
             if reg is not None:
                 return reg
+        if not cest_l:
+            # XML sem CEST: o cadastro NCM×CEST ainda vale — casa pelo NCM.
+            # Regime único entre os CEST do NCM → esse regime; conflito → abre o
+            # portão (ST) e a checagem de MVA a jusante decide com transparência.
+            for c in _candidatos_ncm(ncm):
+                regimes = {r for (n, _ce, u), r in self.dados.items() if n == c and u == uf}
+                if regimes:
+                    return regimes.pop() if len(regimes) == 1 else Regime.ST
         return Regime.TN   # não enquadrado = tributação normal
+
+    def explicar_tn(self, ncm: str, cest: str, uf_dest: str) -> str | None:
+        """Por que o item caiu em TN? None = TN explícito por cadastro (legítimo,
+        fora do motor por decisão). String = falta/conflito de cadastro — vira
+        NAO_AUDITAVEL acionável (com código de erro, reprocessável)."""
+        cest_l, uf = only_digits(cest), uf_dest.upper()
+        candidatos = _candidatos_ncm(ncm)
+        for c in candidatos:
+            if (c, cest_l, uf) in self.dados:
+                return None
+        cests_ncm = sorted({ce for (n, ce, u) in self.dados if u == uf and n in candidatos})
+        if not cests_ncm:
+            alvo = f"NCM {only_digits(ncm) or '—'}" + (f" · CEST {cest_l}" if cest_l else "")
+            return (f"{alvo} sem enquadramento cadastrado para {uf} — cadastre ST ou TN "
+                    "nas Matrizes Fiscais (Enquadramento) para o motor auditar.")
+        if cest_l:
+            return (f"CEST {cest_l} do XML não casa com o cadastro do NCM em {uf} "
+                    f"(CEST cadastrado: {', '.join(cests_ncm)}) — confira o item ou "
+                    "complete o cadastro para auditar.")
+        return None   # sem CEST no XML e NCM cadastrado: o fallback já respondeu
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,11 +175,12 @@ class MatrizesLoader:
         )
 
     async def _mva(self, uf, ncms, cests, data) -> _MvaSnapshot:
+        # Sem filtro por CEST: o XML pode vir sem a tag (o snapshot resolve o
+        # fallback por NCM) — poucas linhas por NCM, custo irrelevante.
         stmt = filtrar_vigencia(
             select(MatrizMva).where(
                 MatrizMva.uf_destino == uf,
                 MatrizMva.ncm.in_(ncms),
-                MatrizMva.cest.in_(cests),
             ),
             MatrizMva,
             data,
@@ -150,11 +191,12 @@ class MatrizesLoader:
         )
 
     async def _enquadramento(self, uf, ncms, cests, data) -> _EnquadramentoSnapshot:
+        # Sem filtro por CEST (mesma razão do _mva): o cadastro NCM×CEST precisa
+        # ser visível mesmo quando a nota veio sem a tag CEST.
         stmt = filtrar_vigencia(
             select(MatrizEnquadramentoSt).where(
                 MatrizEnquadramentoSt.uf_destino == uf,
                 MatrizEnquadramentoSt.ncm.in_(ncms),
-                MatrizEnquadramentoSt.cest.in_(cests),
             ),
             MatrizEnquadramentoSt,
             data,

@@ -73,6 +73,22 @@ class StAuditEngine:
             item.ncm, item.cest, operacao.uf_emit, operacao.uf_dest, operacao.data
         )
         if regime != Regime.ST:
+            # TN sem cadastro (ou CEST que não casa) não é "fora do motor por
+            # decisão": vira pendência COM código — a tela diz o que cadastrar e
+            # o reprocesso destrava a nota quando o cadastro chegar. TN por
+            # cadastro explícito ganha texto próprio (≠ do legado pré-fallback,
+            # que o reprocesso re-rotula uma única vez).
+            if regime == Regime.TN:
+                explicar = getattr(self.enquadramento_repo, "explicar_tn", None)
+                if explicar is not None:
+                    detalhe = explicar(item.ncm, item.cest, operacao.uf_dest)
+                    if detalhe:
+                        return self._nao_auditavel(
+                            item, ErroST.ENQUADRAMENTO_NAO_CADASTRADO, observacao=detalhe
+                        )
+                    return self._nao_auditavel(
+                        item, "regime TN por cadastro nas matrizes (fora do motor de ST)"
+                    )
             return self._nao_auditavel(item, f"regime {regime.value} (fora do motor de ST)")
 
         # Bifurcação por tpNF. SAÍDA de revenda com ST já retido (CST 60 / CSOSN
@@ -325,18 +341,21 @@ class StAuditEngine:
         )
 
     @staticmethod
-    def _nao_auditavel(item: ItemFiscal, motivo: ErroST | str) -> ResultadoAuditoria:
+    def _nao_auditavel(
+        item: ItemFiscal, motivo: ErroST | str, observacao: str | None = None
+    ) -> ResultadoAuditoria:
         """NAO_AUDITAVEL com motivo. Se vier um ErroST, expõe o código no erro
-        e a mensagem na observação (feedback claro, nunca silencioso)."""
+        e a mensagem na observação (feedback claro, nunca silencioso); uma
+        `observacao` explícita, mais específica que a genérica do enum, vence."""
         if isinstance(motivo, ErroST):
             return ResultadoAuditoria(
                 numero_item=item.numero_item,
                 status=StatusAuditoria.NAO_AUDITAVEL,
                 erros=(motivo,),
-                observacao=motivo.mensagem,
+                observacao=observacao or motivo.mensagem,
             )
         return ResultadoAuditoria(
             numero_item=item.numero_item,
             status=StatusAuditoria.NAO_AUDITAVEL,
-            observacao=motivo,
+            observacao=observacao or motivo,
         )

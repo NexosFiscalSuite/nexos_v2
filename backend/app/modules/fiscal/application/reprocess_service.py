@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.cfop_rules.infrastructure.repositories import CfopRegraRepository
@@ -31,12 +31,21 @@ class ReprocessService:
         alvo: dict[UUID, UUID] = {}     # nota_id -> empresa_id
 
         # 1) Notas TRAVADAS por falta de matriz: NAO_AUDITAVEL COM código de erro
-        #    (ex.: ERRO_MVA_NAO_ENCONTRADA). As sem código são "fora do motor de ST"
-        #    (produto não-ST) — legítimas, nunca mudam, não entram no reprocesso.
+        #    (ex.: ERRO_MVA_NAO_ENCONTRADA, ERRO_ENQUADRAMENTO_NAO_CADASTRADO). As
+        #    sem código são TN por cadastro explícito (fora do motor POR DECISÃO)
+        #    — legítimas, nunca mudam, não entram no reprocesso.
         q = select(AuditoriaIcmsSt.nota_id, AuditoriaIcmsSt.empresa_id).where(
             AuditoriaIcmsSt.status == "NAO_AUDITAVEL",
-            AuditoriaIcmsSt.codigo_erro.isnot(None),
-            AuditoriaIcmsSt.codigo_erro != "",
+            or_(
+                and_(
+                    AuditoriaIcmsSt.codigo_erro.isnot(None),
+                    AuditoriaIcmsSt.codigo_erro != "",
+                ),
+                # Legado pré-fallback de CEST: TN mudo (sem código). Re-audita
+                # uma vez — o motor re-rotula em "TN por cadastro" (novo texto,
+                # não volta a casar aqui) ou em ERRO_ENQUADRAMENTO_NAO_CADASTRADO.
+                AuditoriaIcmsSt.observacao == "regime TN (fora do motor de ST)",
+            ),
         )
         if empresa_id:
             q = q.where(AuditoriaIcmsSt.empresa_id == empresa_id)
