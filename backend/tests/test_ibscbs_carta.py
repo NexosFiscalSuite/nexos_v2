@@ -28,6 +28,7 @@ def _texto(pdf: bytes) -> str:
 def _item(n: int = 1, **extra) -> dict:
     base = {
         "numero_nota": "1234", "numero_item": n, "data_emissao": "2026-06-15",
+        "codigo": f"P{n:03d}",
         "descricao": f"CAFÉ TORRADO E MOÍDO 500G — item {n}",
         "cst": "000", "c_class_trib": "000001", "status": "SEM_DESTAQUE",
         "p_ibs": 0, "v_ibs": 0, "p_cbs": 0, "v_cbs": 0,
@@ -74,7 +75,8 @@ def test_textos_entrada_e_saida():
 def test_detalhe_completo_mais_resumo_por_produto():
     """A carta traz o quadro completo nota a nota (dimensão do problema) E o
     resumo com cada produto uma única vez (o que corrigir no emissor)."""
-    mesmo = dict(descricao="CAFE TORRADO 500G", chave_acesso=None)
+    # Mesmo cProd em 3 notas (nItem pode variar) → agrupa pelo código.
+    mesmo = dict(codigo="CAF-500", descricao="CAFE TORRADO 500G", chave_acesso=None)
     itens = [
         _item(1, numero_nota="111", **mesmo),
         _item(2, numero_nota="222", **mesmo),
@@ -92,6 +94,7 @@ def test_detalhe_completo_mais_resumo_por_produto():
     assert "Resumo para correção" in t and "2 produto" in t
     assert "111, 222, 333" in t                        # coluna Nota(s) do resumo
     assert t.count("CAFE TORRADO 500G") == 4           # 3 no detalhe + 1 no resumo
+    assert t.count("CAF-500") == 1                     # cód do produto, só no resumo
     assert "uma única vez" in t                        # rodapé explicando o resumo
 
 

@@ -180,7 +180,7 @@ class IbsCbsService:
             select(
                 it.id, n.empresa_id, n.chave_acesso, n.numero, n.nome_emit,
                 n.cnpj_emit, n.crt_emit, n.fluxo, n.data_emissao,
-                it.numero_item, it.descricao, it.valor_produto,
+                it.numero_item, it.codigo, it.descricao, it.valor_produto,
                 it.v_bc_ibs_cbs, it.p_ibs_uf, it.v_ibs_uf, it.p_ibs_mun,
                 it.v_ibs_mun, it.p_cbs, it.v_cbs, it.cst_ibs_cbs, it.c_class_trib,
             )
@@ -242,6 +242,7 @@ class IbsCbsService:
                         "emitente": r.nome_emit,
                         "cnpj_emit": r.cnpj_emit,
                         "numero_item": r.numero_item,
+                        "codigo": r.codigo,
                         "descricao": r.descricao,
                         "valor_produto": float(r.valor_produto or 0),
                         "v_bc_ibs_cbs": float(r.v_bc_ibs_cbs or 0),

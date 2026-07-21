@@ -59,13 +59,15 @@ def _cnpj(c) -> str:
 
 
 def _agrupar_por_produto(itens: list[dict]) -> list[dict]:
-    """Produto repetido em várias notas vira UMA linha na carta: corrigida a
+    """Produto repetido em várias notas vira UMA linha no resumo: corrigida a
     parametrização do produto no emissor, todas as emissões seguintes saem
-    certas. Valores/percentuais exibidos são os da primeira ocorrência."""
+    certas. Agrupa pelo código do produto (cProd) quando houver — é como o
+    emitente localiza o item no sistema dele — senão pela descrição."""
     grupos: dict[tuple, dict] = {}
     for i in itens:
-        chave = ((i.get("descricao") or "").strip().upper(), i.get("cst"),
-                 i.get("c_class_trib"), i.get("status"))
+        produto = (str(i.get("codigo") or "").strip()
+                   or (i.get("descricao") or "").strip().upper())
+        chave = (produto, i.get("cst"), i.get("c_class_trib"), i.get("status"))
         g = grupos.get(chave)
         if g is None:
             g = grupos[chave] = dict(i, notas=[])
@@ -231,15 +233,16 @@ def gerar_carta(
     pdf.set_font("helvetica", "", 7.4)
 
     with pdf.table(
-        col_widths=(58, 22, 34, 26, 42),
-        text_align=("LEFT", "CENTER", "CENTER", "CENTER", "CENTER"),
+        col_widths=(20, 48, 20, 32, 24, 38),
+        text_align=("CENTER", "LEFT", "CENTER", "CENTER", "CENTER", "CENTER"),
         borders_layout="HORIZONTAL_LINES",
         line_height=3.6,
         headings_style=FontFace(emphasis="BOLD", color=NAVY),
         padding=1.2,
     ) as table:
         cab = table.row()
-        for h in ("Produto", "Classif.", "Devido (IBS / CBS)", "Situação", "Nota(s)"):
+        for h in ("Cód.", "Produto", "Classif.", "Devido (IBS / CBS)", "Situação",
+                  "Nota(s)"):
             cab.cell(_t(h))
         for g in grupos:
             if g.get("p_ibs_esperado") is None:
@@ -250,6 +253,7 @@ def gerar_carta(
             nfs = g["notas"]
             notas = ", ".join(nfs[:3]) + (f" +{len(nfs) - 3}" if len(nfs) > 3 else "")
             linha = table.row()
+            linha.cell(_t(g.get("codigo") or "—"))
             linha.cell(_t((g.get("descricao") or "—")[:60]))
             linha.cell(_t(f"{g.get('cst') or '—'}\n{g.get('c_class_trib') or ''}"))
             linha.cell(_t(devido))
