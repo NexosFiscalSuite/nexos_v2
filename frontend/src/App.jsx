@@ -14,7 +14,6 @@ import Grupos from './pages/Grupos'
 import Auditoria from './pages/Auditoria'
 import EmpresaDashboard from './pages/EmpresaDashboard'
 import Usuarios from './pages/Usuarios'
-import Perfil from './pages/Perfil'
 import Conformidade from './pages/Conformidade'
 import Relatorios from './pages/Relatorios'
 import DivergenciasST from './pages/DivergenciasST'
@@ -67,7 +66,6 @@ export default function App() {
                 <Route path="/usuarios"      element={<AdminRoute><Usuarios /></AdminRoute>} />
                 <Route path="/grupos"        element={<AdminRoute><Grupos /></AdminRoute>} />
                 <Route path="/auditoria"     element={<AdminRoute><Auditoria /></AdminRoute>} />
-                <Route path="/perfil"        element={<Perfil />} />
               </Route>
             </Routes>
           </BrowserRouter>

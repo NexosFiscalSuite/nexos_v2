@@ -24,7 +24,6 @@ const PAGE_TITLES = {
   '/grupos':     'Grupos',
   '/usuarios':   'Usuários',
   '/auditoria':  'Auditoria',
-  '/perfil':     'Meu Perfil',
 }
 
 const NAV = [
@@ -350,10 +349,8 @@ export default function Layout() {
           {/* Divider */}
           <div style={{ width:1, height:28, background:'var(--border)', flexShrink:0 }} />
 
-          {/* Avatar + Sair */}
-          <div onClick={() => navigate('/perfil')} style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', padding:'4px 8px', borderRadius:8, transition:'background .12s' }}
-            onMouseEnter={e => e.currentTarget.style.background='var(--surface-2)'}
-            onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+          {/* Avatar (apenas visual) + Sair */}
+          <div style={{ display:'flex', alignItems:'center', gap:8, padding:'4px 8px' }}>
             <div style={{ width:30, height:30, borderRadius:'50%', background:'var(--primary-lt)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:700, color:'var(--primary-text)' }}>
               {(user?.full_name || 'U')[0].toUpperCase()}
             </div>

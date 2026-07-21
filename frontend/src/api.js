@@ -323,7 +323,6 @@ export const api = {
 
   // ── Recursos do V1 ainda sem endpoint no V2 (fase futura) ──
   certificado: NAO_IMPL('Certificado A1'),
-  updateProfile: NAO_IMPL('Editar perfil'),
 }
 
 export function saveBlob(blob, filename) {
