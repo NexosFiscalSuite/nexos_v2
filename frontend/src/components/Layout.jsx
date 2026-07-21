@@ -142,9 +142,10 @@ function EmpresaTopbar() {
     return () => document.removeEventListener('mousedown', h)
   }, [])
 
+  // Lista completa (a caixa rola): cortar aqui já escondeu empresa de usuário.
   const filtered = empresas.filter(e =>
     !query || e.razao_social.toLowerCase().includes(query.toLowerCase()) || e.cnpj.includes(query)
-  ).slice(0, 6)
+  )
 
   return (
     <div ref={ref} style={{ position:'relative' }}>

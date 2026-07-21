@@ -450,6 +450,118 @@ input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible {
 .login-error .ti { font-size: 16px; flex-shrink: 0; }
 
 .login-form { display: flex; flex-direction: column; gap: 15px; }
+
+/* ── Tour guiado (driver.js) com a cara do app: cantos arredondados e botões
+      na cor da seleção de empresa (primary-lt + azul-marinho). ─────────── */
+.driver-popover.sol-tour {
+  border-radius: 16px;
+  padding: 20px;
+  font-family: var(--font);
+  box-shadow: var(--shadow-pop);
+  max-width: 340px;
+}
+.driver-popover.sol-tour .driver-popover-title {
+  font: 700 15px/1.35 var(--font-display);
+  color: var(--text-1);
+}
+.driver-popover.sol-tour .driver-popover-description {
+  font: 400 13px/1.55 var(--font);
+  color: var(--text-3);
+  margin-top: 6px;
+}
+.driver-popover.sol-tour .driver-popover-progress-text {
+  font: 500 12px var(--font);
+  color: var(--text-4);
+}
+.driver-popover.sol-tour .driver-popover-footer { margin-top: 14px; }
+.driver-popover.sol-tour .driver-popover-navigation-btns button + button { margin-left: 8px; }
+.driver-popover.sol-tour .driver-popover-footer button {
+  border-radius: var(--radius-pill);
+  padding: 7px 15px;
+  font: 600 12.5px var(--font);
+  text-shadow: none;
+  border: 1.5px solid transparent;
+  background: var(--primary-lt);
+  color: var(--primary-text);
+  transition: background .15s ease;
+}
+.driver-popover.sol-tour .driver-popover-footer button:hover {
+  background: var(--primary-lt2);
+  color: var(--primary-text);
+}
+.driver-popover.sol-tour .driver-popover-footer button:disabled {
+  opacity: .45;
+}
+.driver-popover.sol-tour .driver-popover-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-4);
+}
+.driver-popover.sol-tour .driver-popover-close-btn:hover { color: var(--text-2); }
+
+/* ── Seletor com chips (Grupos): tags removíveis + busca inline p/ adicionar,
+      quebrando linha — nada de rolagem lateral. ─────────────────────────── */
+.chips-box {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--surface);
+}
+.chips-box:focus-within { border-color: var(--primary); }
+.chip-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 8px 4px 10px;
+  border-radius: 8px;
+  background: var(--primary-lt);
+  color: var(--primary-text);
+  font: 500 12px var(--font);
+}
+.chip-tag > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip-tag.chip-fixa { background: var(--accent-lt); color: var(--accent-text); }
+.chip-tag button {
+  border: none; background: none; cursor: pointer; padding: 0;
+  color: inherit; opacity: .6; font-size: 12px; line-height: 1; display: flex;
+}
+.chip-tag button:hover { opacity: 1; }
+.chips-box input {
+  flex: 1;
+  min-width: 150px;
+  border: none;
+  outline: none;
+  padding: 5px 4px;
+  font: 400 13px var(--font);
+  color: var(--text-1);
+  background: transparent;
+}
+.chips-sugestoes {
+  position: absolute;
+  left: 0; right: 0; top: calc(100% + 4px);
+  z-index: 600;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-pop);
+  max-height: 220px;
+  overflow-y: auto;
+}
+.chips-sugestoes > div {
+  padding: 9px 13px;
+  font-size: 13px;
+  cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.chips-sugestoes > div:hover { background: var(--primary-lt); color: var(--primary-text); }
+.chips-sugestoes .cs-vazio { color: var(--text-4); cursor: default; }
+.chips-sugestoes .cs-vazio:hover { background: transparent; color: var(--text-4); }
 .login-field span {
   display: block; font-size: 12.5px; font-weight: 600; color: var(--text-2); margin-bottom: 7px;
 }

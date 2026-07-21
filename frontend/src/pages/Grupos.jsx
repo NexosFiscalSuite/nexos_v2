@@ -1,9 +1,64 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Dropdown from '../components/Dropdown'
 import { api, getUser } from '../api'
 import { useToast, ToastContainer } from '../hooks/useToast'
 
 const novoForm = () => ({ nome: '', descricao: '', empresa_ids: [], user_ids: [], supervisor_id: '' })
+
+// Seleção por chips (como no exemplo do escritório): tags removíveis que
+// quebram linha + busca inline que sugere e adiciona — sem rolagem lateral.
+function ChipsPicker({ itens, selecionados, fixos = [], onAdd, onRemove, placeholder }) {
+  const [busca, setBusca] = useState('')
+  const [aberto, setAberto] = useState(false)
+  const ref = useRef()
+
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setAberto(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [])
+
+  const porId = new Map(itens.map(i => [i.id, i]))
+  const disponiveis = itens.filter(i =>
+    !selecionados.includes(i.id) && !fixos.some(f => f.id === i.id) &&
+    (!busca || i.label.toLowerCase().includes(busca.toLowerCase()))
+  )
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <div className="chips-box" onClick={() => setAberto(true)}>
+        {fixos.map(f => (
+          <span key={f.id} className="chip-tag chip-fixa" title={f.hint}>
+            <span>{f.label}</span>
+          </span>
+        ))}
+        {selecionados.map(id => (
+          <span key={id} className="chip-tag" title={porId.get(id)?.label}>
+            <span>{porId.get(id)?.label || '…'}</span>
+            <button type="button" aria-label="Remover" onClick={(e) => { e.stopPropagation(); onRemove(id) }}>
+              <i className="ti ti-x" />
+            </button>
+          </span>
+        ))}
+        <input
+          value={busca}
+          placeholder={placeholder}
+          onChange={e => { setBusca(e.target.value); setAberto(true) }}
+          onFocus={() => setAberto(true)}
+        />
+      </div>
+      {aberto && (
+        <div className="chips-sugestoes">
+          {disponiveis.length === 0
+            ? <div className="cs-vazio">{busca ? 'Nada encontrado.' : 'Todos já estão no grupo.'}</div>
+            : disponiveis.map(i => (
+              <div key={i.id} onClick={() => { onAdd(i.id); setBusca('') }}>{i.label}</div>
+            ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function Grupos() {
   const { toasts, toast } = useToast()
@@ -44,10 +99,8 @@ export default function Grupos() {
     } catch (e) { toast(e.message, 'error') }
   }
 
-  const toggle = (key, id) => setForm(f => {
-    const has = f[key].includes(id)
-    return { ...f, [key]: has ? f[key].filter(x => x !== id) : [...f[key], id] }
-  })
+  const add = (key, id) => setForm(f => f[key].includes(id) ? f : { ...f, [key]: [...f[key], id] })
+  const remove = (key, id) => setForm(f => ({ ...f, [key]: f[key].filter(x => x !== id) }))
 
   async function salvar(e) {
     e.preventDefault()
@@ -116,40 +169,43 @@ export default function Grupos() {
 
       {modal && (
         <div className="modal-overlay" onClick={() => setModal(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ width: 680, maxWidth: '96%' }}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ width: 860, maxWidth: '96%' }}>
             <div className="modal-header">
               <h2>{editId ? 'Editar grupo' : 'Novo grupo'}</h2>
               <button className="btn btn-icon" onClick={() => setModal(false)}><i className="ti ti-x" /></button>
             </div>
             <form onSubmit={salvar}>
               <div className="modal-body">
-                <div className="field"><label>Nome</label><input value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} required /></div>
-                <div className="field"><label>Descrição</label><input value={form.descricao} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} placeholder="opcional" /></div>
-                <div className="field"><label>Supervisor do grupo</label><Dropdown value={form.supervisor_id} onChange={v => setForm(f => ({ ...f, supervisor_id: v }))} options={supOpts} /></div>
-
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                  <div className="field">
-                    <label>Empresas do grupo ({form.empresa_ids.length})</label>
-                    <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', maxHeight: 200, overflowY: 'auto', padding: 8 }}>
-                      {empresas.length === 0 ? <p style={{ fontSize: 12, color: 'var(--text-4)' }}>Nenhuma empresa.</p> : empresas.map(e => (
-                        <label key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, padding: '3px 0', cursor: 'pointer' }}>
-                          <input type="checkbox" checked={form.empresa_ids.includes(e.id)} onChange={() => toggle('empresa_ids', e.id)} />
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.razao_social}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="field">
-                    <label>Membros ({form.user_ids.length})</label>
-                    <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', maxHeight: 200, overflowY: 'auto', padding: 8 }}>
-                      {users.map(u => (
-                        <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, padding: '3px 0', cursor: 'pointer', opacity: u.id === form.supervisor_id ? 0.5 : 1 }}>
-                          <input type="checkbox" checked={form.user_ids.includes(u.id) || u.id === form.supervisor_id} disabled={u.id === form.supervisor_id} onChange={() => toggle('user_ids', u.id)} />
-                          <span>{u.full_name} {u.id === form.supervisor_id && '(supervisor)'}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
+                  <div className="field"><label>Nome</label><input value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} required /></div>
+                  <div className="field"><label>Supervisor (responsável) do grupo</label><Dropdown value={form.supervisor_id} onChange={v => setForm(f => ({ ...f, supervisor_id: v }))} options={supOpts} /></div>
+                </div>
+                <div className="field"><label>Descrição</label><input value={form.descricao} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} placeholder="opcional" /></div>
+
+                <div className="field">
+                  <label>Empresas do grupo ({form.empresa_ids.length})</label>
+                  <ChipsPicker
+                    itens={empresas.map(e => ({ id: e.id, label: e.razao_social }))}
+                    selecionados={form.empresa_ids}
+                    onAdd={id => add('empresa_ids', id)}
+                    onRemove={id => remove('empresa_ids', id)}
+                    placeholder="Adicionar uma empresa…"
+                  />
+                </div>
+
+                <div className="field">
+                  <label>Membros com acesso ({form.user_ids.length})</label>
+                  <ChipsPicker
+                    itens={users.map(u => ({ id: u.id, label: u.full_name }))}
+                    selecionados={form.user_ids.filter(id => id !== form.supervisor_id)}
+                    fixos={users.filter(u => u.id === form.supervisor_id).map(u => ({
+                      id: u.id, label: `${u.full_name} (supervisor)`,
+                      hint: 'O supervisor já tem acesso — definido no campo acima',
+                    }))}
+                    onAdd={id => add('user_ids', id)}
+                    onRemove={id => remove('user_ids', id)}
+                    placeholder="Adicionar um usuário…"
+                  />
                 </div>
                 <p style={{ fontSize: 11.5, color: 'var(--text-4)', marginTop: 4 }}>Admins e supervisores enxergam todas as empresas. Usuários comuns só veem as empresas dos grupos a que pertencem.</p>
               </div>

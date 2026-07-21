@@ -56,6 +56,8 @@ export function iniciarTour() {
     allowClose: true,
     overlayOpacity: 0.65,
     stagePadding: 6,
+    popoverClass: 'sol-tour',   // visual do app (styles.css) por cima do default
+    stageRadius: 10,
     nextBtnText: 'Próximo →',
     prevBtnText: '← Voltar',
     doneBtnText: 'Concluir',
