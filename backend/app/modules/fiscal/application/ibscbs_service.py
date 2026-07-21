@@ -76,6 +76,30 @@ def _d(v) -> Decimal:
     return Decimal(str(v or 0))
 
 
+def regua_do_item(cst: str | None, c_class_trib: str | None) -> dict:
+    """Régua esperada do item: percentuais devidos (None = sem régua percentual,
+    ex.: monofásica/fixa) + a descrição oficial que justifica — alimenta o
+    "veio ▸ esperado" da tela."""
+    regra = tabela_classtrib().get((c_class_trib or "").strip())
+    if regra is not None:
+        base = {"desc": regra["desc"]}
+        if regra["modo"] == "livre":
+            return {**base, "p_ibs": None, "p_cbs": None}
+        if regra["modo"] == "zero":
+            return {**base, "p_ibs": Decimal("0"), "p_cbs": Decimal("0")}
+        return {
+            **base,
+            "p_ibs": ALIQ_IBS_TESTE * (100 - regra["red_ibs"]) / 100,
+            "p_cbs": ALIQ_CBS_TESTE * (100 - regra["red_cbs"]) / 100,
+        }
+    cst = (cst or "").strip()
+    if cst and cst != CST_INTEGRAL:
+        return {"desc": f"CST {cst} — tratamento diferenciado (sem régua percentual)",
+                "p_ibs": None, "p_cbs": None}
+    return {"desc": "Tributação integral — alíquotas de teste de 2026",
+            "p_ibs": ALIQ_IBS_TESTE, "p_cbs": ALIQ_CBS_TESTE}
+
+
 def classificar_item(
     *,
     crt_emit: str | None,
@@ -206,6 +230,9 @@ class IbsCbsService:
                 e["status"][status] = e["status"].get(status, 0) + 1
 
                 if len(problemas) < limite_itens:
+                    regua = regua_do_item(r.cst_ibs_cbs, r.c_class_trib)
+                    v_bc = _d(r.v_bc_ibs_cbs)
+                    base_esp = v_bc if v_bc > 0 else _d(r.valor_produto)
                     problemas.append({
                         "status": status,
                         "chave_acesso": r.chave_acesso,
@@ -222,6 +249,16 @@ class IbsCbsService:
                         "v_ibs": float(_d(r.v_ibs_uf) + _d(r.v_ibs_mun)),
                         "p_cbs": float(r.p_cbs or 0),
                         "v_cbs": float(r.v_cbs or 0),
+                        # "veio ▸ esperado": régua devida ao CST/cClassTrib do item
+                        "cst": r.cst_ibs_cbs,
+                        "c_class_trib": r.c_class_trib,
+                        "regua_desc": regua["desc"],
+                        "p_ibs_esperado": None if regua["p_ibs"] is None else float(regua["p_ibs"]),
+                        "p_cbs_esperado": None if regua["p_cbs"] is None else float(regua["p_cbs"]),
+                        "v_ibs_esperado": None if regua["p_ibs"] is None
+                            else float(base_esp * regua["p_ibs"] / 100),
+                        "v_cbs_esperado": None if regua["p_cbs"] is None
+                            else float(base_esp * regua["p_cbs"] / 100),
                     })
 
         ranking = sorted(emitentes.values(), key=lambda e: e["valor"], reverse=True)

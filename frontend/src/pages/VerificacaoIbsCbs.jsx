@@ -24,6 +24,19 @@ const badge = (txt, tone = 'info') => (
   <span className="badge" style={{ background: `var(--${tone}-bg)`, color: `var(--${tone}-text)` }}>{txt}</span>
 )
 
+// Célula "veio ▸ esperado": o que o XML trouxe (vermelho) sobre o que a régua
+// do CST/cClassTrib manda (verde). "Sem régua" = monofásica/fixa/diferimento.
+function Comparativo({ pVeio, vVeio, pEsp, vEsp }) {
+  return (
+    <div style={{ lineHeight: 1.4, whiteSpace: 'nowrap', textAlign: 'right' }}>
+      <div style={{ color: 'var(--err-text)', fontWeight: 600 }}>{pct(pVeio)} · {brl(vVeio)}</div>
+      <div style={{ color: 'var(--ok-text)', fontSize: 11.5 }}>
+        {pEsp == null ? 'sem régua percentual' : <>✔ {pct(pEsp)} · {brl(vEsp)}</>}
+      </div>
+    </div>
+  )
+}
+
 export default function VerificacaoIbsCbs() {
   const { selectedEmpresa } = useEmpresa()
   const { ano, mes } = useCompetencia()
@@ -143,9 +156,10 @@ export default function VerificacaoIbsCbs() {
                   <thead>
                     <tr>
                       <th>Situação</th><th>Emissão</th><th>NF / Item</th><th>Emitente</th>
+                      <th>Classificação</th>
                       <th style={{ textAlign: 'right' }}>Valor item</th>
-                      <th style={{ textAlign: 'right' }}>pIBS</th><th style={{ textAlign: 'right' }}>vIBS</th>
-                      <th style={{ textAlign: 'right' }}>pCBS</th><th style={{ textAlign: 'right' }}>vCBS</th>
+                      <th style={{ textAlign: 'right' }}>IBS <span style={{ fontWeight: 400, color: 'var(--text-4)' }}>(veio / ✔ devido)</span></th>
+                      <th style={{ textAlign: 'right' }}>CBS <span style={{ fontWeight: 400, color: 'var(--text-4)' }}>(veio / ✔ devido)</span></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -154,12 +168,17 @@ export default function VerificacaoIbsCbs() {
                         <td>{badge(TONE[i.status]?.label || i.status, TONE[i.status]?.tone)}</td>
                         <td style={{ whiteSpace: 'nowrap' }}>{(i.data_emissao || '').split('-').reverse().join('/')}</td>
                         <td className="mono">{i.numero_nota} / {i.numero_item}</td>
-                        <td style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={i.emitente}>{i.emitente}</td>
+                        <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={i.emitente}>{i.emitente}</td>
+                        <td className="mono" title={i.regua_desc} style={{ fontSize: 12, cursor: 'help', whiteSpace: 'nowrap' }}>
+                          {i.cst || '—'}{i.c_class_trib ? ` · ${i.c_class_trib}` : ''} <i className="ti ti-info-circle" style={{ opacity: .45, fontSize: 12 }} />
+                        </td>
                         <td style={{ textAlign: 'right' }}>{brl(i.valor_produto)}</td>
-                        <td style={{ textAlign: 'right' }}>{pct(i.p_ibs)}</td>
-                        <td style={{ textAlign: 'right' }}>{brl(i.v_ibs)}</td>
-                        <td style={{ textAlign: 'right' }}>{pct(i.p_cbs)}</td>
-                        <td style={{ textAlign: 'right' }}>{brl(i.v_cbs)}</td>
+                        <td style={{ textAlign: 'right' }}>
+                          <Comparativo pVeio={i.p_ibs} vVeio={i.v_ibs} pEsp={i.p_ibs_esperado} vEsp={i.v_ibs_esperado} />
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <Comparativo pVeio={i.p_cbs} vVeio={i.v_cbs} pEsp={i.p_cbs_esperado} vEsp={i.v_cbs_esperado} />
+                        </td>
                       </tr>
                     ))}
                   </tbody>

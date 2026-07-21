@@ -19,6 +19,7 @@ from app.modules.fiscal.application.ibscbs_service import (
     VALOR_DIVERGENTE,
     IbsCbsService,
     classificar_item,
+    regua_do_item,
 )
 from app.modules.fiscal.domain.parser import parse_xml
 from app.modules.fiscal.infrastructure.models import Nota, NotaItem
@@ -176,6 +177,22 @@ def test_tabela_oficial_zero_livre_e_integral():
     assert _cls(cst="000", c_class_trib="000001") == OK
     # Integral declarado mas veio tudo zerado → não aplicou as alíquotas.
     assert _cls(cst="000", c_class_trib="000001", **zeros) == ALIQUOTA_DIVERGENTE
+
+
+def test_regua_do_item_expoe_o_esperado():
+    """Alimenta o 'veio ▸ esperado' da tela: percentuais devidos por classificação."""
+    integral = regua_do_item("000", "000001")
+    assert (integral["p_ibs"], integral["p_cbs"]) == (_D("0.10"), _D("0.90"))
+
+    reduzida = regua_do_item("200", "200034")            # alimentos −60%
+    assert (reduzida["p_ibs"], reduzida["p_cbs"]) == (_D("0.04"), _D("0.36"))
+
+    isenta = regua_do_item("410", "410004")              # exportação: zero devido
+    assert (isenta["p_ibs"], isenta["p_cbs"]) == (_D("0"), _D("0"))
+
+    mono = regua_do_item("620", "620001")                # monofásica: sem régua %
+    assert mono["p_ibs"] is None and mono["p_cbs"] is None
+    assert "desc" in mono and mono["desc"]
 
 
 # --------------------------------------------------------------------------- #
