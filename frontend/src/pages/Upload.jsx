@@ -27,12 +27,12 @@ export default function Upload() {
   const [busy, setBusy] = useState(false)
 
   const addFiles = useCallback((novos) => {
-    const xmls = Array.from(novos).filter(f => f.name.toLowerCase().endsWith('.xml'))
-    if (!xmls.length) { toast('Selecione arquivos .xml', 'error'); return }
+    const aceitos = Array.from(novos).filter(f => /\.(xml|zip)$/i.test(f.name))
+    if (!aceitos.length) { toast('Selecione arquivos .xml ou .zip', 'error'); return }
     setFiles(prev => {
       const nomes = new Set(prev.map(f => f.name + f.size))
       const merged = [...prev]
-      xmls.forEach(f => { if (!nomes.has(f.name + f.size)) merged.push(f) })
+      aceitos.forEach(f => { if (!nomes.has(f.name + f.size)) merged.push(f) })
       return merged
     })
   }, [toast])
@@ -107,9 +107,9 @@ export default function Upload() {
           onDrop={onDrop}
         >
           <i className="ti ti-file-upload" />
-          <div className="uz-title">Arraste os XMLs aqui ou clique para selecionar</div>
-          <div className="uz-sub">Vários arquivos de uma vez · .xml</div>
-          <input ref={inputRef} type="file" accept=".xml" multiple hidden
+          <div className="uz-title">Arraste os XMLs (ou um .zip com XMLs) aqui, ou clique para selecionar</div>
+          <div className="uz-sub">Vários arquivos de uma vez · .xml e .zip</div>
+          <input ref={inputRef} type="file" accept=".xml,.zip" multiple hidden
             onChange={e => { addFiles(e.target.files); e.target.value = '' }} />
         </div>
 
@@ -135,7 +135,7 @@ export default function Upload() {
           <button className="btn btn-primary" disabled={busy || !files.length || !selectedEmpresa} onClick={enviar}>
             {busy
               ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Enviando...</>
-              : <><i className="ti ti-upload" /> Importar {files.length || ''} XML(s)</>}
+              : <><i className="ti ti-upload" /> Importar {files.length || ''} arquivo(s)</>}
           </button>
         </div>
       </div>

@@ -3,8 +3,13 @@
 Portado da lógica do upload do V1, agora rodando no WORKER (assíncrono) e sob
 RLS. Dedupe por (empresa, chave). Eventos de cancelamento viram NotaEvento e
 marcam a nota; se a nota ainda não existe, o evento fica "órfão".
+
+Arquivos .zip são expandidos AQUI (no worker): cada XML interno é processado
+como se tivesse sido enviado avulso, com guardas anti zip-bomb.
 """
+import io
 import re
+import zipfile
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from uuid import UUID, uuid4
@@ -33,6 +38,46 @@ def _dec(v) -> Decimal:
         return Decimal(str(v if v is not None else 0))
     except (InvalidOperation, ValueError, TypeError):
         return Decimal("0")
+
+
+# ── Expansão de ZIP (worker) — guardas anti zip-bomb ─────────────────────────
+# O upload já limita o ZIP comprimido (150 MB); aqui limitamos o DESCOMPRIMIDO.
+_ZIP_MAGIC = (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08")
+MAX_ZIP_MEMBROS = 10_000                       # arquivos por ZIP
+MAX_ZIP_MEMBRO_BYTES = 15 * 1024 * 1024        # mesmo teto do XML avulso
+MAX_ZIP_EXPANDIDO_BYTES = 600 * 1024 * 1024    # total descomprimido por ZIP
+
+
+def _expandir_zip(content: bytes, nome: str, resumo: dict):
+    """Gera (nome_interno, bytes) dos XMLs de um ZIP. Problemas viram entradas
+    em resumo['erros'] — nunca derrubam o lote."""
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(content))
+    except zipfile.BadZipFile:
+        resumo["erros"].append({"arquivo": nome, "erro": "ZIP corrompido/ilegível."})
+        return
+    total = membros = 0
+    for info in zf.infolist():
+        if info.is_dir():
+            continue
+        interno = info.filename
+        rotulo = f"{nome} » {interno}"
+        if not interno.lower().endswith(".xml"):
+            if interno.lower().endswith(".zip"):
+                resumo["erros"].append({"arquivo": rotulo, "erro": "ZIP dentro de ZIP não é suportado."})
+            continue  # PDFs/planilhas etc. dentro do ZIP são ignorados em silêncio
+        membros += 1
+        if membros > MAX_ZIP_MEMBROS:
+            resumo["erros"].append({"arquivo": nome, "erro": f"ZIP excede {MAX_ZIP_MEMBROS} arquivos; excedentes ignorados."})
+            return
+        if info.file_size > MAX_ZIP_MEMBRO_BYTES:
+            resumo["erros"].append({"arquivo": rotulo, "erro": "XML interno excede 15 MB; ignorado."})
+            continue
+        total += info.file_size
+        if total > MAX_ZIP_EXPANDIDO_BYTES:
+            resumo["erros"].append({"arquivo": nome, "erro": "ZIP descomprimido excede o limite; excedentes ignorados."})
+            return
+        yield rotulo, zf.read(info)
 
 
 def _novo_resumo(total: int) -> dict:
@@ -73,7 +118,14 @@ class ImportService:
             except Exception as e:
                 resumo["erros"].append({"arquivo": nome, "erro": f"Falha ao ler upload: {e}"})
                 continue
-            await self._processar_arquivo(content, nome, tenant_id, empresa, user_id, resumo)
+            if content[:4] in _ZIP_MAGIC:
+                # .zip: cada XML interno vira um "arquivo" do lote.
+                for rotulo, xml in _expandir_zip(content, nome, resumo):
+                    resumo["total_arquivos"] += 1
+                    await self._processar_arquivo(xml, rotulo, tenant_id, empresa, user_id, resumo)
+                resumo["total_arquivos"] -= 1  # o próprio .zip sai da conta
+            else:
+                await self._processar_arquivo(content, nome, tenant_id, empresa, user_id, resumo)
             try:
                 self.storage.delete(item["key"])  # limpa o staging
             except Exception:
