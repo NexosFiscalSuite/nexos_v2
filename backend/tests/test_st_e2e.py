@@ -271,12 +271,23 @@ async def test_exportacao_xlsx_das_divergencias(sessao):
     xlsx = gerar_xlsx_divergencias(itens, "06/2026")
 
     wb = load_workbook(io.BytesIO(xlsx))
-    assert wb.sheetnames == ["Divergências", "Por fornecedor"]
+    assert wb.sheetnames == ["Divergências", "Memória de cálculo", "Por fornecedor"]
     ws = wb["Divergências"]
     assert ws.cell(row=1, column=1).value == "Fornecedor"
     assert ws.cell(row=2, column=1).value == "FORNECEDOR SP"
     assert ws.cell(row=2, column=6).value == "Autopeca"          # produto
     assert float(ws.cell(row=2, column=13).value) == 177.50      # ST calculado
+
+    # Memória: o passo a passo em colunas (linhas 1-2 = banda + coluna).
+    wm = wb["Memória de cálculo"]
+    assert wm.cell(row=1, column=1).value == "Identificação"
+    cabecalhos = [wm.cell(row=2, column=c).value for c in range(1, 29)]
+    assert "Aplicada" in cabecalhos and "ST devido" in cabecalhos
+    col_devido = cabecalhos.index("ST devido") + 1
+    assert float(wm.cell(row=3, column=col_devido).value) == 177.50
+    col_ded = cabecalhos.index("Tipo de dedução") + 1
+    assert "nota" in wm.cell(row=3, column=col_ded).value        # "ICMS da própria nota"
+
     wf = wb["Por fornecedor"]
     assert wf.cell(row=2, column=1).value == "FORNECEDOR SP"
     assert float(wf.cell(row=2, column=5).value) == 355.0        # a recolher
