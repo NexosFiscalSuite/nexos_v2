@@ -320,6 +320,7 @@ export const api = {
   },
   reprocessarPendentes: (empresaId) =>
     request('POST', '/auditoria/st/reprocessar-pendentes' + (empresaId ? `?empresa_id=${empresaId}` : '')),
+  stCatalogoErros: () => request('GET', '/auditoria/st/catalogo-erros'),
 
   // ── Recursos do V1 ainda sem endpoint no V2 (fase futura) ──
   certificado: NAO_IMPL('Certificado A1'),

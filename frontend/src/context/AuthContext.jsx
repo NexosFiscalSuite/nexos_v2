@@ -16,6 +16,9 @@ export function AuthProvider({ children }) {
     } else {
       setLoading(false)
     }
+    // Roda UMA vez no mount por design (hidratação da sessão): reagir a `user`
+    // aqui recriaria o loop login→me→setUser.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function login(email, password, tenantSlug) {

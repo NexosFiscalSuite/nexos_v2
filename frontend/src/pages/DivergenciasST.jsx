@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import ErroCarga from '../components/ErroCarga'
 import { useEmpresa } from '../context/EmpresaContext'
@@ -6,6 +7,24 @@ import { useCompetencia } from '../context/CompetenciaContext'
 import { useToast, ToastContainer } from '../hooks/useToast'
 
 const PAGE_SIZE = 200
+
+// Pendência de matriz faltante → deep-link para a aba certa das Matrizes,
+// já pré-preenchida (o modal abre pronto para salvar; depois é só reprocessar).
+function linkMatriz(item) {
+  const cod = item.codigo_erro || ''
+  const q = (params) => '/matrizes-fiscais?' + new URLSearchParams(
+    Object.entries(params).filter(([, v]) => v)
+  ).toString()
+  if (cod.includes('ERRO_MVA_NAO_ENCONTRADA'))
+    return q({ aba: 'mva', ncm: item.ncm, cest: item.cest, uf_destino: item.uf_destino })
+  if (cod.includes('ERRO_ALIQUOTA_NAO_ENCONTRADA'))
+    return q({ aba: 'aliquotas', uf_destino: item.uf_destino })
+  if (cod.includes('ERRO_ENQUADRAMENTO_NAO_CADASTRADO'))
+    return q({ aba: 'enquadramento', ncm: item.ncm, cest: item.cest, uf_destino: item.uf_destino })
+  if (cod.includes('ERRO_PROTOCOLO_NAO_AVALIADO'))
+    return q({ aba: 'protocolos', uf_origem: item.uf_origem, uf_destino: item.uf_destino })
+  return null
+}
 const brl = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const pct = (v) => (v == null ? '—' : `${Number(v).toFixed(2)}%`)
 
@@ -66,22 +85,60 @@ export default function DivergenciasST() {
   const [tab, setTab] = useState('entrada')   // Entradas (tpNF=0) × Saídas (tpNF=1)
   const [data, setData] = useState({ total: 0, itens: [] })
   const [loading, setLoading] = useState(false)
+  const [maisBusy, setMaisBusy] = useState(false)
+  const [reproBusy, setReproBusy] = useState(false)
   const [erro, setErro] = useState(null)      // falha de carga NÃO vira "lista vazia"
   const [expandido, setExpandido] = useState(() => new Set())
   const [detalhe, setDetalhe] = useState(null)
+  const [catalogo, setCatalogo] = useState({})   // código de erro → {mensagem, acao}
+
+  useEffect(() => {
+    api.stCatalogoErros()
+      .then(lista => setCatalogo(Object.fromEntries(lista.map(e => [e.codigo, e]))))
+      .catch(() => {})
+  }, [])
+
+  const params = useCallback((page = 1) => ({
+    fluxo: tab, data_inicio: `${ano}-${mes}-01`, data_fim: `${ano}-${mes}-31`,
+    page, page_size: PAGE_SIZE,
+  }), [tab, ano, mes])
 
   const carregar = useCallback(async () => {
     if (!selectedEmpresa) { setData({ total: 0, itens: [] }); return }
     setLoading(true)
     setErro(null)
     try {
-      setData(await api.stDivergencias(selectedEmpresa.id, {
-        fluxo: tab, data_inicio: `${ano}-${mes}-01`, data_fim: `${ano}-${mes}-31`, page_size: PAGE_SIZE,
-      }))
+      setData(await api.stDivergencias(selectedEmpresa.id, params(1)))
     } catch (e) {
       setErro(e.message); setData({ total: 0, itens: [] })
     } finally { setLoading(false) }
-  }, [selectedEmpresa, ano, mes, tab])
+  }, [selectedEmpresa, params])
+
+  // Paginação real: acumula as páginas seguintes (antes truncava em 200 mudo).
+  async function carregarMais() {
+    setMaisBusy(true)
+    try {
+      const proxima = Math.floor(data.itens.length / PAGE_SIZE) + 1
+      const r = await api.stDivergencias(selectedEmpresa.id, params(proxima))
+      setData(d => ({ ...r, itens: [...d.itens, ...r.itens] }))
+    } catch (e) { toast(e.message, 'error') }
+    finally { setMaisBusy(false) }
+  }
+
+  async function reprocessar() {
+    setReproBusy(true)
+    try {
+      const r = await api.reprocessarPendentes(selectedEmpresa.id)
+      const partes = []
+      if (r.notas_destravadas) partes.push(`${r.notas_destravadas} destravada(s)`)
+      if (r.cfop_reclassificados) partes.push(`${r.cfop_reclassificados} CFOP reclassificado(s)`)
+      toast(r.notas_reprocessadas
+        ? `Reprocessadas ${r.notas_reprocessadas} nota(s)${partes.length ? ` · ${partes.join(' · ')}` : ''}.`
+        : 'Nenhuma pendência reprocessável.', 'ok')
+      carregar()
+    } catch (e) { toast(e.message, 'error') }
+    finally { setReproBusy(false) }
+  }
 
   useEffect(() => { carregar() }, [carregar])
   useEffect(() => { setExpandido(new Set()) }, [selectedEmpresa, ano, mes, tab])
@@ -106,8 +163,17 @@ export default function DivergenciasST() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Divergências de ICMS-ST</h1>
-          <p className="page-breadcrumb">{selectedEmpresa.razao_social} · {mes}/{ano} · {notas.length} nota(s) · {data.total} item(ns)</p>
+          <p className="page-breadcrumb">
+            {selectedEmpresa.razao_social} · {mes}/{ano} · {notas.length} nota(s) ·{' '}
+            {data.itens.length < data.total
+              ? <strong style={{ color: 'var(--warn-text)' }}>mostrando {data.itens.length} de {data.total} item(ns)</strong>
+              : `${data.total} item(ns)`}
+          </p>
         </div>
+        <button className="btn btn-secondary" disabled={reproBusy} onClick={reprocessar}
+          title="Re-aplica De/Para CFOP e re-audita as notas travadas por matriz faltante">
+          <i className={`ti ti-refresh ${reproBusy ? 'spin' : ''}`} /> {reproBusy ? 'Reprocessando…' : 'Reprocessar Pendentes'}
+        </button>
       </div>
 
       {/* Abas: o risco fiscal da Entrada (erro de terceiro) ≠ da Saída (erro próprio) */}
@@ -146,7 +212,7 @@ export default function DivergenciasST() {
                   const aberto = expandido.has(nota.chave)
                   return (
                     <FragmentoNota
-                      key={nota.chave} nota={nota} aberto={aberto}
+                      key={nota.chave} nota={nota} aberto={aberto} catalogo={catalogo}
                       onToggle={() => toggle(nota.chave)} onMemoria={setDetalhe}
                     />
                   )
@@ -154,6 +220,16 @@ export default function DivergenciasST() {
               </tbody>
             </table>
           </div>
+          {data.itens.length < data.total && (
+            <div style={{ padding: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, borderTop: '1px solid var(--border-2)' }}>
+              <span style={{ fontSize: 12.5, color: 'var(--text-3)' }}>
+                Mostrando {data.itens.length} de {data.total} item(ns) — os totais acima referem-se só ao carregado.
+              </span>
+              <button className="btn btn-secondary btn-sm" disabled={maisBusy} onClick={carregarMais}>
+                {maisBusy ? <span className="spinner" style={{ width: 12, height: 12 }} /> : <i className="ti ti-arrow-down" />} Carregar mais
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -163,8 +239,16 @@ export default function DivergenciasST() {
 }
 
 // ── Linha-mestre (Nota) + linhas-filhas (itens) quando expandida ──
-function FragmentoNota({ nota, aberto, onToggle, onMemoria }) {
+function FragmentoNota({ nota, aberto, onToggle, onMemoria, catalogo }) {
+  const navigate = useNavigate()
   const temCte = nota.ctes.length > 0
+  // Primeira ação sugerida do catálogo do motor para os códigos do item.
+  const acaoDoCatalogo = (item) => {
+    for (const cod of (item.codigo_erro || '').split(', ')) {
+      if (catalogo[cod]?.acao) return { cod, ...catalogo[cod] }
+    }
+    return null
+  }
   return (
     <>
       <tr onClick={onToggle} style={{ cursor: 'pointer', background: aberto ? 'var(--surface-2)' : undefined }}>
@@ -205,6 +289,8 @@ function FragmentoNota({ nota, aberto, onToggle, onMemoria }) {
 
       {aberto && nota.itens.map(it => {
         const selo = seloAcao(it)
+        const acao = acaoDoCatalogo(it)
+        const destinoMatriz = it.status === 'NAO_AUDITAVEL' ? linkMatriz(it) : null
         return (
         <tr key={it.numero_item} style={{ background: 'var(--surface)' }}>
           <td />
@@ -226,6 +312,18 @@ function FragmentoNota({ nota, aberto, onToggle, onMemoria }) {
             )}
             {it.status === 'NAO_AUDITAVEL' && it.observacao && (
               <div style={{ fontSize: 11, color: 'var(--warn-text)' }}><i className="ti ti-alert-circle" style={{ marginRight: 4 }} />{it.observacao}</div>
+            )}
+            {acao && (
+              <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 2 }} title={acao.mensagem}>
+                <i className="ti ti-bulb" style={{ marginRight: 4, color: 'var(--accent-text)' }} />
+                <strong style={{ color: 'var(--text-2)' }}>Ação:</strong> {acao.acao}
+                {destinoMatriz && (
+                  <button className="btn btn-ghost btn-sm" style={{ marginLeft: 8, padding: '1px 8px', fontSize: 11.5 }}
+                    onClick={(e) => { e.stopPropagation(); navigate(destinoMatriz) }}>
+                    <i className="ti ti-table-plus" /> Cadastrar matriz
+                  </button>
+                )}
+              </div>
             )}
           </td>
           <td colSpan={2} className="mono" style={{ fontSize: 12, color: 'var(--text-4)' }}>

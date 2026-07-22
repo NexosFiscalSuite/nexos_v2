@@ -50,7 +50,9 @@ export default function Conformidade() {
       }
     } catch (e) { toast(e.message, 'error') }
     finally { setLoading(false) }
-  }, [selectedEmpresa, tab, ano, mes, dataVersion])
+    // dataVersion não é lido no corpo: é o gatilho de refresh global (RefreshContext).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEmpresa, tab, ano, mes, dataVersion, toast])
 
   useEffect(() => { carregar() }, [carregar])
 

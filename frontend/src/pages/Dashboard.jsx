@@ -99,6 +99,8 @@ export default function Dashboard() {
     try { setEmpresas(await api.dashSaude(ano, mes) || []) }
     catch { setEmpresas([]) }
     finally { setLoading(false) }
+    // dataVersion não é lido no corpo: é o gatilho de refresh global (RefreshContext).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ano, mes, dataVersion])
 
   useEffect(() => { carregar() }, [carregar])

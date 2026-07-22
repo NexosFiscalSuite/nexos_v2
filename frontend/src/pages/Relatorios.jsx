@@ -38,7 +38,7 @@ export default function Relatorios() {
     try { setModelos(await api.relModelos(selectedEmpresa.id) || []) }
     catch (e) { toast(e.message, 'error') }
     finally { setLoading(false) }
-  }, [selectedEmpresa])
+  }, [selectedEmpresa, toast])
 
   useEffect(() => { carregar() }, [carregar])
   useEffect(() => { api.relTags().then(setTags).catch(() => {}) }, [])

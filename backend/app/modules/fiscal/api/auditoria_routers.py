@@ -9,8 +9,19 @@ from app.core.security import TokenClaims, get_current_claims
 from app.modules.fiscal.api.auditoria_schemas import DivergenciasStResponse
 from app.modules.fiscal.application.auditoria_query import listar_divergencias
 from app.modules.fiscal.application.reprocess_service import ReprocessService
+from app.modules.fiscal.domain.st.errors import ErroST
 
 router = APIRouter(prefix="/auditoria/st", tags=["Auditoria ST"])
+
+
+@router.get("/catalogo-erros")
+async def catalogo_erros(claims: TokenClaims = Depends(get_current_claims)):
+    """Catálogo do motor: código → mensagem + ação sugerida. A régua de conduta
+    do analista sai do código-fonte e vai para a tela (uma fonte só)."""
+    return [
+        {"codigo": e.codigo, "mensagem": e.mensagem, "acao": e.acao_sugerida}
+        for e in ErroST
+    ]
 
 
 @router.post("/reprocessar-pendentes")

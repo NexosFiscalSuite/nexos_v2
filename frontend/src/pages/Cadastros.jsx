@@ -40,7 +40,7 @@ export default function Cadastros() {
     try { setLista(await api.contrapartes(selectedEmpresa.id, tipo, search) || []) }
     catch (e) { toast(e.message, 'error') }
     finally { setLoading(false) }
-  }, [selectedEmpresa, tipo, search])
+  }, [selectedEmpresa, tipo, search, toast])
 
   useEffect(() => { const t = setTimeout(carregar, 250); return () => clearTimeout(t) }, [carregar])
 

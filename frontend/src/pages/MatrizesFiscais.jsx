@@ -258,7 +258,7 @@ function CampoInput({ campo, value, onChange }) {
   )
 }
 
-function CrudMatriz({ aba }) {
+function CrudMatriz({ aba, prefill }) {
   const { toasts, toast } = useToast()
   const [lista, setLista] = useState([])
   const [loading, setLoading] = useState(true)
@@ -268,6 +268,18 @@ function CrudMatriz({ aba }) {
   const [editId, setEditId] = useState(null)
   const [form, setForm] = useState(() => vazioDe(aba.campos))
   const [saving, setSaving] = useState(false)
+
+  // Deep-link das Divergências: abre o cadastro já preenchido (só campos da aba).
+  useEffect(() => {
+    if (!prefill) return
+    const chaves = new Set(aba.campos.map(c => c.key))
+    const valido = Object.fromEntries(
+      Object.entries(prefill).filter(([k]) => chaves.has(k))
+    )
+    setEditId(null)
+    setForm({ ...vazioDe(aba.campos), ...valido })
+    setModal(true)
+  }, [prefill, aba])
 
   const carregar = useCallback(async () => {
     setLoading(true)
@@ -386,9 +398,25 @@ function CrudMatriz({ aba }) {
   )
 }
 
+// Deep-link vindo das Divergências de ST: ?aba=mva&ncm=…&cest=…&uf_destino=…
+// abre a aba certa com o modal de cadastro pré-preenchido (lido UMA vez).
+function lerDeepLink() {
+  const q = new URLSearchParams(window.location.search)
+  const aba = q.get('aba')
+  if (!aba || !ABAS.some(a => a.id === aba && !a.custom)) return null
+  const prefill = {}
+  for (const k of ['ncm', 'cest', 'uf_destino', 'uf_origem']) {
+    if (q.get(k)) prefill[k] = q.get(k)
+  }
+  // Limpa a URL para o F5/aba trocada não reabrir o modal.
+  window.history.replaceState({}, '', window.location.pathname)
+  return { aba, prefill }
+}
+
 export default function MatrizesFiscais() {
   const { toasts, toast } = useToast()
-  const [tab, setTab] = useState('mva')
+  const [deepLink] = useState(lerDeepLink)
+  const [tab, setTab] = useState(deepLink?.aba || 'mva')
   const [bulkVersion, setBulkVersion] = useState(0)   // bump → remonta o grid após import
   const [bulkBusy, setBulkBusy] = useState(false)
   const [resultado, setResultado] = useState(null)    // resumo da importação (modal)
@@ -455,7 +483,8 @@ export default function MatrizesFiscais() {
 
       {aba.custom
         ? <CoberturaPanel key={`${tab}:${bulkVersion}`} />
-        : <CrudMatriz key={`${tab}:${bulkVersion}`} aba={aba} />}
+        : <CrudMatriz key={`${tab}:${bulkVersion}`} aba={aba}
+            prefill={deepLink?.aba === tab ? deepLink.prefill : null} />}
       {resultado && <ResumoImportModal r={resultado} onClose={() => setResultado(null)} />}
     </div>
   )

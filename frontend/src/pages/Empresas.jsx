@@ -75,7 +75,7 @@ export default function Empresas() {
     setSaving(true)
     try {
       if (editId) {
-        const { cnpj, ...campos } = form    // CNPJ é imutável
+        const { cnpj: _cnpj, ...campos } = form    // CNPJ é imutável (descartado)
         await api.editarEmpresa(editId, campos)
         toast('Empresa atualizada.', 'ok')
       } else {

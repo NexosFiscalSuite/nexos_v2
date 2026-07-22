@@ -94,6 +94,8 @@ export default function Notas() {
       setData(await api.notas(selectedEmpresa.id, { ...p, status_: status, ano, mes, q, sort, order, page, page_size: 20 }))
     } catch (e) { setErro(e.message); setData({ total: 0, notas: [], page: 1, page_size: 20 }) }
     finally { setLoading(false) }
+    // dataVersion não é lido no corpo: é o gatilho de refresh global (RefreshContext).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEmpresa, tab, subServ, status, ano, mes, q, sort, order, page, dataVersion])
 
   useEffect(() => { carregar() }, [carregar])

@@ -9,6 +9,11 @@ from pydantic import BaseModel
 class DivergenciaStItem(BaseModel):
     chave_acesso: str
     numero_item: int
+    # Identificação do produto (join com nota_itens — a auditoria só guarda o nº)
+    descricao: str | None = None
+    codigo: str | None = None
+    ncm: str | None = None
+    cest: str | None = None
     numero_nota: str | None = None
     fornecedor: str | None = None
     cnpj_emit: str | None = None
