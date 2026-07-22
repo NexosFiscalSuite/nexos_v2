@@ -321,6 +321,13 @@ export const api = {
   reprocessarPendentes: (empresaId) =>
     request('POST', '/auditoria/st/reprocessar-pendentes' + (empresaId ? `?empresa_id=${empresaId}` : '')),
   stCatalogoErros: () => request('GET', '/auditoria/st/catalogo-erros'),
+  // Carta timbrada (PDF) de cobrança de ST ao fornecedor (sem antecipações)
+  stCartaFornecedor: (empresaId, params = {}) => {
+    const q = new URLSearchParams(
+      Object.entries({ empresa_id: empresaId, ...params }).filter(([, v]) => v)
+    ).toString()
+    return downloadBlob(`/auditoria/st/carta?${q}`, { fallback: 'carta-st.pdf' })
+  },
 
   // ── Recursos do V1 ainda sem endpoint no V2 (fase futura) ──
   certificado: NAO_IMPL('Certificado A1'),

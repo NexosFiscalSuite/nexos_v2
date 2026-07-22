@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.fiscal.infrastructure.models import (
@@ -50,6 +50,49 @@ async def listar_divergencias(
     total = await session.scalar(
         select(func.count()).select_from(a).join(n, a.nota_id == n.id).where(*where)
     )
+
+    # ── Agregados do período inteiro (sem paginação): o dinheiro em jogo. ──
+    # diferença = XML − calculado: negativa = a recolher; positiva = a favor.
+    # Antecipação (ERRO_111) é obrigação do PRÓPRIO cliente — sai da conta do
+    # fornecedor e ganha card próprio.
+    d = a.vicms_st_divergencia
+    eh_antecipacao = func.coalesce(a.codigo_erro, "").like("%ERRO_111%")
+    divergente = a.status == "DIVERGENTE"
+    agg = (await session.execute(
+        select(
+            func.coalesce(func.sum(case(
+                (and_(divergente, d < 0, ~eh_antecipacao), -d), else_=0)), 0),
+            func.coalesce(func.sum(case(
+                (and_(divergente, d > 0), d), else_=0)), 0),
+            func.coalesce(func.sum(case((eh_antecipacao, -d), else_=0)), 0),
+            func.coalesce(func.sum(case((divergente, 1), else_=0)), 0),
+            func.coalesce(func.sum(case((a.status == "NAO_AUDITAVEL", 1), else_=0)), 0),
+        ).select_from(a).join(n, a.nota_id == n.id).where(*where)
+    )).one()
+    resumo = {
+        "a_recolher": float(agg[0]), "a_favor": float(agg[1]),
+        "antecipacao": float(agg[2]),
+        "divergentes": int(agg[3]), "nao_auditaveis": int(agg[4]),
+    }
+
+    # Ranking de emitentes pelo valor COBRÁVEL (divergências sem ERRO_111):
+    # quem cobrar primeiro / onde a parametrização mais erra.
+    rank_rows = (await session.execute(
+        select(
+            n.cnpj_emit, n.nome_emit,
+            func.count().label("itens"),
+            func.coalesce(func.sum(func.abs(d)), 0).label("valor"),
+        )
+        .select_from(a).join(n, a.nota_id == n.id)
+        .where(*where, divergente, ~eh_antecipacao)
+        .group_by(n.cnpj_emit, n.nome_emit)
+        .order_by(func.coalesce(func.sum(func.abs(d)), 0).desc())
+        .limit(20)
+    )).all()
+    ranking = [
+        {"cnpj": r[0], "nome": r[1], "itens": int(r[2]), "valor": float(r[3] or 0)}
+        for r in rank_rows
+    ]
     it = NotaItem
     res = await session.execute(
         select(a, n, it.descricao, it.codigo, it.ncm, it.cest)
@@ -111,4 +154,7 @@ async def listar_divergencias(
         }
         for a_row, n_row, descricao, codigo, ncm, cest in linhas
     ]
-    return {"total": total or 0, "page": page, "page_size": page_size, "itens": itens}
+    return {
+        "total": total or 0, "page": page, "page_size": page_size, "itens": itens,
+        "resumo": resumo, "ranking_fornecedores": ranking,
+    }

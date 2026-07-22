@@ -196,6 +196,15 @@ async def test_query_divergencias_e_idempotencia(sessao):
     assert item["ncm"]
     assert item["memoria"]["mva_original"] == "71.78"    # memória exposta ao front
 
+    # Agregados do período: os cards da tela (dinheiro em jogo) + ranking.
+    assert res["resumo"]["a_recolher"] == 355.0          # 2 × 177,50 retidos a menor
+    assert res["resumo"]["a_favor"] == 0.0
+    assert res["resumo"]["antecipacao"] == 0.0
+    assert res["resumo"]["divergentes"] == 2
+    top = res["ranking_fornecedores"][0]
+    assert top["nome"] == "FORNECEDOR SP" and top["itens"] == 2 and top["valor"] == 355.0
+
     # Filtro de período exclui notas fora da janela.
     vazio = await listar_divergencias(sessao, empresa_id=empresa_id, data_inicio="2027-01-01")
     assert vazio["total"] == 0
+    assert vazio["resumo"]["divergentes"] == 0 and vazio["ranking_fornecedores"] == []

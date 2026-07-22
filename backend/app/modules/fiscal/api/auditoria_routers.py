@@ -1,15 +1,19 @@
 """Rotas do relatório de divergências de ICMS-ST (REL_Divergencia_ST)."""
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import NotFoundError
 from app.core.rls import tenant_session
 from app.core.security import TokenClaims, get_current_claims
+from app.modules.companies.infrastructure.repositories import EmpresaRepository
 from app.modules.fiscal.api.auditoria_schemas import DivergenciasStResponse
 from app.modules.fiscal.application.auditoria_query import listar_divergencias
 from app.modules.fiscal.application.reprocess_service import ReprocessService
+from app.modules.fiscal.application.st_carta import gerar_carta_st
 from app.modules.fiscal.domain.st.errors import ErroST
+from app.shared.domain.value_objects import only_digits
 
 router = APIRouter(prefix="/auditoria/st", tags=["Auditoria ST"])
 
@@ -33,6 +37,51 @@ async def reprocessar_pendentes(
     """Retroatividade: re-aplica o De/Para CFOP e re-audita as notas travadas
     (gargalo de CFOP ou NAO_AUDITAVEL por matriz faltante)."""
     return await ReprocessService(session).reprocessar_pendentes(empresa_id)
+
+
+@router.get("/carta")
+async def carta_st(
+    empresa_id: UUID = Query(..., description="Empresa (cliente) auditada"),
+    cnpj_emit: str = Query(..., description="CNPJ do emitente apontado"),
+    fluxo: str | None = Query(default=None),
+    data_inicio: str | None = Query(default=None),
+    data_fim: str | None = Query(default=None),
+    claims: TokenClaims = Depends(get_current_claims),
+    session: AsyncSession = Depends(tenant_session),
+):
+    """Carta timbrada (PDF) de cobrança/correção de ICMS-ST do emitente:
+    itens DIVERGENTES no filtro, EXCETO antecipações (ERRO_111 é guia do
+    próprio cliente — não há o que cobrar do fornecedor)."""
+    res = await listar_divergencias(
+        session, empresa_id=empresa_id, fluxo=fluxo,
+        data_inicio=data_inicio, data_fim=data_fim, cnpj=cnpj_emit, page_size=500,
+    )
+    itens = [
+        i for i in res["itens"]
+        if i["status"] == "DIVERGENTE" and "ERRO_111" not in (i["codigo_erro"] or "")
+    ]
+    if not itens:
+        raise NotFoundError("Nenhuma divergência cobrável deste emitente no filtro atual.")
+
+    empresa = await EmpresaRepository(session).by_id(empresa_id)
+    competencia = (
+        f"{data_inicio[5:7]}/{data_inicio[:4]}" if data_inicio and len(data_inicio) >= 7
+        else "período completo"
+    )
+    alvo = only_digits(cnpj_emit)
+    pdf = gerar_carta_st(
+        destinatario_nome=itens[0].get("fornecedor") or "Emitente",
+        destinatario_cnpj=alvo,
+        fluxo=fluxo or "entrada",
+        competencia=competencia,
+        itens=itens,
+        cliente_nome=empresa.razao_social if empresa else None,
+    )
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="carta-st-{alvo}.pdf"'},
+    )
 
 
 @router.get("/divergencias", response_model=DivergenciasStResponse)

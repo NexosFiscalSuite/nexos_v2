@@ -1,12 +1,26 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api } from '../api'
+import { api, saveBlob } from '../api'
 import ErroCarga from '../components/ErroCarga'
 import { useEmpresa } from '../context/EmpresaContext'
 import { useCompetencia } from '../context/CompetenciaContext'
 import { useToast, ToastContainer } from '../hooks/useToast'
 
 const PAGE_SIZE = 200
+const cnpjFmt = (c) => (c && c.length === 14 ? c.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5') : c || '—')
+
+// Cards do topo: o dinheiro em jogo por tipo de pendência. Clicar filtra a
+// lista (sobre os itens carregados) — mesmo padrão dos cards do IBS/CBS.
+const CARDS = [
+  { key: 'a_recolher', label: 'ST a menor (cobrar fornecedor)', tone: 'err', icon: 'ti-trending-down', dinheiro: true,
+    filtro: it => it.status === 'DIVERGENTE' && Number(it.diferenca) < 0 && !(it.codigo_erro || '').includes('ERRO_111') },
+  { key: 'a_favor', label: 'Pago a maior (a favor)', tone: 'info', icon: 'ti-arrow-back-up', dinheiro: true,
+    filtro: it => it.status === 'DIVERGENTE' && Number(it.diferenca) > 0 },
+  { key: 'antecipacao', label: 'Antecipação devida (guia própria)', tone: 'warn', icon: 'ti-receipt-tax', dinheiro: true,
+    filtro: it => (it.codigo_erro || '').includes('ERRO_111') },
+  { key: 'nao_auditaveis', label: 'Não auditáveis (pendência)', tone: 'warn', icon: 'ti-help-circle', dinheiro: false,
+    filtro: it => it.status === 'NAO_AUDITAVEL' },
+]
 
 // Pendência de matriz faltante → deep-link para a aba certa das Matrizes,
 // já pré-preenchida (o modal abre pronto para salvar; depois é só reprocessar).
@@ -140,10 +154,30 @@ export default function DivergenciasST() {
     finally { setReproBusy(false) }
   }
 
-  useEffect(() => { carregar() }, [carregar])
-  useEffect(() => { setExpandido(new Set()) }, [selectedEmpresa, ano, mes, tab])
+  // Carta PDF de cobrança por fornecedor (ranking) — sem antecipações.
+  const [cartaBusy, setCartaBusy] = useState(null)
+  async function gerarCarta(cnpj) {
+    setCartaBusy(cnpj)
+    try {
+      const { blob, filename } = await api.stCartaFornecedor(selectedEmpresa.id, {
+        cnpj_emit: cnpj, fluxo: tab,
+        data_inicio: `${ano}-${mes}-01`, data_fim: `${ano}-${mes}-31`,
+      })
+      saveBlob(blob, filename)
+      toast('Carta de ST gerada — pronta para encaminhar.', 'ok')
+    } catch (e) { toast(e.message, 'error') }
+    finally { setCartaBusy(null) }
+  }
 
-  const notas = useMemo(() => agruparPorNota(data.itens), [data.itens])
+  const [filtroCard, setFiltroCard] = useState(null)
+  useEffect(() => { carregar() }, [carregar])
+  useEffect(() => { setExpandido(new Set()); setFiltroCard(null) }, [selectedEmpresa, ano, mes, tab])
+
+  const itensVisiveis = useMemo(() => {
+    const card = CARDS.find(c => c.key === filtroCard)
+    return card ? data.itens.filter(card.filtro) : data.itens
+  }, [data.itens, filtroCard])
+  const notas = useMemo(() => agruparPorNota(itensVisiveis), [itensVisiveis])
   const toggle = (chave) => setExpandido(prev => {
     const s = new Set(prev); s.has(chave) ? s.delete(chave) : s.add(chave); return s
   })
@@ -190,9 +224,78 @@ export default function DivergenciasST() {
         <div className="center-loader"><div className="spinner" /></div>
       ) : erro ? (
         <ErroCarga mensagem={erro} onRetry={carregar} />
-      ) : notas.length === 0 ? (
+      ) : data.itens.length === 0 ? (
         <div className="empty-state"><i className="ti ti-circle-check" /><p>Nenhuma divergência de ST nesta competência. 🎉</p></div>
       ) : (
+        <>
+          {/* O dinheiro em jogo — totais do período (backend, sem truncar) */}
+          {data.resumo && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 18 }}>
+              {CARDS.map(c => {
+                const ativo = filtroCard === c.key
+                return (
+                  <div key={c.key} className="card" role="button"
+                    title={`${c.label} — clique para filtrar a lista`}
+                    onClick={() => setFiltroCard(f => (f === c.key ? null : c.key))}
+                    style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 4, cursor: 'pointer',
+                             boxShadow: ativo ? `inset 0 0 0 2px var(--${c.tone}-text)` : undefined }}>
+                    <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                      <i className={`ti ${c.icon}`} /> {c.label}
+                      {ativo && <i className="ti ti-filter" style={{ marginLeft: 6, color: `var(--${c.tone}-text)` }} />}
+                    </span>
+                    <span style={{ fontSize: 21, fontWeight: 700, color: `var(--${c.tone}-text)` }}>
+                      {c.dinheiro ? brl(data.resumo[c.key]) : (data.resumo[c.key] ?? 0)}
+                    </span>
+                    <span style={{ fontSize: 11, color: 'var(--text-4)' }}>
+                      {c.key === 'nao_auditaveis'
+                        ? `${data.resumo.divergentes ?? 0} divergente(s) no período`
+                        : 'total do período (todas as páginas)'}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Quem cobrar primeiro: divergência cobrável acumulada por emitente */}
+          {(data.ranking_fornecedores || []).length > 0 && (
+            <div className="card" style={{ padding: 0, marginBottom: 18 }}>
+              <div style={{ padding: '12px 16px', fontWeight: 600, borderBottom: '1px solid var(--border-2)' }}>
+                {tab === 'entrada' ? 'Fornecedores com divergência — priorize pelos maiores valores' : 'Emitentes com divergência'}
+              </div>
+              <div className="tbl-wrap">
+                <table className="tbl">
+                  <thead><tr><th>{tab === 'entrada' ? 'Fornecedor' : 'Emitente'}</th><th>CNPJ</th><th style={{ textAlign: 'right' }}>Itens</th><th style={{ textAlign: 'right' }}>Divergência cobrável</th><th /></tr></thead>
+                  <tbody>
+                    {data.ranking_fornecedores.map(f => (
+                      <tr key={f.cnpj || f.nome}>
+                        <td style={{ fontWeight: 500, color: 'var(--text-1)' }}>{f.nome || '—'}</td>
+                        <td className="mono">{cnpjFmt(f.cnpj)}</td>
+                        <td style={{ textAlign: 'right' }}>{f.itens}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{brl(f.valor)}</td>
+                        <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                          <button className="btn btn-secondary btn-sm" disabled={cartaBusy === f.cnpj}
+                            title="Gera a carta timbrada (PDF) de cobrança/correção do ST deste emitente"
+                            onClick={() => gerarCarta(f.cnpj)}>
+                            <i className={`ti ${cartaBusy === f.cnpj ? 'ti-loader-2' : 'ti-file-type-pdf'}`} />
+                            {cartaBusy === f.cnpj ? ' Gerando…' : ' Carta PDF'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {notas.length === 0 ? (
+            <div className="empty-state">
+              <i className="ti ti-filter-off" />
+              <p>Nenhum item carregado nesta categoria.{data.itens.length < data.total ? ' Há mais páginas — use “Carregar mais” sem o filtro.' : ''}</p>
+              <button className="btn btn-ghost btn-sm" onClick={() => setFiltroCard(null)}>Limpar filtro</button>
+            </div>
+          ) : (
         <div className="card" style={{ padding: 0 }}>
           <div className="tbl-wrap">
             <table className="table">
@@ -223,7 +326,7 @@ export default function DivergenciasST() {
           {data.itens.length < data.total && (
             <div style={{ padding: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, borderTop: '1px solid var(--border-2)' }}>
               <span style={{ fontSize: 12.5, color: 'var(--text-3)' }}>
-                Mostrando {data.itens.length} de {data.total} item(ns) — os totais acima referem-se só ao carregado.
+                Mostrando {data.itens.length} de {data.total} item(ns) — a lista abaixo cobre só o carregado; os cards somam o período inteiro.
               </span>
               <button className="btn btn-secondary btn-sm" disabled={maisBusy} onClick={carregarMais}>
                 {maisBusy ? <span className="spinner" style={{ width: 12, height: 12 }} /> : <i className="ti ti-arrow-down" />} Carregar mais
@@ -231,6 +334,8 @@ export default function DivergenciasST() {
             </div>
           )}
         </div>
+          )}
+        </>
       )}
 
       {detalhe && <MemoriaModal d={detalhe} onClose={() => setDetalhe(null)} />}

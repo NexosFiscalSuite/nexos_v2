@@ -44,8 +44,27 @@ class DivergenciaStItem(BaseModel):
     ctes_vinculados: list[str] = []
 
 
+class ResumoSt(BaseModel):
+    """Dinheiro em jogo no período (independente da paginação)."""
+
+    a_recolher: float    # divergências negativas (sem ERRO_111): fornecedor reteve a menor
+    a_favor: float       # divergências positivas: pago a maior (ressarcimento)
+    antecipacao: float   # ERRO_111: guia própria do cliente (não é cobrança de fornecedor)
+    divergentes: int
+    nao_auditaveis: int
+
+
+class FornecedorRanking(BaseModel):
+    cnpj: str | None = None
+    nome: str | None = None
+    itens: int
+    valor: float         # |diferença| acumulada cobrável (sem ERRO_111)
+
+
 class DivergenciasStResponse(BaseModel):
     total: int
     page: int
     page_size: int
     itens: list[DivergenciaStItem]
+    resumo: ResumoSt | None = None
+    ranking_fornecedores: list[FornecedorRanking] = []
