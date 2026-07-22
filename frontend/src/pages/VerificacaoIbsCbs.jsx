@@ -319,19 +319,24 @@ export default function VerificacaoIbsCbs() {
             {STATUS_INFO.map(([key, info]) => {
               const ativo = filtroStatus === key
               return (
-                <div key={key} className="card" role="button"
+                <div key={key} className="card kpi-click" role="button"
                   title={`${info.desc} — clique para ver essas notas`}
                   onClick={() => setFiltroStatus(f => (f === key ? null : key))}
                   style={{
-                    padding: 16, display: 'flex', flexDirection: 'column', gap: 4, cursor: 'pointer',
+                    padding: 16, display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer',
                     boxShadow: ativo ? `inset 0 0 0 2px var(--${info.tone}-text)` : undefined,
                   }}>
-                  <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                    <i className={`ti ${info.icon}`} /> {info.label}
-                    {ativo && <i className="ti ti-filter" style={{ marginLeft: 6, color: `var(--${info.tone}-text)` }} />}
+                  <span className="kpi-icon" style={{ background: `var(--${info.tone}-bg)`, color: `var(--${info.tone}-text)` }}>
+                    <i className={`ti ${info.icon}`} />
                   </span>
-                  <span style={{ fontSize: 22, fontWeight: 700, color: `var(--${info.tone}-text)` }}>{resumo[key]?.itens || 0}</span>
-                  <span style={{ fontSize: 11, color: 'var(--text-4)' }}>{brl(resumo[key]?.valor)}</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                    <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                      {info.label}
+                      {ativo && <i className="ti ti-filter" style={{ marginLeft: 6, color: `var(--${info.tone}-text)` }} />}
+                    </span>
+                    <span className="tnum" style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.3px', color: `var(--${info.tone}-text)` }}>{resumo[key]?.itens || 0}</span>
+                    <span className="tnum" style={{ fontSize: 11, color: 'var(--text-4)' }}>{brl(resumo[key]?.valor)}</span>
+                  </div>
                 </div>
               )
             })}
@@ -441,7 +446,7 @@ export default function VerificacaoIbsCbs() {
                                   </thead>
                                   <tbody>
                                     {n.itens.map((i, idx) => (
-                                      <tr key={`${i.numero_item}-${idx}`}>
+                                      <tr key={`${i.numero_item}-${idx}`} className="filha">
                                         <td className="mono">{i.numero_item}</td>
                                         <td style={{ maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 500, color: 'var(--text-1)' }} title={i.descricao}>{i.descricao || '—'}</td>
                                         <td>{badge(TONE[i.status]?.label || i.status, TONE[i.status]?.tone)}</td>

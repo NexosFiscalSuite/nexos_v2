@@ -9,6 +9,11 @@ import { useToast, ToastContainer } from '../hooks/useToast'
 
 const PAGE_SIZE = 200
 const cnpjFmt = (c) => (c && c.length === 14 ? c.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5') : c || '—')
+// Diferença com SINAL explícito no positivo ("+R$ 84,60"): a favor × a recolher
+// se distinguem no primeiro caractere, não só na cor (padrão fintech).
+const brlDif = (v) => (Number(v || 0) > 0.004 ? `+${brl(v)}` : brl(v))
+// Zero em coluna de dinheiro é ruído: classe muda o peso visual.
+const classeValor = (v) => `tnum${Math.abs(Number(v || 0)) < 0.005 ? ' val-zero' : ''}`
 
 // Cards do topo: o dinheiro em jogo por tipo de pendência. Clicar filtra a
 // lista (sobre os itens carregados) — mesmo padrão dos cards do IBS/CBS.
@@ -304,23 +309,28 @@ export default function DivergenciasST() {
               {CARDS.map(c => {
                 const ativo = filtroCard === c.key
                 return (
-                  <div key={c.key} className="card" role="button"
+                  <div key={c.key} className="card kpi-click" role="button"
                     title={`${c.label} — clique para filtrar a lista`}
                     onClick={() => setFiltroCard(f => (f === c.key ? null : c.key))}
-                    style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 4, cursor: 'pointer',
+                    style={{ padding: 16, display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer',
                              boxShadow: ativo ? `inset 0 0 0 2px var(--${c.tone}-text)` : undefined }}>
-                    <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                      <i className={`ti ${c.icon}`} /> {c.label}
-                      {ativo && <i className="ti ti-filter" style={{ marginLeft: 6, color: `var(--${c.tone}-text)` }} />}
+                    <span className="kpi-icon" style={{ background: `var(--${c.tone}-bg)`, color: `var(--${c.tone}-text)` }}>
+                      <i className={`ti ${c.icon}`} />
                     </span>
-                    <span style={{ fontSize: 21, fontWeight: 700, color: `var(--${c.tone}-text)` }}>
-                      {c.dinheiro ? brl(data.resumo[c.key]) : (data.resumo[c.key] ?? 0)}
-                    </span>
-                    <span style={{ fontSize: 11, color: 'var(--text-4)' }}>
-                      {c.key === 'nao_auditaveis'
-                        ? `${data.resumo.divergentes ?? 0} divergente(s) no período`
-                        : 'total do período (todas as páginas)'}
-                    </span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                      <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                        {c.label}
+                        {ativo && <i className="ti ti-filter" style={{ marginLeft: 6, color: `var(--${c.tone}-text)` }} />}
+                      </span>
+                      <span className="tnum" style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.3px', color: `var(--${c.tone}-text)` }}>
+                        {c.dinheiro ? brl(data.resumo[c.key]) : (data.resumo[c.key] ?? 0)}
+                      </span>
+                      <span style={{ fontSize: 11, color: 'var(--text-4)' }}>
+                        {c.key === 'nao_auditaveis'
+                          ? `${data.resumo.divergentes ?? 0} divergente(s) no período`
+                          : 'total do período (todas as páginas)'}
+                      </span>
+                    </div>
                   </div>
                 )
               })}
@@ -514,9 +524,9 @@ function FragmentoNota({ nota, aberto, onToggle, onMemoria, catalogo }) {
                  style={{ color: 'var(--info-text)', fontSize: 17 }} />
             : <span style={{ color: 'var(--text-4)' }}>—</span>}
         </td>
-        <td className="tnum" style={{ textAlign: 'right' }}>{brl(nota.totalIcmsSt)}</td>
+        <td className={classeValor(nota.totalIcmsSt)} style={{ textAlign: 'right' }}>{brl(nota.totalIcmsSt)}</td>
         <td className="tnum" style={{ textAlign: 'right', fontWeight: 700, color: corDiferenca(nota.totalDiferenca) }}>
-          {brl(nota.totalDiferenca)}
+          {brlDif(nota.totalDiferenca)}
         </td>
         <td style={{ textAlign: 'center' }}>
           {nota.divergentes > 0 && <span className="badge badge-error" style={{ fontSize: 10 }}>{nota.divergentes} divergente(s)</span>}
@@ -538,7 +548,7 @@ function FragmentoNota({ nota, aberto, onToggle, onMemoria, catalogo }) {
         const acao = acaoDoCatalogo(it)
         const destinoMatriz = it.status === 'NAO_AUDITAVEL' ? linkMatriz(it) : null
         return (
-        <tr key={it.numero_item} style={{ background: 'var(--surface)' }}>
+        <tr key={it.numero_item} className="filha" style={{ background: 'var(--surface)' }}>
           <td />
           <td style={{ paddingLeft: 28 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -566,13 +576,13 @@ function FragmentoNota({ nota, aberto, onToggle, onMemoria, catalogo }) {
           <td colSpan={2}>
             <div style={{ display: 'inline-grid', gridTemplateColumns: 'auto auto', columnGap: 7, rowGap: 1, alignItems: 'baseline', lineHeight: 1.5 }}>
               <RotuloSt>na nota</RotuloSt>
-              <span className="tnum" style={{ fontSize: 12.5, color: 'var(--text-3)' }}>{brl(it.vicms_st_xml)}</span>
+              <span className={classeValor(it.vicms_st_xml)} style={{ fontSize: 12.5, color: 'var(--text-3)' }}>{brl(it.vicms_st_xml)}</span>
               <RotuloSt>devido</RotuloSt>
               <span className="tnum" style={{ fontSize: 12.5, fontWeight: 700 }}>{brl(it.vicms_st_calculado)}</span>
             </div>
           </td>
-          <td className="tnum" style={{ textAlign: 'right' }}>{brl(it.vicms_st_calculado)}</td>
-          <td className="tnum" style={{ textAlign: 'right', fontWeight: 600, color: corDiferenca(it.diferenca) }}>{brl(it.diferenca)}</td>
+          <td className={classeValor(it.vicms_st_calculado)} style={{ textAlign: 'right' }}>{brl(it.vicms_st_calculado)}</td>
+          <td className="tnum" style={{ textAlign: 'right', fontWeight: 600, color: corDiferenca(it.diferenca) }}>{brlDif(it.diferenca)}</td>
           <td style={{ textAlign: 'center' }}>
             {it.memoria && <button className="btn btn-icon" title="Como chegamos ao valor devido (memória de cálculo)" onClick={() => onMemoria(it)}><i className="ti ti-calculator" /></button>}
           </td>

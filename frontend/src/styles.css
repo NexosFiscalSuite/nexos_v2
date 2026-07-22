@@ -34,6 +34,7 @@
 
   --border:       #E5E7EB;
   --border-2:     #F1F1F3;
+  --row-hover:    #F7F9FC;   /* hover de linha: perceptível, sem pesar */
 
   /* Flat & crisp: sem sombra em cards/modais (separação só por hairline).
      --shadow-pop fica para elementos flutuantes (toast/dropdown). */
@@ -227,8 +228,7 @@ input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible {
 }
 .tbl tbody tr:last-child td { border-bottom: none; }
 .tbl tbody tr { transition: background 0.1s; }
-.tbl tbody tr:hover td { background: #FAFBFC; }
-.tbl tbody tr:hover td:first-child { border-left: 2px solid var(--primary); padding-left: 12px; }
+.tbl tbody tr:hover td { background: var(--row-hover); }
 
 /* .table : usada nas telas Notas/Cadastros. Mesmo visual do .tbl, sem o
    deslocamento de coluna no hover (que atrapalha em tabelas largas). */
@@ -244,7 +244,29 @@ input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible {
 }
 .table tbody tr:last-child td { border-bottom: none; }
 .table tbody tr { transition: background 0.1s; }
-.table tbody tr:hover td { background: #FAFBFC; }
+.table tbody tr:hover td { background: var(--row-hover); }
+
+/* Colunas numéricas (dinheiro/quantidade): sempre à direita, dígitos tabulares
+   — o olho compara grandezas pelo alinhamento das casas (padrão financeiro). */
+.tbl td.num, .tbl th.num, .table td.num, .table th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+/* Valor zero é ruído em tabela fiscal: presente, mas sem gritar. */
+.val-zero { color: var(--text-4); font-weight: 400; }
+
+/* Linhas-filhas do master-detail: trilho azul-claro à esquerda situa o leitor
+   ("isto pertence à nota acima") sem deslocar o layout. */
+tr.filha td:first-child { box-shadow: inset 3px 0 0 var(--primary-lt2); }
+
+/* Cards de KPI clicáveis: affordance de clique com tinta sutil no hover. */
+.kpi-click { transition: background 0.12s ease; }
+.kpi-click:hover { background: #F8FAFD; }
+.kpi-icon {
+  width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 16px;
+}
 
 /* Cabecalho ordenavel (Notas) */
 .th-sort { cursor: pointer; user-select: none; }
