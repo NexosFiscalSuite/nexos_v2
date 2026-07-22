@@ -99,7 +99,9 @@ class ProtocoloEmMemoria:
         self._pares = {(o.upper(), d.upper()) for (o, d) in (pares or set())}
         self._padrao = padrao
 
-    def tem_protocolo(self, uf_orig: str, uf_dest: str, data: date) -> bool:
+    def tem_protocolo(
+        self, uf_orig: str, uf_dest: str, data: date, ncm: str = ""
+    ) -> bool:
         if self._pares:
             return (uf_orig.upper(), uf_dest.upper()) in self._pares
         return self._padrao

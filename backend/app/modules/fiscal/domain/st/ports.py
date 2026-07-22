@@ -74,8 +74,13 @@ class FcpRepository(Protocol):
 
 class ProtocoloRepository(Protocol):
     """MATRIZ_PROTOCOLO_ST — há acordo/convênio de ST vigente no par UF
-    origem→destino? Decide a RESPONSABILIDADE na interestadual: com protocolo o
-    remetente é o substituto; sem ele, a ST vira antecipação do destinatário.
+    origem→destino (para o NCM, quando o acordo tem escopo)? Decide a
+    RESPONSABILIDADE na interestadual: com protocolo o remetente é o substituto;
+    sem ele, a ST vira antecipação do destinatário.
+
+    Tri-state: True = acordo vigente; False = par CURADO sem acordo aplicável;
+    None = par sem NENHUM registro na matriz (nunca avaliado) — o motor não
+    decide e trava com ERRO_PROTOCOLO_NAO_AVALIADO (fail-closed, ADR-0002).
 
     `fonte` vai para a memória de cálculo: "matriz" = a resposta veio de uma
     matriz consultada; "assumido" = default do motor sem matriz injetada
@@ -84,4 +89,6 @@ class ProtocoloRepository(Protocol):
 
     fonte: str
 
-    def tem_protocolo(self, uf_orig: str, uf_dest: str, data: date) -> bool: ...
+    def tem_protocolo(
+        self, uf_orig: str, uf_dest: str, data: date, ncm: str = ""
+    ) -> bool | None: ...

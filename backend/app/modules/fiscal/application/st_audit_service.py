@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.fiscal.application.frete_service import agregar_frete, ratear_frete
 from app.modules.fiscal.domain.st import (
     Crt,
+    ErroST,
     ItemFiscal,
     Operacao,
     StAuditEngine,
@@ -50,6 +51,9 @@ def _item_fiscal(it: NotaItem, frete_rateado: Decimal) -> ItemFiscal:
         p_mva_st=it.p_mva_st, p_red_bc_st=it.p_red_bc_st, p_icms_st=it.p_icms_st,
         v_bc_st=it.v_bc_st, v_icms_st=it.valor_icms_st,
         p_fcp_st=it.p_fcp_st, v_bc_fcp_st=it.v_bc_fcp_st, v_fcp_st=it.v_fcp_st,
+        v_bc_st_ret=it.v_bc_st_ret, p_st_ret=it.p_st_ret,
+        v_icms_st_ret=it.v_icms_st_ret, v_icms_substituto=it.v_icms_substituto,
+        v_fcp_st_ret=it.v_fcp_st_ret,
     )
 
 
@@ -77,12 +81,20 @@ class StAuditService:
         if not itens_db:
             return []
 
+        # Data podre não derruba o lote: vira diagnóstico por item (a auditoria
+        # depende da data para escolher matriz/alíquota vigentes — sem ela, não
+        # há cálculo confiável). Filosofia do motor: input podre = diagnóstico.
+        try:
+            data_emissao = date.fromisoformat((nota.data_emissao or "").strip())
+        except ValueError:
+            return await self._marcar_sem_data(nota, empresa_id, itens_db)
+
         # ADR-0001: agrega o frete dos CT-e vinculados e rateia por item.
         vinculos = await self.repo.ctes_da_nfe(empresa_id, nota.chave_acesso)
         rateio = ratear_frete(itens_db, agregar_frete(vinculos))
         operacao = Operacao(
             uf_emit=nota.uf_emit or "", uf_dest=nota.uf_dest or "",
-            crt=_crt(nota.crt_emit), data=date.fromisoformat(nota.data_emissao),
+            crt=_crt(nota.crt_emit), data=data_emissao,
             saida=(nota.fluxo == "saida"),   # bifurcação tpNF no motor
         )
         itens_fiscais = [_item_fiscal(it, rateio[it.numero_item]) for it in itens_db]
@@ -120,6 +132,36 @@ class StAuditService:
                 observacao=res.observacao,
                 memoria=_memoria_json(m),
             ))
+        self.session.add_all(registros)
+        await self.session.flush()
+        return registros
+
+    async def _marcar_sem_data(
+        self, nota, empresa_id: UUID, itens_db: list[NotaItem]
+    ) -> list[AuditoriaIcmsSt]:
+        """Nota sem data de emissão válida: cada item vira NAO_AUDITAVEL com
+        código próprio (reprocessável após correção do XML) — nunca exceção."""
+        erro = ErroST.DATA_EMISSAO_INVALIDA
+        await self.session.execute(
+            delete(AuditoriaIcmsSt).where(AuditoriaIcmsSt.nota_id == nota.id)
+        )
+        registros = [
+            AuditoriaIcmsSt(
+                id=uuid4(), tenant_id=nota.tenant_id, empresa_id=empresa_id,
+                nota_id=nota.id, chave_acesso=nota.chave_acesso,
+                numero_item=it.numero_item, cst_csosn=it.cst or it.csosn,
+                mod_bc_st=it.mod_bc_st,
+                pmva_xml=it.p_mva_st, pmva_calculada=ZERO,
+                vbc_st_xml=it.v_bc_st, vbc_st_calculado=ZERO,
+                vicms_st_xml=it.valor_icms_st, vicms_st_calculado=ZERO,
+                vicms_st_divergencia=ZERO,
+                vfcp_st_xml=it.v_fcp_st, vfcp_st_calculado=ZERO,
+                status="NAO_AUDITAVEL", codigo_erro=erro.codigo,
+                observacao=erro.mensagem,
+                memoria=None,
+            )
+            for it in itens_db
+        ]
         self.session.add_all(registros)
         await self.session.flush()
         return registros

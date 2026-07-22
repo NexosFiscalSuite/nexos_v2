@@ -80,6 +80,13 @@ class ItemFiscal:
     v_bc_fcp_st: Decimal = ZERO
     v_fcp_st: Decimal = ZERO
 
+    # --- ST retido anteriormente (CST 60 / CSOSN 500) — insumo do ressarcimento ---
+    v_bc_st_ret: Decimal = ZERO
+    p_st_ret: Decimal = ZERO
+    v_icms_st_ret: Decimal = ZERO
+    v_icms_substituto: Decimal = ZERO
+    v_fcp_st_ret: Decimal = ZERO
+
     @property
     def cst_csosn(self) -> str:
         return self.cst or self.csosn or ""

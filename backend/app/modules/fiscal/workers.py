@@ -67,17 +67,24 @@ async def _run(job_id, tenant_id, empresa_id, user_id, staging):
 
         # txn 3: auditoria de ICMS-ST das NF-e do lote (separada — o frete dos
         # CT-e do mesmo lote já está persistido; falha aqui NÃO desfaz o import).
+        # Sessão POR NOTA: uma nota podre não pode derrubar a auditoria das
+        # outras dezenas boas do lote (e não deixa a sessão SQLAlchemy suja).
         if auditaveis:
-            try:
-                async with worker_tenant_session(tenant_id) as s:
-                    auditor = StAuditService(s)
-                    for nota_id in auditaveis:
-                        await auditor.auditar_nota(empresa_id, nota_id)
-            except Exception as e:  # noqa: BLE001 — auditoria não derruba o import
+            falhas: list[str] = []
+            for nota_id in auditaveis:
+                try:
+                    async with worker_tenant_session(tenant_id) as s:
+                        await StAuditService(s).auditar_nota(empresa_id, nota_id)
+                except Exception as e:  # noqa: BLE001 — segue para a próxima nota
+                    falhas.append(f"{nota_id}: {e}")
+            if falhas:
                 # Degradação silenciosa é o pior modo de falha: o import "deu
-                # certo" mas as notas ficaram sem auditoria — alerta sempre.
-                alertar_falha("fiscal.auditoria_st", f"Auditoria de ST falhou: {e}",
-                              {"job_id": str(job_id), "notas": len(auditaveis)})
+                # certo" mas ALGUMAS notas ficaram sem auditoria — alerta sempre.
+                alertar_falha(
+                    "fiscal.auditoria_st",
+                    f"Auditoria de ST falhou em {len(falhas)} de {len(auditaveis)} nota(s).",
+                    {"job_id": str(job_id), "falhas": falhas[:10]},
+                )
 
         # Etapa separada: enriquece o regime (consulta optante) das contrapartes
         # recém-criadas, sem acoplar a velocidade do import à API externa.

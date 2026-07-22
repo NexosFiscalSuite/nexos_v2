@@ -29,7 +29,13 @@ from .ports import (
     MvaRepository,
     ProtocoloRepository,
 )
-from .strategies import BaseMva, aplicar_reducao_base, base_strategy_for, calcular_deducao
+from .strategies import (
+    BaseMva,
+    BaseValorOperacao,
+    aplicar_reducao_base,
+    base_strategy_for,
+    calcular_deducao,
+)
 
 # Gravada em cada memória de cálculo: permite responder "qual regra o sistema
 # aplicou na época" (defensibilidade). Bump a cada mudança de regra de cálculo.
@@ -43,7 +49,7 @@ class _AssumeProtocolo:
 
     fonte = "assumido"
 
-    def tem_protocolo(self, uf_orig: str, uf_dest: str, data: date) -> bool:
+    def tem_protocolo(self, uf_orig: str, uf_dest: str, data: date, ncm: str = "") -> bool:
         return True
 
 # Régua de centavos por item (Seção 6 do CALC_ICMS_Proprio).
@@ -91,17 +97,34 @@ class StAuditEngine:
                     )
             return self._nao_auditavel(item, f"regime {regime.value} (fora do motor de ST)")
 
-        # Bifurcação por tpNF. SAÍDA de revenda com ST já retido (CST 60 / CSOSN
-        # 500): o ST foi recolhido na cadeia anterior, não se recolhe de novo —
-        # auditoria própria (Cenário 1). Os demais casos (entrada, ou saída como
-        # substituto CST 10/70/201…) seguem o mesmo cálculo de ST (Cenário 2).
-        if operacao.saida and item.cst_csosn in ("60", "500"):
-            return self._auditar_revenda_st_retido(item, operacao, regime)
+        # Bifurcação por tpNF e CST 60/500 (ST já retido na cadeia). SAÍDA de
+        # revenda: não se recolhe de novo — auditoria própria (Cenário 1).
+        # ENTRADA com ST retido: nada a calcular nesta compra — OK registrando o
+        # retido (insumo do ressarcimento). Demais casos: cálculo de ST normal.
+        if item.cst_csosn in ("60", "500"):
+            if operacao.saida:
+                return self._auditar_revenda_st_retido(item, operacao, regime)
+            return self._auditar_entrada_st_retido(item, regime)
 
-        # 2. Estratégia de base — núcleo v1 cobre só MVA (4) e Valor da Operação (6).
+        # 2. Estratégia de base — núcleo v1 cobre MVA (4) e Valor da Operação (6).
+        #    modBCST AUSENTE (fornecedor nem tratou o item como ST — o caso
+        #    típico da antecipação/sem retenção): a matriz decide, mesma regra
+        #    de ouro do passo 4 — MVA cadastrada → base MVA; senão → valor da
+        #    operação. Modalidades 0/1/2/3/5 (pauta/listas) seguem sem suporte,
+        #    agora com código reprocessável.
         base_strategy = base_strategy_for(item.mod_bc_st)
+        if base_strategy is None and item.mod_bc_st is None:
+            mva_previa = self.mva_repo.buscar(
+                item.ncm, item.cest, operacao.uf_dest, operacao.data
+            )
+            tem_mva_previa = mva_previa is not None and mva_previa.mva_original > ZERO
+            base_strategy = BaseMva() if tem_mva_previa else BaseValorOperacao()
         if base_strategy is None:
-            return self._nao_auditavel(item, f"modBCST={item.mod_bc_st} fora do núcleo v1")
+            return self._nao_auditavel(
+                item, ErroST.MODBCST_NAO_SUPORTADO,
+                observacao=f"modBCST={item.mod_bc_st} (pauta/preço tabelado/listas) "
+                           "ainda sem suporte no motor — pendência reprocessável.",
+            )
 
         # 3. Alíquotas. A interestadual é lei em fórmula (código); a interna vem
         #    da matriz VIGENTE NA DATA — sem alíquota cadastrada, o motor não
@@ -182,13 +205,18 @@ class StAuditEngine:
         # 9. RESPONSABILIDADE na interestadual (matriz de protocolo), resolvida
         #    ANTES da memória: fica registrado o que o motor decidiu E de onde
         #    veio a resposta ("assumido" = default sem matriz, nunca silencioso).
+        #    Tri-state: True = acordo vigente (remetente é o substituto);
+        #    False = par CURADO sem acordo aplicável (antecipação do destinatário);
+        #    None = par nunca avaliado na matriz → fail-closed, não decide.
         tem_protocolo: bool | None = None
         protocolo_fonte: str | None = None
         if operacao.interestadual:
             tem_protocolo = self.protocolo_repo.tem_protocolo(
-                operacao.uf_emit, operacao.uf_dest, operacao.data
+                operacao.uf_emit, operacao.uf_dest, operacao.data, item.ncm
             )
             protocolo_fonte = getattr(self.protocolo_repo, "fonte", "matriz")
+            if tem_protocolo is None:
+                return self._nao_auditavel(item, ErroST.PROTOCOLO_NAO_AVALIADO)
 
         # 10. Memória (independe das comparações — vale para os dois fluxos abaixo).
         memoria = MemoriaCalculo(
@@ -338,6 +366,31 @@ class StAuditEngine:
             numero_item=item.numero_item,
             status=StatusAuditoria.DIVERGENTE if erros else StatusAuditoria.OK,
             erros=erros, divergencia_icms_st=diferenca, memoria=memoria, observacao=obs,
+        )
+
+    def _auditar_entrada_st_retido(self, item: ItemFiscal, regime: Regime) -> ResultadoAuditoria:
+        """COMPRA com ST já retido na cadeia (CST 60 / CSOSN 500): não há ST a
+        calcular nesta entrada — o imposto veio retido pelo substituto. O item
+        sai OK e os valores retidos do XML (vICMSSTRet/vBCSTRet/vICMSSubstituto)
+        ficam registrados como insumo do fluxo de ressarcimento/complemento."""
+        memoria = MemoriaCalculo(
+            regime=regime.value, mva_original=ZERO, mva_aplicada=ZERO,
+            mva_foi_ajustada=False,
+            motivo_nao_ajuste="ST retido na cadeia (CST 60/500) — entrada sem novo ST",
+            alq_inter=ZERO, alq_intra=ZERO, base_st_calculada=ZERO, icms_st_debito=ZERO,
+            deducao_aplicada=ZERO, deducao_tipo="zero", icms_st_calculado=ZERO,
+            fcp_st_debito=ZERO, fcp_st_deducao=ZERO, fcp_st_calculado=ZERO,
+            engine_version=ENGINE_VERSION,
+        )
+        obs = (
+            f"Compra com ST retido na cadeia (CST 60/500). Retido informado no XML: "
+            f"R$ {centavos(item.v_icms_st_ret)} (base R$ {centavos(item.v_bc_st_ret)})."
+            if item.v_icms_st_ret > ZERO else
+            "Compra com ST retido na cadeia (CST 60/500) — sem ST a auditar nesta entrada."
+        )
+        return ResultadoAuditoria(
+            numero_item=item.numero_item, status=StatusAuditoria.OK,
+            memoria=memoria, observacao=obs,
         )
 
     @staticmethod

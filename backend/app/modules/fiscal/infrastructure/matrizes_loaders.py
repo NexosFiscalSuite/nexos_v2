@@ -11,7 +11,7 @@ from datetime import date
 from decimal import Decimal
 from typing import ClassVar
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.fiscal.domain.st.enums import Regime
@@ -123,11 +123,27 @@ class _FcpSnapshot:
 
 @dataclass(frozen=True, slots=True)
 class _ProtocoloSnapshot:
-    pares: frozenset[tuple[str, str]]            # (uf_orig, uf_dest) com acordo vigente
+    """Tri-state do par UF origem→destino da nota (o loader já filtrou o par):
+    - `curado` False (nenhuma linha na matriz, qualquer situação) → None: o par
+      nunca foi avaliado; o motor trava com ERRO_PROTOCOLO_NAO_AVALIADO em vez
+      de decidir errado (fail-closed, ADR-0002);
+    - acordo ATIVO vigente casando o NCM (linha sem NCM = par inteiro; com NCM,
+      fallback 8→6→4) → True (remetente é o substituto);
+    - curado sem acordo aplicável (denunciado/vencido/outro NCM) → False
+      (antecipação do destinatário)."""
+
+    curado: bool
+    ncms_ativos: frozenset[str]                  # "*" = acordo do par inteiro
     fonte: ClassVar[str] = "matriz"              # resposta consultada (vai à memória)
 
-    def tem_protocolo(self, uf_orig: str, uf_dest: str, data: date) -> bool:
-        return (uf_orig.upper(), uf_dest.upper()) in self.pares
+    def tem_protocolo(
+        self, uf_orig: str, uf_dest: str, data: date, ncm: str = ""
+    ) -> bool | None:
+        if not self.curado:
+            return None
+        if "*" in self.ncms_ativos:
+            return True
+        return any(c in self.ncms_ativos for c in _candidatos_ncm(ncm))
 
 
 @dataclass(frozen=True, slots=True)
@@ -219,19 +235,30 @@ class MatrizesLoader:
         return _FcpSnapshot({(r.uf_destino, r.ncm): r.aliq_fcp_st for r in rows})
 
     async def _protocolo(self, uf_orig: str, uf_dest: str, data) -> _ProtocoloSnapshot:
-        # Operação interna (mesma UF) não tem protocolo a checar — evita ida ao banco.
+        # Operação interna (mesma UF) não tem protocolo a checar — o engine nem
+        # consulta; `curado` True evita falso "não avaliado" em qualquer borda.
         if uf_orig == uf_dest:
-            return _ProtocoloSnapshot(frozenset())
+            return _ProtocoloSnapshot(curado=True, ncms_ativos=frozenset())
+        par = [
+            MatrizProtocoloSt.uf_origem == uf_orig,
+            MatrizProtocoloSt.uf_destino == uf_dest,
+        ]
+        # Curadoria: existe QUALQUER linha do par (mesmo vencida/denunciada)?
+        curado = bool(await self.session.scalar(
+            select(func.count()).select_from(MatrizProtocoloSt).where(*par)
+        ))
         stmt = filtrar_vigencia(
-            select(MatrizProtocoloSt).where(
-                MatrizProtocoloSt.uf_origem == uf_orig,
-                MatrizProtocoloSt.uf_destino == uf_dest,
-            ),
+            select(MatrizProtocoloSt).where(*par, MatrizProtocoloSt.situacao == "ATIVO"),
             MatrizProtocoloSt,
             data,
         )
         rows = (await self.session.execute(stmt)).scalars().all()
-        return _ProtocoloSnapshot(frozenset((r.uf_origem, r.uf_destino) for r in rows))
+        return _ProtocoloSnapshot(
+            curado=curado,
+            ncms_ativos=frozenset(
+                only_digits(r.ncm) if r.ncm else "*" for r in rows
+            ),
+        )
 
     async def _aliquota(self, uf: str, data) -> _AliquotaSnapshot:
         stmt = (

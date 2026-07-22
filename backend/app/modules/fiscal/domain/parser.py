@@ -307,6 +307,13 @@ def _parse_nfe(root) -> dict:
             "p_icms_st": _f(_g(icms, "pICMSST")),
             "v_bc_st": _f(_g(icms, "vBCST")),
             "valor_icms_st": _f(_g(icms, "vICMSST")),
+            # ST retido anteriormente (CST 60 / CSOSN 500) — insumo do fluxo de
+            # ressarcimento/complemento (fundação entrada→saída)
+            "v_bc_st_ret": _f(_g(icms, "vBCSTRet")),
+            "p_st_ret": _f(_g(icms, "pST")),
+            "v_icms_st_ret": _f(_g(icms, "vICMSSTRet")),
+            "v_icms_substituto": _f(_g(icms, "vICMSSubstituto")),
+            "v_fcp_st_ret": _f(_g(icms, "vFCPSTRet")),
             # FCP (próprio e ST) — trilhas paralelas
             "v_fcp": _f(_g(icms, "vFCP")),
             "p_fcp": _f(_g(icms, "pFCP")),

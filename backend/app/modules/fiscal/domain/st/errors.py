@@ -76,6 +76,26 @@ class ErroST(_Erro, Enum):
         "na data — o motor não sabe se o produto é ST e não audita (fail-closed).",
         "Cadastrar o enquadramento (ST ou TN, com vigência) nas Matrizes Fiscais e reauditar.",
     )
+    MODBCST_NAO_SUPORTADO = (
+        "ERRO_MODBCST_NAO_SUPORTADO",
+        "Modalidade de base do ST (modBCST) ainda sem suporte no motor — "
+        "pauta/preço tabelado/listas (0, 1, 2, 3, 5) exigem matriz de pauta própria.",
+        "Auditar manualmente por ora; a pendência é reprocessável quando o suporte a pauta chegar.",
+    )
+    PROTOCOLO_NAO_AVALIADO = (
+        "ERRO_PROTOCOLO_NAO_AVALIADO",
+        "Interestadual sem NENHUM registro na matriz de protocolos para o par "
+        "origem→destino — o motor não sabe se o remetente é o substituto e não "
+        "decide entre cobrar o fornecedor e apontar antecipação (fail-closed).",
+        "Cadastrar o protocolo/convênio do par de UFs (situação ATIVO; ou uma linha "
+        "INATIVO/DENUNCIADO para registrar que NÃO há acordo) e reauditar.",
+    )
+    DATA_EMISSAO_INVALIDA = (
+        "ERRO_DATA_EMISSAO_INVALIDA",
+        "Nota sem data de emissão válida no XML — a auditoria depende da data "
+        "para escolher a matriz e a alíquota vigentes.",
+        "Corrigir/reimportar o XML da nota; sem data não há vigência aplicável.",
+    )
     ST_INDEVIDO_REVENDA = (
         "ERRO_110_ST_INDEVIDO_REVENDA",
         "Revenda de produto com ST já retido (CST 60 / CSOSN 500) destacou "

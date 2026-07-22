@@ -127,6 +127,13 @@ class NotaItem(Base):
     p_fcp_st: Mapped[Decimal] = mapped_column(_PCT, default=Decimal("0"))
     v_bc_fcp_st: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
 
+    # --- ST retido anteriormente (CST 60/CSOSN 500) — insumo do ressarcimento ---
+    v_bc_st_ret: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+    p_st_ret: Mapped[Decimal] = mapped_column(_PCT, default=Decimal("0"))
+    v_icms_st_ret: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+    v_icms_substituto: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+    v_fcp_st_ret: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+
     # --- IBS/CBS (Reforma Tributária — destaque do ano-teste 2026) ---
     cst_ibs_cbs: Mapped[str | None] = mapped_column(String(3), nullable=True)
     c_class_trib: Mapped[str | None] = mapped_column(String(6), nullable=True)
