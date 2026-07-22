@@ -599,6 +599,13 @@ function MemoriaModal({ d, onClose }) {
   const dif = Number(d.diferenca || 0)
   const interna = d.uf_origem === d.uf_destino
 
+  // Custo aproximado da compra (base ÷ (1 + MVA)): deixa o passo 3 concreto.
+  const mvaApl = Number(m.mva_aplicada)
+  const custoAprox = (m.base_st_calculada != null && Number(m.base_st_calculada) > 0
+    && !Number.isNaN(mvaApl))
+    ? Number(m.base_st_calculada) / (1 + mvaApl / 100)
+    : null
+
   const frase = dif < -0.004
     ? <>A nota destacou <b>{brl(d.vicms_st_xml)}</b>, mas pela regra vigente o valor é <b>{brl(d.vicms_st_calculado)}</b> — <b style={{ color: 'var(--err-text)' }}>faltaram {brl(-dif)}</b> de ST.</>
     : dif > 0.004
@@ -636,28 +643,68 @@ function MemoriaModal({ d, onClose }) {
           </div>
 
           <div className="section-label" style={{ marginBottom: 10 }}>O cálculo, passo a passo</div>
-          <Passo n="1" titulo="A operação"
-            sub={interna
-              ? `Venda dentro de ${d.uf_destino} · produto enquadrado na substituição tributária`
-              : `${d.uf_origem} → ${d.uf_destino} · produto enquadrado na substituição tributária`}
-            valor={`alíquotas: ${pct(m.alq_inter)} inter · ${pct(m.alq_intra)} interna`} />
+
+          {/* Passo 1: a operação e DE ONDE VEM cada alíquota (e se foi usada). */}
+          <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '12px 14px', marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <NumeroPasso n="1" />
+              <div style={{ fontSize: 13, fontWeight: 600 }}>
+                {interna
+                  ? <>Venda dentro de {d.uf_destino}</>
+                  : <>Venda de {d.uf_origem} para {d.uf_destino}</>}
+                <span style={{ fontWeight: 400, color: 'var(--text-3)' }}> · produto enquadrado na substituição tributária</span>
+              </div>
+            </div>
+            <div style={{ marginLeft: 38, marginTop: 8, display: 'grid', gap: 6 }}>
+              <LinhaAliquota
+                nome={`Alíquota interna de ${d.uf_destino || 'destino'}`}
+                valor={pct(m.alq_intra)}
+                desc="usada no passo 4 para calcular o imposto cheio da cadeia — vem da matriz de alíquotas vigente na data da nota" />
+              <LinhaAliquota
+                nome="Alíquota interestadual"
+                valor={pct(m.alq_inter)}
+                apagada={interna}
+                desc={interna
+                  ? 'não entra neste cálculo — a venda não cruza estados'
+                  : (Number(m.alq_inter) === 4
+                    ? 'usada no ICMS próprio e no ajuste da MVA — 4% indica produto de origem importada (Resolução 13/2012)'
+                    : 'usada no ICMS próprio e no ajuste da MVA — 7% ou 12% conforme as regiões de origem e destino')} />
+            </div>
+          </div>
+
           <Passo n="2" titulo="Margem presumida (MVA)"
             sub={ajustada
-              ? 'Ajustada: em venda entre estados a lei corrige a margem pela diferença de alíquotas'
-              : 'A margem que a lei presume até a venda ao consumidor final'}
+              ? `A margem original de ${pct(m.mva_original)} é corrigida para ${pct(m.mva_aplicada)} porque a alíquota da compra (${pct(m.alq_inter)}) difere da interna (${pct(m.alq_intra)}) — o ajuste equaliza a carga entre comprar dentro e fora do estado`
+              : 'Quanto a lei presume que o preço vai subir até chegar ao consumidor final — é sobre essa margem que o ST antecipa o imposto'}
             valor={<><span style={{ color: 'var(--text-4)' }}>{pct(m.mva_original)}</span> <i className="ti ti-arrow-right" style={{ fontSize: 12 }} /> <b>{pct(m.mva_aplicada)}</b></>}
             badge={ajustada ? { txt: 'Ajustada', cls: 'badge-info' } : { txt: 'Original', cls: 'badge-ok' }} />
-          <Passo n="3" titulo="Base de cálculo do ST" sub="preço do produto + frete e encargos, acrescido da margem" valor={brl(m.base_st_calculada)} />
-          <Passo n="4" titulo="Imposto cheio sobre a base" sub={`base × alíquota interna de ${pct(m.alq_intra)}`} valor={brl(m.icms_st_debito)} />
-          <Passo n="5" titulo="(−) Desconto do ICMS próprio" sub={DEDUCAO_LEIGO[m.deducao_tipo] || 'desconto do imposto da operação própria'} valor={`− ${brl(m.deducao_aplicada)}`} negativo />
-          <Passo n="=" titulo="ICMS-ST devido" valor={brl(m.icms_st_calculado)} final />
+          <Passo n="3" titulo="Base de cálculo do ST"
+            sub={custoAprox != null
+              ? `Valor da compra (produto + frete e encargos ≈ ${brl(custoAprox)}) acrescido da margem de ${pct(m.mva_aplicada)} — o preço presumido de venda ao consumidor`
+              : 'Valor da compra (produto + frete e encargos) acrescido da margem — o preço presumido de venda ao consumidor'}
+            valor={brl(m.base_st_calculada)} />
+          <Passo n="4" titulo="Imposto cheio sobre a base"
+            sub={`${brl(m.base_st_calculada)} × ${pct(m.alq_intra)} — o ICMS total da cadeia até o consumidor, que o ST antecipa de uma vez`}
+            valor={brl(m.icms_st_debito)} />
+          <Passo n="5" titulo="(−) Desconto do ICMS próprio"
+            sub={`${DEDUCAO_LEIGO[m.deducao_tipo] || 'desconto do imposto da operação própria'} — desconta para não cobrar duas vezes o mesmo imposto`}
+            valor={`− ${brl(m.deducao_aplicada)}`} negativo />
+          <Passo n="=" titulo="ICMS-ST devido"
+            sub="É o que deveria vir destacado no campo vICMSST da nota"
+            valor={brl(m.icms_st_calculado)} final />
 
           {temFcp && (
             <>
               <div className="section-label" style={{ margin: '18px 0 10px' }}>FCP-ST (trilha paralela)</div>
-              <Passo n="A" titulo="Débito FCP-ST" valor={brl(m.fcp_st_debito)} />
-              <Passo n="B" titulo="(−) FCP próprio (não-cumulatividade)" valor={`− ${brl(m.fcp_st_deducao)}`} negativo />
-              <Passo n="=" titulo="FCP-ST devido" valor={brl(m.fcp_st_calculado)} final />
+              <Passo n="A" titulo="Débito FCP-ST"
+                sub="Adicional do Fundo de Combate à Pobreza sobre a mesma base presumida do ST"
+                valor={brl(m.fcp_st_debito)} />
+              <Passo n="B" titulo="(−) FCP próprio"
+                sub="Desconta o FCP que já veio pago na operação própria — mesmo princípio do passo 5"
+                valor={`− ${brl(m.fcp_st_deducao)}`} negativo />
+              <Passo n="=" titulo="FCP-ST devido"
+                sub="Recolhido junto com o ICMS-ST na mesma guia"
+                valor={brl(m.fcp_st_calculado)} final />
             </>
           )}
 
@@ -703,29 +750,53 @@ function Cartao({ titulo, valor, destaque, cor }) {
   )
 }
 
+function NumeroPasso({ n, final }) {
+  return (
+    <div style={{
+      width: 26, height: 26, borderRadius: '50%', flexShrink: 0, display: 'flex',
+      alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700,
+      background: final ? 'var(--primary)' : 'var(--primary-lt)',
+      color: final ? '#fff' : 'var(--primary-text)',
+    }}>{n}</div>
+  )
+}
+
+// Uma alíquota do passo 1: nome + valor + DE ONDE VEM / SE FOI USADA.
+function LinhaAliquota({ nome, valor, desc, apagada }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, opacity: apagada ? 0.55 : 1 }}>
+      <span className="tnum" style={{ fontWeight: 700, fontSize: 13, minWidth: 58, textAlign: 'right' }}>{valor}</span>
+      <div style={{ fontSize: 11.5, lineHeight: 1.5 }}>
+        <span style={{ fontWeight: 600, color: 'var(--text-2)' }}>{nome}</span>
+        <span style={{ color: 'var(--text-4)' }}> — {desc}</span>
+      </div>
+    </div>
+  )
+}
+
 function Passo({ n, titulo, sub, valor, badge, negativo, final }) {
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', marginBottom: 6,
+      padding: '10px 14px', marginBottom: 6,
       borderRadius: 'var(--radius)', background: final ? 'var(--primary-lt)' : 'transparent',
       border: final ? '1px solid var(--primary)' : '1px solid var(--border)',
     }}>
-      <div style={{
-        width: 26, height: 26, borderRadius: '50%', flexShrink: 0, display: 'flex',
-        alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700,
-        background: final ? 'var(--primary)' : 'var(--surface-2)', color: final ? '#fff' : 'var(--text-3)',
-      }}>{n}</div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <NumeroPasso n={n} final={final} />
+        <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
           {titulo}
           {badge && <span className={`badge ${badge.cls}`} style={{ fontSize: 10 }}>{badge.txt}</span>}
         </div>
-        {sub && <div style={{ fontSize: 11, color: 'var(--text-4)' }}>{sub}</div>}
+        <div className="tnum" style={{
+          fontSize: final ? 16 : 14, fontWeight: 700, whiteSpace: 'nowrap',
+          color: negativo ? 'var(--err-text)' : (final ? 'var(--primary-text)' : 'var(--text-1)'),
+        }}>{valor}</div>
       </div>
-      <div className="mono" style={{
-        fontSize: final ? 16 : 14, fontWeight: final ? 700 : 500, whiteSpace: 'nowrap',
-        color: negativo ? 'var(--err-text)' : (final ? 'var(--primary-text)' : 'var(--text-1)'),
-      }}>{valor}</div>
+      {sub && (
+        <div style={{ marginLeft: 38, marginTop: 3, fontSize: 11.5, color: 'var(--text-4)', lineHeight: 1.5 }}>
+          {sub}
+        </div>
+      )}
     </div>
   )
 }
