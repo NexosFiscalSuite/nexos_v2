@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Dropdown from '../components/Dropdown'
 import { api, saveBlob } from '../api'
@@ -418,6 +418,72 @@ const RotuloSt = ({ children }) => (
   <span style={{ color: 'var(--text-4)', fontWeight: 600, fontSize: 9.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>{children}</span>
 )
 
+// A conduta do analista como selo destacado; o ⓘ abre o balão com a
+// explicação técnica do motor (padrão do balão da classificação — clique
+// abre, clique fora fecha). Nada de tooltip escondido no hover.
+function AcaoSugerida({ acao, destinoMatriz, onIrMatriz }) {
+  const [aberto, setAberto] = useState(false)
+  const [pos, setPos] = useState(null)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!aberto) return
+    const fechar = (e) => { if (!e.target.closest('.balao-classif')) setAberto(false) }
+    document.addEventListener('mousedown', fechar)
+    return () => document.removeEventListener('mousedown', fechar)
+  }, [aberto])
+
+  function alternar(e) {
+    e.stopPropagation()
+    if (!aberto && ref.current) {
+      const r = ref.current.getBoundingClientRect()
+      setPos({
+        top: Math.min(r.bottom + 6, window.innerHeight - 200),
+        left: Math.min(r.left, window.innerWidth - 420),
+      })
+    }
+    setAberto(a => !a)
+  }
+
+  return (
+    <div style={{ marginTop: 5, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <span className="balao-classif" style={{ position: 'relative', display: 'inline-flex', maxWidth: '100%' }}>
+        <button ref={ref} onClick={alternar} title="Clique para ver a explicação do motor"
+          style={{ display: 'inline-flex', alignItems: 'flex-start', gap: 6, maxWidth: '100%',
+                   background: 'var(--accent-lt)', color: 'var(--accent-text)', border: 'none',
+                   borderRadius: 8, padding: '5px 10px', fontSize: 11.5, fontWeight: 600,
+                   lineHeight: 1.45, textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit' }}>
+          <i className="ti ti-bulb" style={{ fontSize: 13, flexShrink: 0, marginTop: 1 }} />
+          <span>{acao.acao}</span>
+          <i className="ti ti-info-circle" style={{ fontSize: 12, opacity: .55, flexShrink: 0, marginTop: 1 }} />
+        </button>
+        {aberto && pos && (
+          <div className="balao-classif" style={{
+            position: 'fixed', top: pos.top, left: pos.left, zIndex: 2000, width: 400,
+            background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
+            boxShadow: '0 10px 30px rgba(0,0,0,.18)', padding: '13px 15px', textAlign: 'left',
+          }}>
+            <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 6, color: 'var(--text-1)' }}>
+              Por que este item foi apontado
+            </div>
+            <div style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.55 }}>{acao.mensagem}</div>
+            <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border-2)', fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.55 }}>
+              <strong style={{ color: 'var(--accent-text)' }}>O que fazer:</strong> {acao.acao}
+            </div>
+            <div className="mono" style={{ marginTop: 8, fontSize: 10.5, color: 'var(--text-4)' }}>{acao.cod}</div>
+          </div>
+        )}
+      </span>
+      {destinoMatriz && (
+        <button className="btn btn-secondary btn-sm" style={{ padding: '3px 10px', fontSize: 11.5 }}
+          onClick={(e) => { e.stopPropagation(); onIrMatriz() }}>
+          <i className="ti ti-table-plus" /> Cadastrar matriz
+        </button>
+      )}
+    </div>
+  )
+}
+
 // ── Linha-mestre (Nota) + linhas-filhas (itens) quando expandida ──
 function FragmentoNota({ nota, aberto, onToggle, onMemoria, catalogo }) {
   const navigate = useNavigate()
@@ -493,16 +559,8 @@ function FragmentoNota({ nota, aberto, onToggle, onMemoria, catalogo }) {
               <div style={{ fontSize: 11, color: 'var(--warn-text)', marginTop: 2 }}><i className="ti ti-alert-circle" style={{ marginRight: 4 }} />{it.observacao}</div>
             )}
             {acao && (
-              <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 2 }} title={acao.mensagem}>
-                <i className="ti ti-bulb" style={{ marginRight: 4, color: 'var(--accent-text)' }} />
-                <strong style={{ color: 'var(--text-2)' }}>Ação:</strong> {acao.acao}
-                {destinoMatriz && (
-                  <button className="btn btn-ghost btn-sm" style={{ marginLeft: 8, padding: '1px 8px', fontSize: 11.5 }}
-                    onClick={(e) => { e.stopPropagation(); navigate(destinoMatriz) }}>
-                    <i className="ti ti-table-plus" /> Cadastrar matriz
-                  </button>
-                )}
-              </div>
+              <AcaoSugerida acao={acao} destinoMatriz={destinoMatriz}
+                onIrMatriz={() => navigate(destinoMatriz)} />
             )}
           </td>
           <td colSpan={2}>
