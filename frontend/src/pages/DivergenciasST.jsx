@@ -624,102 +624,109 @@ function MemoriaModal({ d, onClose }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()} style={{ width: 560, maxWidth: '96%' }}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ width: 920, maxWidth: '96%' }}>
         <div className="modal-header">
           <h2><i className="ti ti-calculator" style={{ marginRight: 8 }} />Como chegamos ao valor devido</h2>
           <button className="btn btn-icon" onClick={onClose}><i className="ti ti-x" /></button>
         </div>
         <div className="modal-body">
+          {/* Topo em largura total: os 3 números + a conclusão em uma frase. */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
             <Cartao titulo="Destacado na nota" valor={brl(d.vicms_st_xml)} />
             <Cartao titulo="Devido pela regra" valor={brl(d.vicms_st_calculado)} destaque />
-            <Cartao titulo="Diferença" valor={brl(d.diferenca)} cor={corDiferenca(d.diferenca)} />
+            <Cartao titulo="Diferença" valor={brlDif(d.diferenca)} cor={corDiferenca(d.diferenca)} />
           </div>
-
-          {/* A conclusão em uma frase — antes de qualquer número. */}
           <div style={{ background: 'var(--surface-2)', borderRadius: 'var(--radius)', padding: '10px 14px', fontSize: 13, lineHeight: 1.55, marginBottom: 18 }}>
             {frase}
           </div>
 
-          <div className="section-label" style={{ marginBottom: 8 }}>Onde nasce a diferença</div>
-          <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', marginBottom: 18, overflow: 'hidden' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 90px 92px', gap: 10, padding: '6px 12px', background: 'var(--surface-2)', fontSize: 10.5, fontWeight: 600, color: 'var(--text-4)', textTransform: 'uppercase', letterSpacing: 0.4 }}>
-              <span>Etapa</span><span style={{ textAlign: 'right' }}>Na nota</span><span style={{ textAlign: 'right' }}>Pela regra</span><span style={{ textAlign: 'center' }}>Confere?</span>
-            </div>
-            <LinhaConfronto rotulo="Margem presumida (MVA)" xml={d.pmva_xml} calc={d.pmva_calculada} fmt={pct} tol={0.011} />
-            <LinhaConfronto rotulo="Base de cálculo do ST" xml={d.vbc_st_xml} calc={d.vbc_st_calculado} />
-            <LinhaConfronto rotulo="ICMS-ST" xml={d.vicms_st_xml} calc={d.vicms_st_calculado} />
-            <LinhaConfronto rotulo="FCP-ST (fundo de combate à pobreza)" xml={d.vfcp_st_xml} calc={d.vfcp_st_calculado} ultima />
-          </div>
+          {/* Duas colunas: a narrativa do cálculo à esquerda, o veredito etapa
+              a etapa (+ FCP) à direita — o modal ganha largura, não altura. */}
+          <div className="memoria-grid">
+            <div>
+              <div className="section-label" style={{ marginBottom: 10 }}>O cálculo, passo a passo</div>
 
-          <div className="section-label" style={{ marginBottom: 10 }}>O cálculo, passo a passo</div>
-
-          {/* Passo 1: a operação e DE ONDE VEM cada alíquota (e se foi usada). */}
-          <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '12px 14px', marginBottom: 8 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <NumeroPasso n="1" />
-              <div style={{ fontSize: 13, fontWeight: 600 }}>
-                {interna
-                  ? <>Venda dentro de {d.uf_destino}</>
-                  : <>Venda de {d.uf_origem} para {d.uf_destino}</>}
-                <span style={{ fontWeight: 400, color: 'var(--text-3)' }}> · produto enquadrado na substituição tributária</span>
+              {/* Passo 1: a operação e DE ONDE VEM cada alíquota (e se foi usada). */}
+              <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '12px 14px', marginBottom: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <NumeroPasso n="1" />
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>
+                    {interna
+                      ? <>Venda dentro de {d.uf_destino}</>
+                      : <>Venda de {d.uf_origem} para {d.uf_destino}</>}
+                    <span style={{ fontWeight: 400, color: 'var(--text-3)' }}> · produto na substituição tributária</span>
+                  </div>
+                </div>
+                <div style={{ marginLeft: 38, marginTop: 8, display: 'grid', gap: 6 }}>
+                  <LinhaAliquota
+                    nome={`Alíquota interna de ${d.uf_destino || 'destino'}`}
+                    valor={pct(m.alq_intra)}
+                    desc="usada no passo 4 para calcular o imposto cheio da cadeia — vem da matriz de alíquotas vigente na data da nota" />
+                  <LinhaAliquota
+                    nome="Alíquota interestadual"
+                    valor={pct(m.alq_inter)}
+                    apagada={interna}
+                    desc={interna
+                      ? 'não entra neste cálculo — a venda não cruza estados'
+                      : (Number(m.alq_inter) === 4
+                        ? 'usada no ICMS próprio e no ajuste da MVA — 4% indica produto de origem importada (Resolução 13/2012)'
+                        : 'usada no ICMS próprio e no ajuste da MVA — 7% ou 12% conforme as regiões de origem e destino')} />
+                </div>
               </div>
+
+              <Passo n="2" titulo="Margem presumida (MVA)"
+                sub={ajustada
+                  ? `A margem original de ${pct(m.mva_original)} é corrigida para ${pct(m.mva_aplicada)} porque a alíquota da compra (${pct(m.alq_inter)}) difere da interna (${pct(m.alq_intra)}) — o ajuste equaliza a carga entre comprar dentro e fora do estado`
+                  : 'Quanto a lei presume que o preço vai subir até chegar ao consumidor final — é sobre essa margem que o ST antecipa o imposto'}
+                valor={<><span style={{ color: 'var(--text-4)' }}>{pct(m.mva_original)}</span> <i className="ti ti-arrow-right" style={{ fontSize: 12 }} /> <b>{pct(m.mva_aplicada)}</b></>}
+                badge={ajustada ? { txt: 'Ajustada', cls: 'badge-info' } : { txt: 'Original', cls: 'badge-ok' }} />
+              <Passo n="3" titulo="Base de cálculo do ST"
+                sub={custoAprox != null
+                  ? `Valor da compra (produto + frete e encargos ≈ ${brl(custoAprox)}) acrescido da margem de ${pct(m.mva_aplicada)} — o preço presumido de venda ao consumidor`
+                  : 'Valor da compra (produto + frete e encargos) acrescido da margem — o preço presumido de venda ao consumidor'}
+                valor={brl(m.base_st_calculada)} />
+              <Passo n="4" titulo="Imposto cheio sobre a base"
+                sub={`${brl(m.base_st_calculada)} × ${pct(m.alq_intra)} — o ICMS total da cadeia até o consumidor, que o ST antecipa de uma vez`}
+                valor={brl(m.icms_st_debito)} />
+              <Passo n="5" titulo="(−) Desconto do ICMS próprio"
+                sub={`${DEDUCAO_LEIGO[m.deducao_tipo] || 'desconto do imposto da operação própria'} — desconta para não cobrar duas vezes o mesmo imposto`}
+                valor={`− ${brl(m.deducao_aplicada)}`} negativo />
+              <Passo n="=" titulo="ICMS-ST devido"
+                sub="É o que deveria vir destacado no campo vICMSST da nota"
+                valor={brl(m.icms_st_calculado)} final />
             </div>
-            <div style={{ marginLeft: 38, marginTop: 8, display: 'grid', gap: 6 }}>
-              <LinhaAliquota
-                nome={`Alíquota interna de ${d.uf_destino || 'destino'}`}
-                valor={pct(m.alq_intra)}
-                desc="usada no passo 4 para calcular o imposto cheio da cadeia — vem da matriz de alíquotas vigente na data da nota" />
-              <LinhaAliquota
-                nome="Alíquota interestadual"
-                valor={pct(m.alq_inter)}
-                apagada={interna}
-                desc={interna
-                  ? 'não entra neste cálculo — a venda não cruza estados'
-                  : (Number(m.alq_inter) === 4
-                    ? 'usada no ICMS próprio e no ajuste da MVA — 4% indica produto de origem importada (Resolução 13/2012)'
-                    : 'usada no ICMS próprio e no ajuste da MVA — 7% ou 12% conforme as regiões de origem e destino')} />
+
+            <div>
+              <div className="section-label" style={{ marginBottom: 8 }}>Onde nasce a diferença</div>
+              <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 82px 82px 84px', gap: 8, padding: '6px 12px', background: 'var(--surface-2)', fontSize: 10.5, fontWeight: 600, color: 'var(--text-4)', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                  <span>Etapa</span><span style={{ textAlign: 'right' }}>Na nota</span><span style={{ textAlign: 'right' }}>Pela regra</span><span style={{ textAlign: 'center' }}>Confere?</span>
+                </div>
+                <LinhaConfronto rotulo="Margem presumida (MVA)" xml={d.pmva_xml} calc={d.pmva_calculada} fmt={pct} tol={0.011} />
+                <LinhaConfronto rotulo="Base de cálculo do ST" xml={d.vbc_st_xml} calc={d.vbc_st_calculado} />
+                <LinhaConfronto rotulo="ICMS-ST" xml={d.vicms_st_xml} calc={d.vicms_st_calculado} />
+                <LinhaConfronto rotulo="FCP-ST" xml={d.vfcp_st_xml} calc={d.vfcp_st_calculado} ultima />
+              </div>
+
+              {temFcp && (
+                <>
+                  <div className="section-label" style={{ margin: '18px 0 10px' }}>FCP-ST (trilha paralela)</div>
+                  <Passo n="A" titulo="Débito FCP-ST"
+                    sub="Adicional do Fundo de Combate à Pobreza sobre a mesma base presumida do ST"
+                    valor={brl(m.fcp_st_debito)} />
+                  <Passo n="B" titulo="(−) FCP próprio"
+                    sub="Desconta o FCP que já veio pago na operação própria — mesmo princípio do passo 5"
+                    valor={`− ${brl(m.fcp_st_deducao)}`} negativo />
+                  <Passo n="=" titulo="FCP-ST devido"
+                    sub="Recolhido junto com o ICMS-ST na mesma guia"
+                    valor={brl(m.fcp_st_calculado)} final />
+                </>
+              )}
             </div>
           </div>
-
-          <Passo n="2" titulo="Margem presumida (MVA)"
-            sub={ajustada
-              ? `A margem original de ${pct(m.mva_original)} é corrigida para ${pct(m.mva_aplicada)} porque a alíquota da compra (${pct(m.alq_inter)}) difere da interna (${pct(m.alq_intra)}) — o ajuste equaliza a carga entre comprar dentro e fora do estado`
-              : 'Quanto a lei presume que o preço vai subir até chegar ao consumidor final — é sobre essa margem que o ST antecipa o imposto'}
-            valor={<><span style={{ color: 'var(--text-4)' }}>{pct(m.mva_original)}</span> <i className="ti ti-arrow-right" style={{ fontSize: 12 }} /> <b>{pct(m.mva_aplicada)}</b></>}
-            badge={ajustada ? { txt: 'Ajustada', cls: 'badge-info' } : { txt: 'Original', cls: 'badge-ok' }} />
-          <Passo n="3" titulo="Base de cálculo do ST"
-            sub={custoAprox != null
-              ? `Valor da compra (produto + frete e encargos ≈ ${brl(custoAprox)}) acrescido da margem de ${pct(m.mva_aplicada)} — o preço presumido de venda ao consumidor`
-              : 'Valor da compra (produto + frete e encargos) acrescido da margem — o preço presumido de venda ao consumidor'}
-            valor={brl(m.base_st_calculada)} />
-          <Passo n="4" titulo="Imposto cheio sobre a base"
-            sub={`${brl(m.base_st_calculada)} × ${pct(m.alq_intra)} — o ICMS total da cadeia até o consumidor, que o ST antecipa de uma vez`}
-            valor={brl(m.icms_st_debito)} />
-          <Passo n="5" titulo="(−) Desconto do ICMS próprio"
-            sub={`${DEDUCAO_LEIGO[m.deducao_tipo] || 'desconto do imposto da operação própria'} — desconta para não cobrar duas vezes o mesmo imposto`}
-            valor={`− ${brl(m.deducao_aplicada)}`} negativo />
-          <Passo n="=" titulo="ICMS-ST devido"
-            sub="É o que deveria vir destacado no campo vICMSST da nota"
-            valor={brl(m.icms_st_calculado)} final />
-
-          {temFcp && (
-            <>
-              <div className="section-label" style={{ margin: '18px 0 10px' }}>FCP-ST (trilha paralela)</div>
-              <Passo n="A" titulo="Débito FCP-ST"
-                sub="Adicional do Fundo de Combate à Pobreza sobre a mesma base presumida do ST"
-                valor={brl(m.fcp_st_debito)} />
-              <Passo n="B" titulo="(−) FCP próprio"
-                sub="Desconta o FCP que já veio pago na operação própria — mesmo princípio do passo 5"
-                valor={`− ${brl(m.fcp_st_deducao)}`} negativo />
-              <Passo n="=" titulo="FCP-ST devido"
-                sub="Recolhido junto com o ICMS-ST na mesma guia"
-                valor={brl(m.fcp_st_calculado)} final />
-            </>
-          )}
 
           {/* Defensibilidade: qual versão do motor e quais linhas de matriz decidiram. */}
-          <div style={{ marginTop: 14, fontSize: 11, color: 'var(--text-4)', lineHeight: 1.6 }}>
+          <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border-2)', fontSize: 11, color: 'var(--text-4)', lineHeight: 1.6 }}>
             <i className="ti ti-shield-check" style={{ marginRight: 4 }} />
             Rastreabilidade: motor v{m.engine_version || '—'} · MVA da matriz {m.mva_matriz_id ? `#${m.mva_matriz_id}` : '—'}{m.mva_base_legal ? ` (${m.mva_base_legal})` : ''} ·
             alíquota da matriz {m.aliquota_matriz_id ? `#${m.aliquota_matriz_id}` : '—'}{m.aliquota_base_legal ? ` (${m.aliquota_base_legal})` : ''} ·
