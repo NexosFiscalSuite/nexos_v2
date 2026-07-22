@@ -108,7 +108,8 @@ async def _injetar(s: AsyncSession, tenant_id, empresa_id):
     for it in nfe["itens"]:
         s.add(NotaItem(
             id=uuid4(), tenant_id=tenant_id, nota_id=nota.id,
-            numero_item=it["numero_item"], ncm=it["ncm"], cest=it["cest"], cfop=it["cfop"],
+            numero_item=it["numero_item"], descricao=it.get("descricao"),
+            codigo=it.get("codigo"), ncm=it["ncm"], cest=it["cest"], cfop=it["cfop"],
             orig=it["orig"], cst=it["cst"], csosn=it["csosn"] or None, mod_bc_st=it["mod_bc_st"],
             quantidade=_d(it["quantidade"]), valor_produto=_d(it["valor_produto"]),
             valor_frete=_d(it["valor_frete"]), valor_seguro=_d(it["valor_seguro"]),
@@ -191,6 +192,8 @@ async def test_query_divergencias_e_idempotencia(sessao):
     assert item["vicms_st_xml"] == Decimal("0.00")
     assert item["diferenca"] == Decimal("-177.50")       # XML − calculado
     assert item["fornecedor"] == "FORNECEDOR SP"
+    assert item["descricao"]                             # nome do produto na listagem
+    assert item["ncm"]
     assert item["memoria"]["mva_original"] == "71.78"    # memória exposta ao front
 
     # Filtro de período exclui notas fora da janela.

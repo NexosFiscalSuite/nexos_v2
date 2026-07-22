@@ -210,7 +210,15 @@ function FragmentoNota({ nota, aberto, onToggle, onMemoria }) {
           <td />
           <td style={{ paddingLeft: 28 }}>
             <span className="mono">Item {it.numero_item}</span>
-            <span style={{ fontSize: 11, color: 'var(--text-4)', marginLeft: 8 }}>CST {it.cst_csosn || '—'} · modBCST {it.mod_bc_st ?? '—'}</span>
+            {it.descricao && (
+              <span style={{ fontWeight: 500, color: 'var(--text-1)', marginLeft: 8, maxWidth: 320, display: 'inline-block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'bottom' }} title={it.descricao}>
+                {it.descricao}
+              </span>
+            )}
+            <span style={{ fontSize: 11, color: 'var(--text-4)', marginLeft: 8 }}>
+              CST {it.cst_csosn || '—'} · modBCST {it.mod_bc_st ?? '—'}
+              {it.ncm && <> · NCM {it.ncm}</>}{it.cest && <> · CEST {it.cest}</>}
+            </span>
             {selo && (
               <span className={`badge ${selo.cls}`} style={{ fontSize: 10, marginLeft: 8 }}>
                 <i className={`ti ${selo.icon}`} style={{ marginRight: 3 }} />{selo.txt}

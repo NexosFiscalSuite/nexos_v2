@@ -9,10 +9,15 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.fiscal.infrastructure.models import AuditoriaIcmsSt, NfeCteVinculo, Nota
+from app.modules.fiscal.infrastructure.models import (
+    AuditoriaIcmsSt,
+    NfeCteVinculo,
+    Nota,
+    NotaItem,
+)
 from app.shared.domain.value_objects import only_digits
 
 
@@ -45,9 +50,12 @@ async def listar_divergencias(
     total = await session.scalar(
         select(func.count()).select_from(a).join(n, a.nota_id == n.id).where(*where)
     )
+    it = NotaItem
     res = await session.execute(
-        select(a, n)
+        select(a, n, it.descricao, it.codigo, it.ncm, it.cest)
         .join(n, a.nota_id == n.id)
+        # LEFT JOIN: o item dá nome/NCM/CEST à linha (a auditoria guarda só o nº).
+        .outerjoin(it, and_(it.nota_id == a.nota_id, it.numero_item == a.numero_item))
         .where(*where)
         # DIVERGENTE ('D') antes de NAO_AUDITAVEL ('N'); depois a maior diferença.
         .order_by(a.status.asc(), func.abs(a.vicms_st_divergencia).desc())
@@ -57,7 +65,7 @@ async def listar_divergencias(
     linhas = res.all()
 
     # CT-e vinculados por chave de NF-e (badge 🚚 do ADR-0001).
-    chaves = {a_row.chave_acesso for a_row, _ in linhas}
+    chaves = {linha[0].chave_acesso for linha in linhas}
     ctes_por_chave: dict[str, list[str]] = {}
     if chaves:
         vinc = await session.execute(
@@ -73,6 +81,10 @@ async def listar_divergencias(
         {
             "chave_acesso": a_row.chave_acesso,
             "numero_item": a_row.numero_item,
+            "descricao": descricao,
+            "codigo": codigo,
+            "ncm": ncm,
+            "cest": cest,
             "numero_nota": n_row.numero,
             "fornecedor": n_row.nome_emit,
             "cnpj_emit": n_row.cnpj_emit,
@@ -97,6 +109,6 @@ async def listar_divergencias(
             "memoria": a_row.memoria,
             "ctes_vinculados": ctes_por_chave.get(a_row.chave_acesso, []),
         }
-        for a_row, n_row in linhas
+        for a_row, n_row, descricao, codigo, ncm, cest in linhas
     ]
     return {"total": total or 0, "page": page, "page_size": page_size, "itens": itens}
