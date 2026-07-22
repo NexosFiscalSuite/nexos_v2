@@ -45,6 +45,10 @@ class ReprocessService:
                 # uma vez — o motor re-rotula em "TN por cadastro" (novo texto,
                 # não volta a casar aqui) ou em ERRO_ENQUADRAMENTO_NAO_CADASTRADO.
                 AuditoriaIcmsSt.observacao == "regime TN (fora do motor de ST)",
+                # Legado pré-Parte 1: "modBCST=None fora do núcleo v1" sem código.
+                # Re-audita uma vez — vira cálculo real (matriz decide a base),
+                # entrada CST 60 OK, ou ERRO_MODBCST_NAO_SUPORTADO (pauta).
+                AuditoriaIcmsSt.observacao.like("modBCST=%fora do núcleo v1"),
             ),
         )
         if empresa_id:
