@@ -208,3 +208,47 @@ async def test_query_divergencias_e_idempotencia(sessao):
     vazio = await listar_divergencias(sessao, empresa_id=empresa_id, data_inicio="2027-01-01")
     assert vazio["total"] == 0
     assert vazio["resumo"]["divergentes"] == 0 and vazio["ranking_fornecedores"] == []
+
+    # Filtros de servidor: status, código do motor e busca livre.
+    so_div = await listar_divergencias(sessao, empresa_id=empresa_id, status="DIVERGENTE")
+    assert so_div["total"] == 2
+    nada = await listar_divergencias(sessao, empresa_id=empresa_id, status="NAO_AUDITAVEL")
+    assert nada["total"] == 0
+    por_cod = await listar_divergencias(sessao, empresa_id=empresa_id, codigo_erro="ERRO_104")
+    assert por_cod["total"] == 2
+    por_q = await listar_divergencias(sessao, empresa_id=empresa_id, q="autopeca")
+    assert por_q["total"] == 2                            # descrição do item (sem caixa)
+    por_q2 = await listar_divergencias(sessao, empresa_id=empresa_id, q="fornecedor sp")
+    assert por_q2["total"] == 2                           # nome do emitente
+    por_q3 = await listar_divergencias(sessao, empresa_id=empresa_id, q="produto inexistente")
+    assert por_q3["total"] == 0
+
+
+async def test_exportacao_xlsx_das_divergencias(sessao):
+    """Planilha de trabalho: todas as linhas do filtro + consolidação por
+    fornecedor, legível pelo openpyxl (o que o Excel abre, o teste abre)."""
+    import io
+
+    from openpyxl import load_workbook
+
+    from app.modules.fiscal.application.auditoria_query import exportar_divergencias
+    from app.modules.fiscal.application.st_export import gerar_xlsx_divergencias
+
+    tenant_id, empresa_id = uuid4(), uuid4()
+    nota = await _injetar(sessao, tenant_id, empresa_id)
+    await StAuditService(sessao).auditar_nota(empresa_id, nota.id)
+
+    itens = await exportar_divergencias(sessao, empresa_id=empresa_id)
+    assert len(itens) == 2
+    xlsx = gerar_xlsx_divergencias(itens, "06/2026")
+
+    wb = load_workbook(io.BytesIO(xlsx))
+    assert wb.sheetnames == ["Divergências", "Por fornecedor"]
+    ws = wb["Divergências"]
+    assert ws.cell(row=1, column=1).value == "Fornecedor"
+    assert ws.cell(row=2, column=1).value == "FORNECEDOR SP"
+    assert ws.cell(row=2, column=6).value == "Autopeca"          # produto
+    assert float(ws.cell(row=2, column=13).value) == 177.50      # ST calculado
+    wf = wb["Por fornecedor"]
+    assert wf.cell(row=2, column=1).value == "FORNECEDOR SP"
+    assert float(wf.cell(row=2, column=5).value) == 355.0        # a recolher

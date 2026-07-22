@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import Dropdown from '../components/Dropdown'
 import { api, saveBlob } from '../api'
 import ErroCarga from '../components/ErroCarga'
 import { useEmpresa } from '../context/EmpresaContext'
@@ -112,10 +113,18 @@ export default function DivergenciasST() {
       .catch(() => {})
   }, [])
 
+  // Filtros de servidor: busca livre (debounce), status e código do motor.
+  const [busca, setBusca] = useState('')
+  const [q, setQ] = useState('')
+  const [fStatus, setFStatus] = useState('')
+  const [fCodigo, setFCodigo] = useState('')
+  useEffect(() => { const t = setTimeout(() => setQ(busca.trim()), 400); return () => clearTimeout(t) }, [busca])
+
   const params = useCallback((page = 1) => ({
     fluxo: tab, data_inicio: `${ano}-${mes}-01`, data_fim: `${ano}-${mes}-31`,
+    status: fStatus, codigo_erro: fCodigo, q,
     page, page_size: PAGE_SIZE,
-  }), [tab, ano, mes])
+  }), [tab, ano, mes, fStatus, fCodigo, q])
 
   const carregar = useCallback(async () => {
     if (!selectedEmpresa) { setData({ total: 0, itens: [] }); return }
@@ -169,9 +178,20 @@ export default function DivergenciasST() {
     finally { setCartaBusy(null) }
   }
 
+  const [expBusy, setExpBusy] = useState(false)
+  async function exportarExcel() {
+    setExpBusy(true)
+    try {
+      const { blob, filename } = await api.stExportarDivergencias(selectedEmpresa.id, params())
+      saveBlob(blob, filename)
+      toast('Planilha exportada.', 'ok')
+    } catch (e) { toast(e.message, 'error') }
+    finally { setExpBusy(false) }
+  }
+
   const [filtroCard, setFiltroCard] = useState(null)
   useEffect(() => { carregar() }, [carregar])
-  useEffect(() => { setExpandido(new Set()); setFiltroCard(null) }, [selectedEmpresa, ano, mes, tab])
+  useEffect(() => { setExpandido(new Set()); setFiltroCard(null) }, [selectedEmpresa, ano, mes, tab, q, fStatus, fCodigo])
 
   const itensVisiveis = useMemo(() => {
     const card = CARDS.find(c => c.key === filtroCard)
@@ -204,20 +224,55 @@ export default function DivergenciasST() {
               : `${data.total} item(ns)`}
           </p>
         </div>
-        <button className="btn btn-secondary" disabled={reproBusy} onClick={reprocessar}
-          title="Re-aplica De/Para CFOP e re-audita as notas travadas por matriz faltante">
-          <i className={`ti ti-refresh ${reproBusy ? 'spin' : ''}`} /> {reproBusy ? 'Reprocessando…' : 'Reprocessar Pendentes'}
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-secondary" disabled={expBusy || data.total === 0} onClick={exportarExcel}
+            title="Planilha Excel do filtro atual (todas as páginas): itens + consolidação por fornecedor">
+            <i className="ti ti-file-spreadsheet" /> {expBusy ? 'Exportando…' : 'Exportar Excel'}
+          </button>
+          <button className="btn btn-secondary" disabled={reproBusy} onClick={reprocessar}
+            title="Re-aplica De/Para CFOP e re-audita as notas travadas por matriz faltante">
+            <i className={`ti ti-refresh ${reproBusy ? 'spin' : ''}`} /> {reproBusy ? 'Reprocessando…' : 'Reprocessar Pendentes'}
+          </button>
+        </div>
       </div>
 
-      {/* Abas: o risco fiscal da Entrada (erro de terceiro) ≠ da Saída (erro próprio) */}
-      <div style={{ display: 'inline-flex', background: 'var(--surface-2)', borderRadius: 'var(--radius)', padding: 3, marginBottom: 16 }}>
-        {[['entrada', 'Entradas', 'ti-arrow-down-left'], ['saida', 'Saídas', 'ti-arrow-up-right']].map(([v, label, icon]) => (
-          <button key={v} onClick={() => setTab(v)} className="btn btn-sm"
-            style={{ border: 'none', background: tab === v ? 'var(--surface)' : 'transparent', color: tab === v ? 'var(--text-1)' : 'var(--text-3)', boxShadow: tab === v ? 'var(--shadow-sm)' : 'none' }}>
-            <i className={`ti ${icon}`} /> {label}
-          </button>
-        ))}
+      {/* Abas + filtros de servidor (compõem com competência e paginação) */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+        <div style={{ display: 'inline-flex', background: 'var(--surface-2)', borderRadius: 'var(--radius)', padding: 3 }}>
+          {[['entrada', 'Entradas', 'ti-arrow-down-left'], ['saida', 'Saídas', 'ti-arrow-up-right']].map(([v, label, icon]) => (
+            <button key={v} onClick={() => setTab(v)} className="btn btn-sm"
+              style={{ border: 'none', background: tab === v ? 'var(--surface)' : 'transparent', color: tab === v ? 'var(--text-1)' : 'var(--text-3)', boxShadow: tab === v ? 'var(--shadow-sm)' : 'none' }}>
+              <i className={`ti ${icon}`} /> {label}
+            </button>
+          ))}
+        </div>
+        <div style={{ width: 190 }}>
+          <Dropdown value={fStatus} onChange={setFStatus} options={[
+            { value: '', label: 'Todas as situações' },
+            { value: 'DIVERGENTE', label: 'Só divergentes' },
+            { value: 'NAO_AUDITAVEL', label: 'Só não auditáveis' },
+          ]} />
+        </div>
+        <div style={{ width: 250 }}>
+          <Dropdown value={fCodigo} onChange={setFCodigo} options={[
+            { value: '', label: 'Todos os códigos do motor' },
+            ...Object.keys(catalogo).sort().map(c => ({
+              value: c, label: c.replace(/^ERRO_(\d+_)?/, '').replaceAll('_', ' ').toLowerCase(),
+            })),
+          ]} />
+        </div>
+        <div style={{ position: 'relative', marginLeft: 'auto', width: 280, maxWidth: '100%' }}>
+          <i className="ti ti-search" style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-4)', fontSize: 14 }} />
+          <input value={busca} onChange={e => setBusca(e.target.value)}
+            placeholder="Buscar fornecedor, produto, NF, NCM…"
+            style={{ width: '100%', paddingLeft: 32, paddingRight: busca ? 30 : 12 }} />
+          {busca && (
+            <button onClick={() => setBusca('')} title="Limpar busca"
+              style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-4)', padding: 2, display: 'flex' }}>
+              <i className="ti ti-x" style={{ fontSize: 13 }} />
+            </button>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -466,6 +521,18 @@ function MemoriaModal({ d, onClose }) {
             <Cartao titulo="Diferença" valor={brl(d.diferenca)} cor={corDiferenca(d.diferenca)} />
           </div>
 
+          {/* Em qual etapa nasce a divergência: MVA? base? valor? FCP? */}
+          <div className="section-label" style={{ marginBottom: 8 }}>Onde nasce a diferença — declarado × calculado</div>
+          <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', marginBottom: 18, overflow: 'hidden' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 90px 92px', gap: 10, padding: '6px 12px', background: 'var(--surface-2)', fontSize: 10.5, fontWeight: 600, color: 'var(--text-4)', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+              <span>Etapa</span><span style={{ textAlign: 'right' }}>No XML</span><span style={{ textAlign: 'right' }}>Motor</span><span style={{ textAlign: 'center' }}>Confere?</span>
+            </div>
+            <LinhaConfronto rotulo="MVA (%)" xml={d.pmva_xml} calc={d.pmva_calculada} fmt={pct} tol={0.011} />
+            <LinhaConfronto rotulo="Base de cálculo do ST" xml={d.vbc_st_xml} calc={d.vbc_st_calculado} />
+            <LinhaConfronto rotulo="ICMS-ST" xml={d.vicms_st_xml} calc={d.vicms_st_calculado} />
+            <LinhaConfronto rotulo="FCP-ST" xml={d.vfcp_st_xml} calc={d.vfcp_st_calculado} ultima />
+          </div>
+
           <div className="section-label" style={{ marginBottom: 10 }}>A jornada do cálculo</div>
           <Passo n="1" titulo="Operação" sub={`${d.uf_origem} → ${d.uf_destino} · regime ${m.regime || '—'}`}
             valor={`Alq. inter ${pct(m.alq_inter)} · interna ${pct(m.alq_intra)}`} />
@@ -486,9 +553,36 @@ function MemoriaModal({ d, onClose }) {
               <Passo n="=" titulo="FCP-ST devido" valor={brl(m.fcp_st_calculado)} final />
             </>
           )}
+
+          {/* Defensibilidade: qual versão do motor e quais linhas de matriz decidiram. */}
+          <div style={{ marginTop: 14, fontSize: 11, color: 'var(--text-4)', lineHeight: 1.6 }}>
+            <i className="ti ti-shield-check" style={{ marginRight: 4 }} />
+            Rastreabilidade: motor v{m.engine_version || '—'} · MVA da matriz {m.mva_matriz_id ? `#${m.mva_matriz_id}` : '—'} ·
+            alíquota da matriz {m.aliquota_matriz_id ? `#${m.aliquota_matriz_id}` : '—'} ·
+            protocolo: {m.tem_protocolo == null ? 'operação interna (não se aplica)' : m.tem_protocolo ? 'com acordo' : 'sem acordo'}
+            {m.protocolo_fonte ? ` (fonte: ${m.protocolo_fonte})` : ''}
+          </div>
         </div>
         <div className="modal-footer"><button className="btn btn-ghost" onClick={onClose}>Fechar</button></div>
       </div>
+    </div>
+  )
+}
+
+// Linha do confronto etapa a etapa: destaca EM QUAL passo a conta descola.
+function LinhaConfronto({ rotulo, xml, calc, fmt = brl, tol = 0.021, ultima }) {
+  const dif = Number(xml || 0) - Number(calc || 0)
+  const bate = Math.abs(dif) <= tol
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 90px 92px', gap: 10, alignItems: 'center', padding: '7px 12px', borderBottom: ultima ? 'none' : '1px solid var(--border-2)', fontSize: 12.5 }}>
+      <span style={{ color: 'var(--text-2)' }}>{rotulo}</span>
+      <span className="mono" style={{ textAlign: 'right', color: 'var(--text-3)' }}>{fmt(xml)}</span>
+      <span className="mono" style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(calc)}</span>
+      <span style={{ textAlign: 'center' }}>
+        {bate
+          ? <span className="badge badge-ok" style={{ fontSize: 10 }}>confere</span>
+          : <span className="badge badge-error" style={{ fontSize: 10 }}>Δ {fmt(dif)}</span>}
+      </span>
     </div>
   )
 }

@@ -328,6 +328,13 @@ export const api = {
     ).toString()
     return downloadBlob(`/auditoria/st/carta?${q}`, { fallback: 'carta-st.pdf' })
   },
+  // Planilha Excel das divergências do filtro atual (sem paginação)
+  stExportarDivergencias: (empresaId, params = {}) => {
+    const q = new URLSearchParams(
+      Object.entries({ empresa_id: empresaId, ...params }).filter(([, v]) => v)
+    ).toString()
+    return downloadBlob(`/auditoria/st/divergencias/export?${q}`, { fallback: 'divergencias-st.xlsx' })
+  },
 
   // ── Recursos do V1 ainda sem endpoint no V2 (fase futura) ──
   certificado: NAO_IMPL('Certificado A1'),

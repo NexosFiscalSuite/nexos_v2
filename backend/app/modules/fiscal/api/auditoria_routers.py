@@ -9,9 +9,13 @@ from app.core.rls import tenant_session
 from app.core.security import TokenClaims, get_current_claims
 from app.modules.companies.infrastructure.repositories import EmpresaRepository
 from app.modules.fiscal.api.auditoria_schemas import DivergenciasStResponse
-from app.modules.fiscal.application.auditoria_query import listar_divergencias
+from app.modules.fiscal.application.auditoria_query import (
+    exportar_divergencias,
+    listar_divergencias,
+)
 from app.modules.fiscal.application.reprocess_service import ReprocessService
 from app.modules.fiscal.application.st_carta import gerar_carta_st
+from app.modules.fiscal.application.st_export import gerar_xlsx_divergencias
 from app.modules.fiscal.domain.st.errors import ErroST
 from app.shared.domain.value_objects import only_digits
 
@@ -91,6 +95,9 @@ async def divergencias(
     data_inicio: str | None = Query(default=None, description="Emissão >= AAAA-MM-DD"),
     data_fim: str | None = Query(default=None, description="Emissão <= AAAA-MM-DD"),
     cnpj: str | None = Query(default=None, description="CNPJ do fornecedor (emitente)"),
+    status: str | None = Query(default=None, description="DIVERGENTE | NAO_AUDITAVEL"),
+    codigo_erro: str | None = Query(default=None, description="Filtra por código do motor"),
+    q: str | None = Query(default=None, description="Busca livre: fornecedor/produto/NF/NCM"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=200, ge=1, le=500),
     claims: TokenClaims = Depends(get_current_claims),
@@ -105,6 +112,43 @@ async def divergencias(
         data_inicio=data_inicio,
         data_fim=data_fim,
         cnpj=cnpj,
+        status=status,
+        codigo_erro=codigo_erro,
+        q=q,
         page=page,
         page_size=page_size,
+    )
+
+
+@router.get("/divergencias/export")
+async def divergencias_export(
+    empresa_id: UUID = Query(...),
+    fluxo: str | None = Query(default=None),
+    data_inicio: str | None = Query(default=None),
+    data_fim: str | None = Query(default=None),
+    cnpj: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    codigo_erro: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    claims: TokenClaims = Depends(get_current_claims),
+    session: AsyncSession = Depends(tenant_session),
+):
+    """Planilha Excel do filtro atual, SEM paginação: aba item a item + aba
+    consolidada por fornecedor (anexo de cobrança/pedido de ressarcimento)."""
+    itens = await exportar_divergencias(
+        session, empresa_id=empresa_id, fluxo=fluxo, data_inicio=data_inicio,
+        data_fim=data_fim, cnpj=cnpj, status=status, codigo_erro=codigo_erro, q=q,
+    )
+    if not itens:
+        raise NotFoundError("Nenhuma divergência no filtro atual.")
+    periodo = (
+        f"{data_inicio[5:7]}/{data_inicio[:4]}" if data_inicio and len(data_inicio) >= 7
+        else "período completo"
+    )
+    xlsx = gerar_xlsx_divergencias(itens, periodo)
+    nome = f"divergencias-st-{periodo.replace('/', '-')}.xlsx"
+    return Response(
+        content=xlsx,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{nome}"'},
     )
