@@ -413,6 +413,11 @@ export default function DivergenciasST() {
   )
 }
 
+// Rótulo pequeno que nomeia a linha do confronto ("NA NOTA" / "DEVIDO").
+const RotuloSt = ({ children }) => (
+  <span style={{ color: 'var(--text-4)', fontWeight: 600, fontSize: 9.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>{children}</span>
+)
+
 // ── Linha-mestre (Nota) + linhas-filhas (itens) quando expandida ──
 function FragmentoNota({ nota, aberto, onToggle, onMemoria, catalogo }) {
   const navigate = useNavigate()
@@ -436,15 +441,15 @@ function FragmentoNota({ nota, aberto, onToggle, onMemoria, catalogo }) {
             NF-e {nota.numero || '—'} · {nota.cnpj} · {nota.itens.length} item(ns)
           </div>
         </td>
-        <td className="mono">{nota.ufOrigem}→{nota.ufDestino}</td>
+        <td>{nota.ufOrigem}→{nota.ufDestino}</td>
         <td style={{ textAlign: 'center' }}>
           {temCte
             ? <i className="ti ti-truck" title={`CT-e vinculado(s): ${nota.ctes.join(', ')}`}
                  style={{ color: 'var(--info-text)', fontSize: 17 }} />
             : <span style={{ color: 'var(--text-4)' }}>—</span>}
         </td>
-        <td className="mono" style={{ textAlign: 'right' }}>{brl(nota.totalIcmsSt)}</td>
-        <td className="mono" style={{ textAlign: 'right', fontWeight: 600, color: corDiferenca(nota.totalDiferenca) }}>
+        <td className="tnum" style={{ textAlign: 'right' }}>{brl(nota.totalIcmsSt)}</td>
+        <td className="tnum" style={{ textAlign: 'right', fontWeight: 700, color: corDiferenca(nota.totalDiferenca) }}>
           {brl(nota.totalDiferenca)}
         </td>
         <td style={{ textAlign: 'center' }}>
@@ -470,23 +475,22 @@ function FragmentoNota({ nota, aberto, onToggle, onMemoria, catalogo }) {
         <tr key={it.numero_item} style={{ background: 'var(--surface)' }}>
           <td />
           <td style={{ paddingLeft: 28 }}>
-            <span className="mono">Item {it.numero_item}</span>
-            {it.descricao && (
-              <span style={{ fontWeight: 500, color: 'var(--text-1)', marginLeft: 8, maxWidth: 320, display: 'inline-block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'bottom' }} title={it.descricao}>
-                {it.descricao}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontWeight: 600, color: 'var(--text-1)', maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={it.descricao}>
+                {it.descricao || `Item ${it.numero_item} da nota`}
               </span>
-            )}
-            <span style={{ fontSize: 11, color: 'var(--text-4)', marginLeft: 8 }}>
-              CST {it.cst_csosn || '—'} · modBCST {it.mod_bc_st ?? '—'}
-              {it.ncm && <> · NCM {it.ncm}</>}{it.cest && <> · CEST {it.cest}</>}
-            </span>
-            {selo && (
-              <span className={`badge ${selo.cls}`} style={{ fontSize: 10, marginLeft: 8 }}>
-                <i className={`ti ${selo.icon}`} style={{ marginRight: 3 }} />{selo.txt}
-              </span>
-            )}
+              {selo && (
+                <span className={`badge ${selo.cls}`} style={{ fontSize: 10 }}>
+                  <i className={`ti ${selo.icon}`} style={{ marginRight: 3 }} />{selo.txt}
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 2 }}>
+              {it.ncm && <>NCM {it.ncm} · </>}{it.cest && <>CEST {it.cest} · </>}
+              CST {it.cst_csosn || '—'} · modBCST {it.mod_bc_st ?? '—'} · item {it.numero_item}
+            </div>
             {it.status === 'NAO_AUDITAVEL' && it.observacao && (
-              <div style={{ fontSize: 11, color: 'var(--warn-text)' }}><i className="ti ti-alert-circle" style={{ marginRight: 4 }} />{it.observacao}</div>
+              <div style={{ fontSize: 11, color: 'var(--warn-text)', marginTop: 2 }}><i className="ti ti-alert-circle" style={{ marginRight: 4 }} />{it.observacao}</div>
             )}
             {acao && (
               <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 2 }} title={acao.mensagem}>
@@ -501,13 +505,18 @@ function FragmentoNota({ nota, aberto, onToggle, onMemoria, catalogo }) {
               </div>
             )}
           </td>
-          <td colSpan={2} className="mono" style={{ fontSize: 12, color: 'var(--text-4)' }}>
-            XML {brl(it.vicms_st_xml)} → calc {brl(it.vicms_st_calculado)}
+          <td colSpan={2}>
+            <div style={{ display: 'inline-grid', gridTemplateColumns: 'auto auto', columnGap: 7, rowGap: 1, alignItems: 'baseline', lineHeight: 1.5 }}>
+              <RotuloSt>na nota</RotuloSt>
+              <span className="tnum" style={{ fontSize: 12.5, color: 'var(--text-3)' }}>{brl(it.vicms_st_xml)}</span>
+              <RotuloSt>devido</RotuloSt>
+              <span className="tnum" style={{ fontSize: 12.5, fontWeight: 700 }}>{brl(it.vicms_st_calculado)}</span>
+            </div>
           </td>
-          <td className="mono" style={{ textAlign: 'right' }}>{brl(it.vicms_st_calculado)}</td>
-          <td className="mono" style={{ textAlign: 'right', fontWeight: 500, color: corDiferenca(it.diferenca) }}>{brl(it.diferenca)}</td>
+          <td className="tnum" style={{ textAlign: 'right' }}>{brl(it.vicms_st_calculado)}</td>
+          <td className="tnum" style={{ textAlign: 'right', fontWeight: 600, color: corDiferenca(it.diferenca) }}>{brl(it.diferenca)}</td>
           <td style={{ textAlign: 'center' }}>
-            {it.memoria && <button className="btn btn-icon" title="Memória de cálculo" onClick={() => onMemoria(it)}><i className="ti ti-calculator" /></button>}
+            {it.memoria && <button className="btn btn-icon" title="Como chegamos ao valor devido (memória de cálculo)" onClick={() => onMemoria(it)}><i className="ti ti-calculator" /></button>}
           </td>
         </tr>
         )
@@ -516,48 +525,73 @@ function FragmentoNota({ nota, aberto, onToggle, onMemoria, catalogo }) {
   )
 }
 
-// ── Modal da Verdade: a jornada matemática do JSON `memoria` ──
+// ── Modal da Verdade: a jornada matemática do JSON `memoria`, escrita para
+// qualquer pessoa entender (o jargão fica nos tooltips e na rastreabilidade) ──
+const DEDUCAO_LEIGO = {
+  real: 'o ICMS que o vendedor já destacou na própria nota',
+  teorica: 'o ICMS teórico da operação própria (emitente do Simples)',
+  zero: 'nada a descontar (operação própria isenta)',
+  contaminada: 'o ICMS próprio recalculado (o da nota veio zerado por erro)',
+}
+
 function MemoriaModal({ d, onClose }) {
   const m = d.memoria || {}
   const ajustada = m.mva_foi_ajustada
   const temFcp = Number(m.fcp_st_debito || 0) > 0
+  const dif = Number(d.diferenca || 0)
+  const interna = d.uf_origem === d.uf_destino
+
+  const frase = dif < -0.004
+    ? <>A nota destacou <b>{brl(d.vicms_st_xml)}</b>, mas pela regra vigente o valor é <b>{brl(d.vicms_st_calculado)}</b> — <b style={{ color: 'var(--err-text)' }}>faltaram {brl(-dif)}</b> de ST.</>
+    : dif > 0.004
+      ? <>A nota destacou <b>{brl(d.vicms_st_xml)}</b> — <b style={{ color: 'var(--info-text)' }}>{brl(dif)} a mais</b> que o devido ({brl(d.vicms_st_calculado)}): candidato a ressarcimento.</>
+      : <>O valor destacado confere com o cálculo.</>
 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()} style={{ width: 560, maxWidth: '96%' }}>
         <div className="modal-header">
-          <h2><i className="ti ti-calculator" style={{ marginRight: 8 }} />Memória de Cálculo do ST</h2>
+          <h2><i className="ti ti-calculator" style={{ marginRight: 8 }} />Como chegamos ao valor devido</h2>
           <button className="btn btn-icon" onClick={onClose}><i className="ti ti-x" /></button>
         </div>
         <div className="modal-body">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 18 }}>
-            <Cartao titulo="ICMS-ST no XML" valor={brl(d.vicms_st_xml)} />
-            <Cartao titulo="Calculado pelo motor" valor={brl(d.vicms_st_calculado)} destaque />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
+            <Cartao titulo="Destacado na nota" valor={brl(d.vicms_st_xml)} />
+            <Cartao titulo="Devido pela regra" valor={brl(d.vicms_st_calculado)} destaque />
             <Cartao titulo="Diferença" valor={brl(d.diferenca)} cor={corDiferenca(d.diferenca)} />
           </div>
 
-          {/* Em qual etapa nasce a divergência: MVA? base? valor? FCP? */}
-          <div className="section-label" style={{ marginBottom: 8 }}>Onde nasce a diferença — declarado × calculado</div>
-          <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', marginBottom: 18, overflow: 'hidden' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 90px 92px', gap: 10, padding: '6px 12px', background: 'var(--surface-2)', fontSize: 10.5, fontWeight: 600, color: 'var(--text-4)', textTransform: 'uppercase', letterSpacing: 0.4 }}>
-              <span>Etapa</span><span style={{ textAlign: 'right' }}>No XML</span><span style={{ textAlign: 'right' }}>Motor</span><span style={{ textAlign: 'center' }}>Confere?</span>
-            </div>
-            <LinhaConfronto rotulo="MVA (%)" xml={d.pmva_xml} calc={d.pmva_calculada} fmt={pct} tol={0.011} />
-            <LinhaConfronto rotulo="Base de cálculo do ST" xml={d.vbc_st_xml} calc={d.vbc_st_calculado} />
-            <LinhaConfronto rotulo="ICMS-ST" xml={d.vicms_st_xml} calc={d.vicms_st_calculado} />
-            <LinhaConfronto rotulo="FCP-ST" xml={d.vfcp_st_xml} calc={d.vfcp_st_calculado} ultima />
+          {/* A conclusão em uma frase — antes de qualquer número. */}
+          <div style={{ background: 'var(--surface-2)', borderRadius: 'var(--radius)', padding: '10px 14px', fontSize: 13, lineHeight: 1.55, marginBottom: 18 }}>
+            {frase}
           </div>
 
-          <div className="section-label" style={{ marginBottom: 10 }}>A jornada do cálculo</div>
-          <Passo n="1" titulo="Operação" sub={`${d.uf_origem} → ${d.uf_destino} · regime ${m.regime || '—'}`}
-            valor={`Alq. inter ${pct(m.alq_inter)} · interna ${pct(m.alq_intra)}`} />
-          <Passo n="2" titulo="MVA"
-            sub={ajustada ? 'Ajustada (interestadual, não-Simples)' : `Original — ${m.motivo_nao_ajuste || 'sem ajuste'}`}
+          <div className="section-label" style={{ marginBottom: 8 }}>Onde nasce a diferença</div>
+          <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', marginBottom: 18, overflow: 'hidden' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 90px 92px', gap: 10, padding: '6px 12px', background: 'var(--surface-2)', fontSize: 10.5, fontWeight: 600, color: 'var(--text-4)', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+              <span>Etapa</span><span style={{ textAlign: 'right' }}>Na nota</span><span style={{ textAlign: 'right' }}>Pela regra</span><span style={{ textAlign: 'center' }}>Confere?</span>
+            </div>
+            <LinhaConfronto rotulo="Margem presumida (MVA)" xml={d.pmva_xml} calc={d.pmva_calculada} fmt={pct} tol={0.011} />
+            <LinhaConfronto rotulo="Base de cálculo do ST" xml={d.vbc_st_xml} calc={d.vbc_st_calculado} />
+            <LinhaConfronto rotulo="ICMS-ST" xml={d.vicms_st_xml} calc={d.vicms_st_calculado} />
+            <LinhaConfronto rotulo="FCP-ST (fundo de combate à pobreza)" xml={d.vfcp_st_xml} calc={d.vfcp_st_calculado} ultima />
+          </div>
+
+          <div className="section-label" style={{ marginBottom: 10 }}>O cálculo, passo a passo</div>
+          <Passo n="1" titulo="A operação"
+            sub={interna
+              ? `Venda dentro de ${d.uf_destino} · produto enquadrado na substituição tributária`
+              : `${d.uf_origem} → ${d.uf_destino} · produto enquadrado na substituição tributária`}
+            valor={`alíquotas: ${pct(m.alq_inter)} inter · ${pct(m.alq_intra)} interna`} />
+          <Passo n="2" titulo="Margem presumida (MVA)"
+            sub={ajustada
+              ? 'Ajustada: em venda entre estados a lei corrige a margem pela diferença de alíquotas'
+              : 'A margem que a lei presume até a venda ao consumidor final'}
             valor={<><span style={{ color: 'var(--text-4)' }}>{pct(m.mva_original)}</span> <i className="ti ti-arrow-right" style={{ fontSize: 12 }} /> <b>{pct(m.mva_aplicada)}</b></>}
             badge={ajustada ? { txt: 'Ajustada', cls: 'badge-info' } : { txt: 'Original', cls: 'badge-ok' }} />
-          <Passo n="3" titulo="Base de Cálculo do ST" sub="custo + frete rateado × (1 + MVA)" valor={brl(m.base_st_calculada)} />
-          <Passo n="4" titulo="Débito do ST" sub={`base × alíquota interna (${pct(m.alq_intra)})`} valor={brl(m.icms_st_debito)} />
-          <Passo n="5" titulo="(−) Dedução ICMS Próprio" sub={`dedução ${m.deducao_tipo || '—'}`} valor={`− ${brl(m.deducao_aplicada)}`} negativo />
+          <Passo n="3" titulo="Base de cálculo do ST" sub="preço do produto + frete e encargos, acrescido da margem" valor={brl(m.base_st_calculada)} />
+          <Passo n="4" titulo="Imposto cheio sobre a base" sub={`base × alíquota interna de ${pct(m.alq_intra)}`} valor={brl(m.icms_st_debito)} />
+          <Passo n="5" titulo="(−) Desconto do ICMS próprio" sub={DEDUCAO_LEIGO[m.deducao_tipo] || 'desconto do imposto da operação própria'} valor={`− ${brl(m.deducao_aplicada)}`} negativo />
           <Passo n="=" titulo="ICMS-ST devido" valor={brl(m.icms_st_calculado)} final />
 
           {temFcp && (

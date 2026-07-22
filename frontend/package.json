@@ -10,7 +10,7 @@
     "lint:fix": "eslint src --ext .js,.jsx --fix"
   },
   "dependencies": {
-    "@fontsource/inter": "^5.2.8",
+    "@fontsource-variable/manrope": "^5.3.0",
     "@fontsource/jetbrains-mono": "^5.2.8",
     "@fontsource/plus-jakarta-sans": "^5.2.8",
     "@tabler/icons-webfont": "^3.3.0",

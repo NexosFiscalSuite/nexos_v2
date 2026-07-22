@@ -56,7 +56,7 @@
   --sidebar-w-c:  64px;
   --topbar-h:     60px;
 
-  --font:         'Inter', system-ui, sans-serif;                       /* corpo / UI */
+  --font:         'Manrope Variable', 'Inter', system-ui, sans-serif;   /* corpo / UI */
   --font-display: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif; /* títulos */
   --mono:         'JetBrains Mono', monospace;                          /* códigos fiscais */
 }
@@ -374,6 +374,9 @@ input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible {
 
 /* ── Mono ── */
 .mono { font-family: var(--mono); }
+/* Números alinhados SEM cara de terminal: fonte do corpo com dígitos tabulares
+   (para valores em colunas; o mono fica só para chave/CNPJ/códigos). */
+.tnum { font-variant-numeric: tabular-nums; }
 
 /* ── Progress ── */
 .progress { height: 4px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
