@@ -157,6 +157,7 @@ async def list_notas(
     status_: str | None = None,
     tipo: str | None = None,
     tipo_excluir: str | None = None,
+    q: str | None = None,
     sort: str | None = None,
     order: str | None = None,
     page: int = 1,
@@ -166,7 +167,7 @@ async def list_notas(
 ):
     return await NotaRepository(session).list(
         empresa_id, fluxo=fluxo, ano=ano, mes=mes, status=status_,
-        tipo=tipo, tipo_excluir=tipo_excluir,
+        tipo=tipo, tipo_excluir=tipo_excluir, q=q,
         sort=sort, order=order, page=page, page_size=page_size,
     )
 

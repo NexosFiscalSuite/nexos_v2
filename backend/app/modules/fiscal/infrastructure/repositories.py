@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import BigInteger, cast, func, select
+from sqlalchemy import BigInteger, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -68,12 +68,29 @@ class NotaRepository:
         status: str | None = None,
         tipo: str | None = None,
         tipo_excluir: str | None = None,
+        q: str | None = None,
         sort: str | None = None,
         order: str | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> dict:
         where = [Nota.empresa_id == empresa_id]
+        if q and q.strip():
+            # Busca livre: nome do emitente/destinatário (parcial, sem caixa) e,
+            # quando o termo tem dígitos, número da NF, chave de acesso e CNPJs.
+            termo = q.strip()
+            like = f"%{termo}%"
+            conds = [Nota.nome_emit.ilike(like), Nota.nome_dest.ilike(like)]
+            digitos = "".join(ch for ch in termo if ch.isdigit())
+            if digitos:
+                dlike = f"%{digitos}%"
+                conds += [
+                    Nota.numero.like(dlike),
+                    Nota.chave_acesso.like(dlike),
+                    Nota.cnpj_emit.like(dlike),
+                    Nota.cnpj_dest.like(dlike),
+                ]
+            where.append(or_(*conds))
         if fluxo:
             where.append(Nota.fluxo == fluxo)
         if ano:

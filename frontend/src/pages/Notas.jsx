@@ -61,6 +61,9 @@ export default function Notas() {
   const [tab, setTab] = useState('saida')
   const [subServ, setSubServ] = useState('prestador')
   const [status, setStatus] = useState('')
+  // Busca livre (nº da NF, chave, nome ou CNPJ): digita → aplica com debounce.
+  const [busca, setBusca] = useState('')
+  const [q, setQ] = useState('')
   const [sort, setSort] = useState(null)
   const [order, setOrder] = useState(null)
   const [page, setPage] = useState(1)
@@ -88,13 +91,14 @@ export default function Notas() {
     setErro(null)
     try {
       const p = abaParams(tab, subServ)
-      setData(await api.notas(selectedEmpresa.id, { ...p, status_: status, ano, mes, sort, order, page, page_size: 20 }))
+      setData(await api.notas(selectedEmpresa.id, { ...p, status_: status, ano, mes, q, sort, order, page, page_size: 20 }))
     } catch (e) { setErro(e.message); setData({ total: 0, notas: [], page: 1, page_size: 20 }) }
     finally { setLoading(false) }
-  }, [selectedEmpresa, tab, subServ, status, ano, mes, sort, order, page, dataVersion])
+  }, [selectedEmpresa, tab, subServ, status, ano, mes, q, sort, order, page, dataVersion])
 
   useEffect(() => { carregar() }, [carregar])
-  useEffect(() => { setPage(1); setSelected(new Set()) }, [selectedEmpresa, tab, subServ, status, ano, mes, sort, order])
+  useEffect(() => { const t = setTimeout(() => setQ(busca.trim()), 400); return () => clearTimeout(t) }, [busca])
+  useEffect(() => { setPage(1); setSelected(new Set()) }, [selectedEmpresa, tab, subServ, status, ano, mes, q, sort, order])
   useEffect(() => {
     api.tiposSped().then(setTiposSped).catch(() => {})
     api.tiposNota().then(setTiposNota).catch(() => {})
@@ -251,6 +255,22 @@ export default function Notas() {
             ))}
           </div>
         )}
+        {/* Busca livre: acha a nota no meio de centenas sem paginar */}
+        <div style={{ position: 'relative', marginLeft: 'auto', width: 300, maxWidth: '100%' }}>
+          <i className="ti ti-search" style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-4)', fontSize: 14 }} />
+          <input
+            value={busca}
+            onChange={e => setBusca(e.target.value)}
+            placeholder="Buscar nº da NF, chave, nome ou CNPJ…"
+            style={{ width: '100%', paddingLeft: 32, paddingRight: busca ? 30 : 12 }}
+          />
+          {busca && (
+            <button onClick={() => setBusca('')} title="Limpar busca"
+              style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-4)', padding: 2, display: 'flex' }}>
+              <i className="ti ti-x" style={{ fontSize: 13 }} />
+            </button>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -258,7 +278,7 @@ export default function Notas() {
       ) : erro ? (
         <ErroCarga mensagem={erro} onRetry={carregar} />
       ) : data.notas.length === 0 ? (
-        <div className="empty-state"><i className="ti ti-file-off" /><p>Nenhuma nota nesta competência.</p></div>
+        <div className="empty-state"><i className="ti ti-file-off" /><p>{q ? <>Nenhuma nota encontrada para “{q}”.</> : 'Nenhuma nota nesta competência.'}</p></div>
       ) : (
         <>
           <div className="card" style={{ padding: 0 }}>
