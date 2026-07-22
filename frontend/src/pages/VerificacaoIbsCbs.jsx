@@ -305,7 +305,7 @@ export default function VerificacaoIbsCbs() {
         <div className="empty-state">
           <i className="ti ti-flask" />
           <p className="empty-title">Nenhum item para verificar</p>
-          <p className="empty-subtitle">Importe XMLs de 2026 desta competência — ou use "Reprocessar XMLs" se as notas foram importadas antes deste módulo.</p>
+          <p className="empty-subtitle">Importe XMLs de 2026 desta competência — ou use “Reprocessar XMLs” se as notas foram importadas antes deste módulo.</p>
         </div>
       ) : (
         <>
@@ -391,7 +391,7 @@ export default function VerificacaoIbsCbs() {
               </div>
               {notasApontadas.length === 0 && (
                 <div style={{ padding: 20, fontSize: 13, color: 'var(--text-3)' }}>
-                  Nenhuma nota na situação "{TONE[filtroStatus]?.label || filtroStatus}" neste período.
+                  Nenhuma nota na situação “{TONE[filtroStatus]?.label || filtroStatus}” neste período.
                 </div>
               )}
               {notasApontadas.length > 0 && (
