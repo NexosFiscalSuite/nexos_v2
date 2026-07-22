@@ -10,11 +10,13 @@ from app.core.security import TokenClaims, get_current_claims
 from app.modules.companies.infrastructure.repositories import EmpresaRepository
 from app.modules.fiscal.api.auditoria_schemas import DivergenciasStResponse
 from app.modules.fiscal.application.auditoria_query import (
+    diagnostico_st,
     exportar_divergencias,
     listar_divergencias,
 )
 from app.modules.fiscal.application.reprocess_service import ReprocessService
 from app.modules.fiscal.application.st_carta import gerar_carta_st
+from app.modules.fiscal.application.st_diagnostico import gerar_diagnostico_pdf
 from app.modules.fiscal.application.st_export import gerar_xlsx_divergencias
 from app.modules.fiscal.domain.st.errors import ErroST
 from app.shared.domain.value_objects import only_digits
@@ -41,6 +43,35 @@ async def reprocessar_pendentes(
     """Retroatividade: re-aplica o De/Para CFOP e re-audita as notas travadas
     (gargalo de CFOP ou NAO_AUDITAVEL por matriz faltante)."""
     return await ReprocessService(session).reprocessar_pendentes(empresa_id)
+
+
+@router.get("/diagnostico")
+async def diagnostico(
+    empresa_id: UUID = Query(..., description="Empresa (cliente) auditada"),
+    data_inicio: str | None = Query(default=None, description="AAAA-MM-DD (vazio = tudo)"),
+    data_fim: str | None = Query(default=None),
+    claims: TokenClaims = Depends(get_current_claims),
+    session: AsyncSession = Depends(tenant_session),
+):
+    """Diagnóstico executivo em PDF: conformidade e dinheiro em jogo por
+    competência + top fornecedores — o entregável do serviço de auditoria
+    (inclusive retroativa: sem datas, cobre TUDO que foi importado)."""
+    dados = await diagnostico_st(
+        session, empresa_id=empresa_id, data_inicio=data_inicio, data_fim=data_fim
+    )
+    if not dados["competencias"]:
+        raise NotFoundError("Nenhum item auditado no período para diagnosticar.")
+    empresa = await EmpresaRepository(session).by_id(empresa_id)
+    pdf = gerar_diagnostico_pdf(
+        empresa_nome=(empresa.razao_social if empresa else "Empresa"),
+        empresa_cnpj=(empresa.cnpj if empresa else None),
+        dados=dados,
+    )
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="diagnostico-st.pdf"'},
+    )
 
 
 @router.get("/carta")

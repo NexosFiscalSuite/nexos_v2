@@ -328,6 +328,9 @@ export const api = {
     ).toString()
     return downloadBlob(`/auditoria/st/carta?${q}`, { fallback: 'carta-st.pdf' })
   },
+  // Diagnóstico executivo em PDF (todo o período auditado da empresa)
+  stDiagnostico: (empresaId) =>
+    downloadBlob(`/auditoria/st/diagnostico?empresa_id=${empresaId}`, { fallback: 'diagnostico-st.pdf' }),
   // Planilha Excel das divergências do filtro atual (sem paginação)
   stExportarDivergencias: (empresaId, params = {}) => {
     const q = new URLSearchParams(

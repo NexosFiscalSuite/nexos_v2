@@ -107,8 +107,20 @@ def gerar_carta_st(
         "(ressarcimento)."
     )
 
+    # Bases legais das regras aplicadas (memória de cálculo): o laudo cita a
+    # norma, não só o número interno da matriz — padrão "pronto para auditoria".
+    bases = sorted({
+        b for i in itens for b in (
+            (i.get("memoria") or {}).get("mva_base_legal"),
+            (i.get("memoria") or {}).get("aliquota_base_legal"),
+        ) if b
+    })
+    paragrafos = [intro, metodo]
+    if bases:
+        paragrafos.append("Bases legais aplicadas no recálculo: " + "; ".join(bases) + ".")
+
     pdf.set_font("helvetica", "", 10)
-    for paragrafo in (intro, metodo):
+    for paragrafo in paragrafos:
         pdf.multi_cell(0, 5.4, _t(paragrafo))
         pdf.ln(2)
 

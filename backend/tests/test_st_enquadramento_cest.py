@@ -67,14 +67,17 @@ def test_explicar_tn_distingue_os_tres_casos():
 
 # ── Snapshot de MVA ──────────────────────────────────────────────────────── #
 def test_mva_fallback_por_ncm_sem_cest():
-    uma = _MvaSnapshot({(NCM, CEST, UF): (D("40"), 7)})
+    uma = _MvaSnapshot({(NCM, CEST, UF): (D("40"), 7, "Port. 195/2019")})
     info = uma.buscar(NCM, "", UF, DATA)
     assert info and info.mva_original == D("40") and info.matriz_id == 7
+    assert info.base_legal == "Port. 195/2019"
 
-    iguais = _MvaSnapshot({(NCM, CEST, UF): (D("40"), 7), (NCM, "0102901", UF): (D("40"), 8)})
+    iguais = _MvaSnapshot({(NCM, CEST, UF): (D("40"), 7, None),
+                           (NCM, "0102901", UF): (D("40"), 8, None)})
     assert iguais.buscar(NCM, "", UF, DATA).mva_original == D("40")
 
-    distintas = _MvaSnapshot({(NCM, CEST, UF): (D("40"), 7), (NCM, "0102901", UF): (D("55"), 8)})
+    distintas = _MvaSnapshot({(NCM, CEST, UF): (D("40"), 7, None),
+                              (NCM, "0102901", UF): (D("55"), 8, None)})
     assert distintas.buscar(NCM, "", UF, DATA) is None   # ambíguo: fail-closed
 
     # Com CEST no XML, o exato continua mandando.
@@ -101,7 +104,7 @@ def test_item_sem_cest_e_auditado_quando_enquadrado():
     — base 1000 × 1,40 = 1400; ST = 1400 × 18% − 180 = 72."""
     eng = _engine_snapshots(
         _snap_enq({(NCM, CEST, UF): Regime.ST}),
-        _MvaSnapshot({(NCM, CEST, UF): (D("40"), 7)}),
+        _MvaSnapshot({(NCM, CEST, UF): (D("40"), 7, None)}),
     )
     op = Operacao(uf_emit="MG", uf_dest="MG", crt=Crt.NORMAL, data=DATA)
     r = eng.auditar_item(_item_sem_cest(v_bc_st=D("1400.00"), v_icms_st=D("72.00")), op)

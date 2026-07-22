@@ -43,15 +43,17 @@ def _candidatos_ncm(ncm: str) -> list[str]:
 # --------------------------------------------------------------------------- #
 @dataclass(frozen=True, slots=True)
 class _MvaSnapshot:
-    dados: dict[tuple[str, str, str], tuple[Decimal, int]]   # (ncm, cest, uf) -> (MVA, id)
+    # (ncm, cest, uf) -> (MVA, id da linha, base legal)
+    dados: dict[tuple[str, str, str], tuple[Decimal, int, str | None]]
 
     def buscar(self, ncm: str, cest: str, uf_dest: str, data: date) -> MvaInfo | None:
         cest_l, uf = only_digits(cest), uf_dest.upper()
         for c in _candidatos_ncm(ncm):
             par = self.dados.get((c, cest_l, uf))
             if par is not None:
-                mva, linha_id = par
-                return MvaInfo(mva_original=mva, ncm_casado=c, matriz_id=linha_id)
+                mva, linha_id, base_legal = par
+                return MvaInfo(mva_original=mva, ncm_casado=c,
+                               matriz_id=linha_id, base_legal=base_legal)
         if not cest_l:
             # XML sem a tag CEST (típico de emitente que nem tratou o item como
             # ST): casa pelo NCM. MVA única no NCM → usa; MVAs distintas por
@@ -61,8 +63,9 @@ class _MvaSnapshot:
                 if pares:
                     mvas = {p[0] for p in pares}
                     if len(mvas) == 1:
-                        mva, linha_id = pares[0]
-                        return MvaInfo(mva_original=mva, ncm_casado=c, matriz_id=linha_id)
+                        mva, linha_id, base_legal = pares[0]
+                        return MvaInfo(mva_original=mva, ncm_casado=c,
+                                       matriz_id=linha_id, base_legal=base_legal)
                     return None
         return None
 
@@ -202,9 +205,10 @@ class MatrizesLoader:
             data,
         )
         rows = (await self.session.execute(stmt)).scalars().all()
-        return _MvaSnapshot(
-            {(r.ncm, r.cest, r.uf_destino): (r.mva_original, r.id) for r in rows}
-        )
+        return _MvaSnapshot({
+            (r.ncm, r.cest, r.uf_destino): (r.mva_original, r.id, r.base_legal)
+            for r in rows
+        })
 
     async def _enquadramento(self, uf, ncms, cests, data) -> _EnquadramentoSnapshot:
         # Sem filtro por CEST (mesma razão do _mva): o cadastro NCM×CEST precisa
@@ -276,5 +280,6 @@ class MatrizesLoader:
         if row is None:
             return _AliquotaSnapshot({})
         return _AliquotaSnapshot({row.uf_destino: AliquotaUf(
-            modal=row.aliq_modal, fcp_integrado=row.aliq_fcp_integrado, matriz_id=row.id,
+            modal=row.aliq_modal, fcp_integrado=row.aliq_fcp_integrado,
+            matriz_id=row.id, base_legal=row.base_legal,
         )})

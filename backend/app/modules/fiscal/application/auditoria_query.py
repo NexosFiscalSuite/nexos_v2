@@ -208,6 +208,79 @@ def _linha(a_row, n_row, descricao, codigo, ncm, cest, ctes: list[str]) -> dict:
     }
 
 
+async def diagnostico_st(
+    session: AsyncSession,
+    *,
+    empresa_id: UUID,
+    data_inicio: str | None = None,
+    data_fim: str | None = None,
+) -> dict:
+    """Diagnóstico executivo do período: conformidade e dinheiro em jogo POR
+    COMPETÊNCIA (inclui os itens OK — é o retrato completo da carteira), mais
+    o top de fornecedores cobráveis. Alimenta o PDF de diagnóstico (o
+    entregável do serviço de auditoria/recuperação retroativa)."""
+    a, n = _A, _N
+    where = [a.empresa_id == empresa_id]
+    if data_inicio:
+        where.append(n.data_emissao >= data_inicio)
+    if data_fim:
+        where.append(n.data_emissao <= data_fim)
+
+    d = a.vicms_st_divergencia
+    eh_antecipacao = func.coalesce(a.codigo_erro, "").like("%ERRO_111%")
+    divergente = a.status == "DIVERGENTE"
+    comp = func.substr(n.data_emissao, 1, 7)               # 'AAAA-MM'
+    rows = (await session.execute(
+        select(
+            comp.label("competencia"),
+            func.count(),
+            func.coalesce(func.sum(case((a.status == "OK", 1), else_=0)), 0),
+            func.coalesce(func.sum(case((divergente, 1), else_=0)), 0),
+            func.coalesce(func.sum(case((a.status == "NAO_AUDITAVEL", 1), else_=0)), 0),
+            func.coalesce(func.sum(case(
+                (and_(divergente, d < 0, ~eh_antecipacao), -d), else_=0)), 0),
+            func.coalesce(func.sum(case((and_(divergente, d > 0), d), else_=0)), 0),
+            func.coalesce(func.sum(case((eh_antecipacao, -d), else_=0)), 0),
+        ).select_from(a).join(n, a.nota_id == n.id).where(*where)
+        .group_by(comp).order_by(comp)
+    )).all()
+    competencias = [
+        {
+            "competencia": r[0], "itens": int(r[1]), "ok": int(r[2]),
+            "divergentes": int(r[3]), "nao_auditaveis": int(r[4]),
+            "a_recolher": float(r[5]), "a_favor": float(r[6]),
+            "antecipacao": float(r[7]),
+        }
+        for r in rows
+    ]
+    totais = {
+        chave: round(sum(c[chave] for c in competencias), 2)
+        for chave in ("itens", "ok", "divergentes", "nao_auditaveis",
+                      "a_recolher", "a_favor", "antecipacao")
+    }
+    totais["pct_conformidade"] = (
+        round(totais["ok"] / totais["itens"] * 100, 1) if totais["itens"] else 100.0
+    )
+
+    top_rows = (await session.execute(
+        select(
+            n.cnpj_emit, n.nome_emit,
+            func.count().label("itens"),
+            func.coalesce(func.sum(func.abs(d)), 0).label("valor"),
+        )
+        .select_from(a).join(n, a.nota_id == n.id)
+        .where(*where, divergente, ~eh_antecipacao)
+        .group_by(n.cnpj_emit, n.nome_emit)
+        .order_by(func.coalesce(func.sum(func.abs(d)), 0).desc())
+        .limit(10)
+    )).all()
+    top = [
+        {"cnpj": r[0], "nome": r[1], "itens": int(r[2]), "valor": float(r[3] or 0)}
+        for r in top_rows
+    ]
+    return {"competencias": competencias, "totais": totais, "top_fornecedores": top}
+
+
 async def exportar_divergencias(
     session: AsyncSession,
     *,

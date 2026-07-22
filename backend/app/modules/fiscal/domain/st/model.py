@@ -118,6 +118,10 @@ class MemoriaCalculo:
     aliquota_matriz_id: int | None = None   # linha da matriz_aliquota usada
     tem_protocolo: bool | None = None       # None = operação interna (não se aplica)
     protocolo_fonte: str | None = None      # "matriz" (consultada) | "assumido" (default)
+    # Base legal das regras aplicadas (padrão "pronto para auditoria"):
+    # cita-se a norma no laudo/carta em vez de só o id interno da matriz.
+    mva_base_legal: str | None = None
+    aliquota_base_legal: str | None = None
 
 
 class StatusAuditoria(str):

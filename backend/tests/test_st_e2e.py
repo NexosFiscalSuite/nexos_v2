@@ -224,6 +224,34 @@ async def test_query_divergencias_e_idempotencia(sessao):
     assert por_q3["total"] == 0
 
 
+async def test_diagnostico_executivo_e_pdf(sessao):
+    """Diagnóstico do período: agregados por competência (inclui itens OK),
+    top fornecedores e o PDF timbrado do relatório executivo."""
+    from app.modules.fiscal.application.auditoria_query import diagnostico_st
+    from app.modules.fiscal.application.st_diagnostico import gerar_diagnostico_pdf
+
+    tenant_id, empresa_id = uuid4(), uuid4()
+    nota = await _injetar(sessao, tenant_id, empresa_id)
+    await StAuditService(sessao).auditar_nota(empresa_id, nota.id)
+
+    d = await diagnostico_st(sessao, empresa_id=empresa_id)
+    assert [c["competencia"] for c in d["competencias"]] == ["2026-06"]
+    c = d["competencias"][0]
+    assert c["itens"] == 2 and c["divergentes"] == 2 and c["ok"] == 0
+    assert c["a_recolher"] == 355.0
+    assert d["totais"]["pct_conformidade"] == 0.0
+    assert d["top_fornecedores"][0]["nome"] == "FORNECEDOR SP"
+
+    pdf = gerar_diagnostico_pdf(
+        empresa_nome="CLIENTE MG LTDA", empresa_cnpj="22222222000122", dados=d
+    )
+    assert pdf[:5] == b"%PDF-" and len(pdf) > 3000
+
+    # Fora do período: 404 amigável fica no router; aqui, estrutura vazia.
+    vazio = await diagnostico_st(sessao, empresa_id=empresa_id, data_inicio="2027-01-01")
+    assert vazio["competencias"] == [] and vazio["totais"]["itens"] == 0
+
+
 async def test_exportacao_xlsx_das_divergencias(sessao):
     """Planilha de trabalho: todas as linhas do filtro + consolidação por
     fornecedor, legível pelo openpyxl (o que o Excel abre, o teste abre)."""

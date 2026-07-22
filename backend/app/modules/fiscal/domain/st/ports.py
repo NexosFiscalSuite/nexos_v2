@@ -19,6 +19,7 @@ class MvaInfo:
     mva_original: Decimal
     ncm_casado: str          # qual nível do NCM bateu (diagnóstico do fallback)
     matriz_id: int | None = None   # linha da matriz usada (rastreabilidade na memória)
+    base_legal: str | None = None  # norma da MVA (vai à memória e às cartas)
 
 
 class MvaRepository(Protocol):
@@ -39,6 +40,7 @@ class AliquotaUf:
     modal: Decimal
     fcp_integrado: Decimal = Decimal("0")
     matriz_id: int | None = None   # linha da matriz usada (rastreabilidade na memória)
+    base_legal: str | None = None  # norma da alíquota (vai à memória e às cartas)
 
     @property
     def efetiva(self) -> Decimal:

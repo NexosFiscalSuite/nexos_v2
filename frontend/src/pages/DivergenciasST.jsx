@@ -178,6 +178,17 @@ export default function DivergenciasST() {
     finally { setCartaBusy(null) }
   }
 
+  const [diagBusy, setDiagBusy] = useState(false)
+  async function gerarDiagnostico() {
+    setDiagBusy(true)
+    try {
+      const { blob, filename } = await api.stDiagnostico(selectedEmpresa.id)
+      saveBlob(blob, filename)
+      toast('Diagnóstico gerado — o retrato executivo do período todo.', 'ok')
+    } catch (e) { toast(e.message, 'error') }
+    finally { setDiagBusy(false) }
+  }
+
   const [expBusy, setExpBusy] = useState(false)
   async function exportarExcel() {
     setExpBusy(true)
@@ -225,6 +236,10 @@ export default function DivergenciasST() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-secondary" disabled={diagBusy} onClick={gerarDiagnostico}
+            title="Relatório executivo em PDF de TODO o período auditado desta empresa: conformidade e dinheiro em jogo por competência + top fornecedores">
+            <i className="ti ti-report-analytics" /> {diagBusy ? 'Gerando…' : 'Diagnóstico (PDF)'}
+          </button>
           <button className="btn btn-secondary" disabled={expBusy || data.total === 0} onClick={exportarExcel}
             title="Planilha Excel do filtro atual (todas as páginas): itens + consolidação por fornecedor">
             <i className="ti ti-file-spreadsheet" /> {expBusy ? 'Exportando…' : 'Exportar Excel'}
@@ -557,8 +572,8 @@ function MemoriaModal({ d, onClose }) {
           {/* Defensibilidade: qual versão do motor e quais linhas de matriz decidiram. */}
           <div style={{ marginTop: 14, fontSize: 11, color: 'var(--text-4)', lineHeight: 1.6 }}>
             <i className="ti ti-shield-check" style={{ marginRight: 4 }} />
-            Rastreabilidade: motor v{m.engine_version || '—'} · MVA da matriz {m.mva_matriz_id ? `#${m.mva_matriz_id}` : '—'} ·
-            alíquota da matriz {m.aliquota_matriz_id ? `#${m.aliquota_matriz_id}` : '—'} ·
+            Rastreabilidade: motor v{m.engine_version || '—'} · MVA da matriz {m.mva_matriz_id ? `#${m.mva_matriz_id}` : '—'}{m.mva_base_legal ? ` (${m.mva_base_legal})` : ''} ·
+            alíquota da matriz {m.aliquota_matriz_id ? `#${m.aliquota_matriz_id}` : '—'}{m.aliquota_base_legal ? ` (${m.aliquota_base_legal})` : ''} ·
             protocolo: {m.tem_protocolo == null ? 'operação interna (não se aplica)' : m.tem_protocolo ? 'com acordo' : 'sem acordo'}
             {m.protocolo_fonte ? ` (fonte: ${m.protocolo_fonte})` : ''}
           </div>

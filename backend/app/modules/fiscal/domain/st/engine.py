@@ -240,6 +240,8 @@ class StAuditEngine:
             aliquota_matriz_id=aliq_uf.matriz_id,
             tem_protocolo=tem_protocolo,
             protocolo_fonte=protocolo_fonte,
+            mva_base_legal=(getattr(mva_info, "base_legal", None) if tem_mva else None),
+            aliquota_base_legal=getattr(aliq_uf, "base_legal", None),
         )
 
         # 11. Sem acordo vigente origem→destino, o remetente NÃO é o substituto:
