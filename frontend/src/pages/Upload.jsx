@@ -70,6 +70,11 @@ export default function Upload() {
 
   const resumo = job?.result
   const running = job && (job.status === 'queued' || job.status === 'running')
+  // Lote grande de XMLs soltos: cada arquivo pesa na MESMA requisição (e o
+  // túnel corta em ~100s). O .zip sobe em segundos e expande no worker.
+  const xmlsSoltos = files.filter(f => /\.xml$/i.test(f.name)).length
+  const loteGrande = xmlsSoltos > 200
+  const acimaDoLimite = xmlsSoltos > 1000
 
   return (
     <div>
@@ -131,8 +136,19 @@ export default function Upload() {
           </div>
         )}
 
+        {loteGrande && (
+          <div style={{ marginTop: 16, padding: '12px 14px', borderRadius: 'var(--radius)', display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, background: acimaDoLimite ? 'var(--err-bg)' : 'var(--warn-bg)', color: acimaDoLimite ? 'var(--err-text)' : 'var(--warn-text)' }}>
+            <i className={`ti ${acimaDoLimite ? 'ti-circle-x' : 'ti-alert-triangle'}`} style={{ fontSize: 18, flexShrink: 0 }} />
+            <span>
+              {acimaDoLimite
+                ? <><strong>{xmlsSoltos} XMLs soltos</strong> — acima do limite de 1.000 por envio. Compacte tudo num <strong>.zip</strong> (aguenta até 10.000 XMLs) e envie o arquivo único.</>
+                : <><strong>Lote grande ({xmlsSoltos} XMLs soltos)</strong> — para importar mais rápido e sem estourar o tempo da requisição, compacte num <strong>.zip</strong> e envie o arquivo único.</>}
+            </span>
+          </div>
+        )}
+
         <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-          <button className="btn btn-primary" disabled={busy || !files.length || !selectedEmpresa} onClick={enviar}>
+          <button className="btn btn-primary" disabled={busy || !files.length || !selectedEmpresa || acimaDoLimite} onClick={enviar}>
             {busy
               ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Enviando...</>
               : <><i className="ti ti-upload" /> Importar {files.length || ''} arquivo(s)</>}
