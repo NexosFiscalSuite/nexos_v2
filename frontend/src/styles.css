@@ -12,12 +12,12 @@
   --topbar-bg:    #FFFFFF;
   --sidebar-bg:   #FFFFFF;   /* sidebar clara: a logo respira e aparece 100% */
 
-  --primary:      #1F3B73;   /* Azul-marinho Sol = ação/marca */
-  --primary-h:    #18305E;
-  --primary-d:    #122749;
-  --primary-text: #1F3B73;
-  --primary-lt:   #EAEEF7;
-  --primary-lt2:  #CFDAEE;
+  --primary:      #0056D2;   /* Azul vivo (referência Coursera) = ação */
+  --primary-h:    #0047B8;
+  --primary-d:    #003A96;
+  --primary-text: #0056D2;
+  --primary-lt:   #E9F1FE;
+  --primary-lt2:  #C6DBFC;
 
   --accent:       #F39200;   /* Laranja Sol = destaque/realce */
   --accent-h:     #DD8400;
@@ -43,10 +43,10 @@
   --shadow-lg:    none;
   --shadow-pop:   0 8px 24px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.06);
 
-  --ok-bg:        #D1FAE5; --ok-text:   #065F46;
-  --err-bg:       #FEE2E2; --err-text:  #991B1B;
-  --warn-bg:      #FEF3C7; --warn-text: #92400E;
-  --info-bg:      #DBEAFE; --info-text: #1E40AF;
+  --ok-bg:        #D1FAE5; --ok-text:   #047857;
+  --err-bg:       #FEE2E2; --err-text:  #DC2626;
+  --warn-bg:      #FEF3C7; --warn-text: #B45309;
+  --info-bg:      #DBEAFE; --info-text: #1D4ED8;
 
   --radius:       8px;
   --radius-lg:    18px;      /* cards de utilidade/dashboard (Apple lg) */
@@ -164,7 +164,7 @@ input, select, textarea {
 }
 input:hover, select:hover { border-color: #D1D5DB; }
 input:focus, select:focus, textarea:focus {
-  border-color: var(--primary); box-shadow: 0 0 0 3px rgba(31,59,115,0.12);
+  border-color: var(--primary); box-shadow: 0 0 0 3px rgba(0,86,210,0.12);
 }
 input::placeholder, textarea::placeholder { color: var(--text-4); }
 select { cursor: pointer; }
@@ -205,7 +205,7 @@ input[type="radio"]:checked::after {
   transform: translate(-50%, -50%);
 }
 input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible {
-  outline: none; box-shadow: 0 0 0 3px rgba(31,59,115,0.30);
+  outline: none; box-shadow: 0 0 0 3px rgba(0,86,210,0.30);
 }
 
 .input-wrap { position: relative; }
@@ -436,7 +436,7 @@ tr.filha td:first-child { box-shadow: inset 3px 0 0 var(--primary-lt2); }
 .login-bg .shape { position: absolute; border-radius: 50%; }
 .login-bg .blur { filter: blur(60px); }
 /* blobs grandes preenchidos */
-.login-bg .s1 { width: 460px; height: 460px; top: -150px; left: -120px;  background: #1F3B73; opacity: 0.30; }
+.login-bg .s1 { width: 460px; height: 460px; top: -150px; left: -120px;  background: #0056D2; opacity: 0.30; }
 .login-bg .s2 { width: 520px; height: 520px; bottom: -200px; right: -160px; background: #8EA0CE; opacity: 0.26; }
 .login-bg .s3 { width: 300px; height: 300px; top: 8%;  right: 6%;  background: #C7CEE8; opacity: 0.24; }
 .login-bg .s4 { width: 240px; height: 240px; bottom: 10%; left: 8%; background: #F39200; opacity: 0.16; }
@@ -444,12 +444,12 @@ tr.filha td:first-child { box-shadow: inset 3px 0 0 var(--primary-lt2); }
 .login-bg .s6 { width: 140px; height: 140px; top: 14%; left: 30%; background: #8EA0CE; opacity: 0.20; }
 .login-bg .s7 { width: 120px; height: 120px; bottom: 16%; right: 26%; background: #F39200; opacity: 0.16; }
 /* aneis de contorno (sem preenchimento) */
-.login-bg .ring { border-radius: 50%; border: 2px solid rgba(31,59,115,0.25); background: transparent; }
+.login-bg .ring { border-radius: 50%; border: 2px solid rgba(0,86,210,0.25); background: transparent; }
 .login-bg .r1 { width: 380px; height: 380px; top: -90px; right: 8%; }
-.login-bg .r2 { width: 240px; height: 240px; bottom: -60px; left: 18%; border-color: rgba(31,59,115,0.18); }
-.login-bg .r3 { width: 90px;  height: 90px;  top: 24%; right: 22%; border-color: rgba(31,59,115,0.30); }
+.login-bg .r2 { width: 240px; height: 240px; bottom: -60px; left: 18%; border-color: rgba(0,86,210,0.18); }
+.login-bg .r3 { width: 90px;  height: 90px;  top: 24%; right: 22%; border-color: rgba(0,86,210,0.30); }
 /* pequenos pontos sólidos */
-.login-bg .dot { border-radius: 50%; background: #1F3B73; }
+.login-bg .dot { border-radius: 50%; background: #0056D2; }
 .login-bg .d1 { width: 16px; height: 16px; top: 30%; left: 16%; opacity: 0.5; }
 .login-bg .d2 { width: 10px; height: 10px; top: 68%; left: 30%; opacity: 0.4; }
 .login-bg .d3 { width: 14px; height: 14px; top: 20%; right: 34%; opacity: 0.45; }
@@ -600,7 +600,7 @@ tr.filha td:first-child { box-shadow: inset 3px 0 0 var(--primary-lt2); }
 .login-input input {
   width: 100%; box-sizing: border-box;
   padding: 12px 14px 12px 44px; font-size: 14px;
-  border: 1.5px solid rgba(31,59,115,0.25); border-radius: 12px; outline: none;
+  border: 1.5px solid rgba(0,86,210,0.25); border-radius: 12px; outline: none;
   background: rgba(255,255,255,0.85); color: var(--text-1);
   font-family: inherit; transition: border-color .15s, box-shadow .15s, background .15s;
 }
@@ -608,7 +608,7 @@ tr.filha td:first-child { box-shadow: inset 3px 0 0 var(--primary-lt2); }
 .login-input input:focus {
   border-color: var(--primary);
   background: #fff;
-  box-shadow: 0 0 0 3px rgba(31,59,115,0.15);
+  box-shadow: 0 0 0 3px rgba(0,86,210,0.15);
 }
 .login-eye {
   position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
@@ -628,9 +628,9 @@ tr.filha td:first-child { box-shadow: inset 3px 0 0 var(--primary-lt2); }
   font-family: inherit; cursor: pointer; margin-top: 6px;
   display: flex; align-items: center; justify-content: center; gap: 8px;
   transition: transform .08s, box-shadow .15s, background .15s;
-  box-shadow: 0 8px 22px rgba(31,59,115,0.32);
+  box-shadow: 0 8px 22px rgba(0,86,210,0.32);
 }
-.login-submit:hover:not(:disabled) { background: var(--primary-h); box-shadow: 0 10px 28px rgba(31,59,115,0.4); }
+.login-submit:hover:not(:disabled) { background: var(--primary-h); box-shadow: 0 10px 28px rgba(0,86,210,0.4); }
 .login-submit:active:not(:disabled) { transform: translateY(1px); }
 .login-submit:disabled { opacity: 0.75; cursor: not-allowed; }
 .login-submit .ti { font-size: 17px; }
