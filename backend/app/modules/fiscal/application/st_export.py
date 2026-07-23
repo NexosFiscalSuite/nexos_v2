@@ -167,6 +167,13 @@ _BANDAS_MEMORIA = [
         ("Aplicada", 9, _PCT_FMT, lambda i, m: _mf(m.get("mva_aplicada"))),
         ("Ajustada?", 10, None, lambda i, m: "sim" if m.get("mva_foi_ajustada") else "não"),
     ]),
+    ("Custo que formou a base", [
+        ("Produto", 11, _MONEY_FMT, lambda i, m: _mf(m.get("custo_produto"))),
+        ("Frete", 10, _MONEY_FMT, lambda i, m: _mf(m.get("custo_frete"))),
+        ("· do CT-e", 10, _MONEY_FMT, lambda i, m: _mf(m.get("custo_frete_cte"))),
+        ("IPI", 10, _MONEY_FMT, lambda i, m: _mf(m.get("custo_ipi"))),
+        ("(−) Desc.", 10, _MONEY_FMT, lambda i, m: _mf(m.get("custo_desconto"))),
+    ]),
     ("Base do ST", [
         ("Na nota", 12, _MONEY_FMT, lambda i, m: _mf(i.get("vbc_st_xml"))),
         ("Calculada", 12, _MONEY_FMT, lambda i, m: _mf(m.get("base_st_calculada"))),

@@ -642,6 +642,18 @@ function MemoriaModal({ d, onClose }) {
     ? Number(m.base_st_calculada) / (1 + mvaApl / 100)
     : null
 
+  // Composição REAL do custo (memórias novas trazem os componentes): a conta
+  // aberta que responde "como verificar o rateio de frete/IPI" na plataforma.
+  const custoComposicao = m.custo_produto != null ? [
+    ['produto', Number(m.custo_produto)],
+    ['frete', Number(m.custo_frete || 0)],
+    ['seguro', Number(m.custo_seguro || 0)],
+    ['outras despesas', Number(m.custo_outras || 0)],
+    ['IPI', Number(m.custo_ipi || 0)],
+    ['(−) desconto', -Number(m.custo_desconto || 0)],
+  ].filter(([, v]) => Math.abs(v) > 0.004) : null
+  const freteCte = Number(m.custo_frete_cte || 0)
+
   const frase = dif < -0.004
     ? <>A nota destacou <b>{brl(d.vicms_st_xml)}</b>, mas pela regra vigente o valor é <b>{brl(d.vicms_st_calculado)}</b> — <b style={{ color: 'var(--err-text)' }}>faltaram {brl(-dif)}</b> de ST.</>
     : dif > 0.004
@@ -707,9 +719,17 @@ function MemoriaModal({ d, onClose }) {
                 valor={<><span style={{ color: 'var(--text-4)' }}>{pct(m.mva_original)}</span> <i className="ti ti-arrow-right" style={{ fontSize: 12 }} /> <b>{pct(m.mva_aplicada)}</b></>}
                 badge={ajustada ? { txt: 'Ajustada', cls: 'badge-info' } : { txt: 'Original', cls: 'badge-ok' }} />
               <Passo n="3" titulo="Base de cálculo do ST"
-                sub={custoAprox != null
-                  ? `Valor da compra (produto + frete e encargos ≈ ${brl(custoAprox)}) acrescido da margem de ${pct(m.mva_aplicada)} — o preço presumido de venda ao consumidor`
-                  : 'Valor da compra (produto + frete e encargos) acrescido da margem — o preço presumido de venda ao consumidor'}
+                sub={custoComposicao
+                  ? <>
+                      Custo da compra: {custoComposicao.map(([nome, v], i) => (
+                        <span key={nome}>{i > 0 && (v < 0 ? ' ' : ' + ')}{v < 0 ? '− ' : ''}{nome} <b className="tnum">{brl(Math.abs(v))}</b></span>
+                      ))}
+                      {freteCte > 0.004 && <> — sendo <b className="tnum">{brl(freteCte)}</b> de frete rateado dos CT-e vinculados</>}
+                      {'. '}Sobre o custo, a margem de {pct(m.mva_aplicada)}.
+                    </>
+                  : (custoAprox != null
+                    ? `Valor da compra (produto + frete e encargos ≈ ${brl(custoAprox)}) acrescido da margem de ${pct(m.mva_aplicada)} — o preço presumido de venda ao consumidor`
+                    : 'Valor da compra (produto + frete e encargos) acrescido da margem — o preço presumido de venda ao consumidor')}
                 valor={brl(m.base_st_calculada)} />
               <Passo n="4" titulo="Imposto cheio sobre a base"
                 sub={`${brl(m.base_st_calculada)} × ${pct(m.alq_intra)} — o ICMS total da cadeia até o consumidor, que o ST antecipa de uma vez`}

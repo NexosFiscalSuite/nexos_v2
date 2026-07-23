@@ -281,7 +281,7 @@ async def test_exportacao_xlsx_das_divergencias(sessao):
     # Memória: o passo a passo em colunas (linhas 1-2 = banda + coluna).
     wm = wb["Memória de cálculo"]
     assert wm.cell(row=1, column=1).value == "Identificação"
-    cabecalhos = [wm.cell(row=2, column=c).value for c in range(1, 29)]
+    cabecalhos = [wm.cell(row=2, column=c).value for c in range(1, 34)]
     assert "Aplicada" in cabecalhos and "ST devido" in cabecalhos
     col_devido = cabecalhos.index("ST devido") + 1
     assert float(wm.cell(row=3, column=col_devido).value) == 177.50

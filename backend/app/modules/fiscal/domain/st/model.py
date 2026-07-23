@@ -57,7 +57,8 @@ class ItemFiscal:
     # --- valores físicos da operação (base do recálculo) ---
     v_prod: Decimal = ZERO
     q_com: Decimal = ZERO
-    v_frete: Decimal = ZERO
+    v_frete: Decimal = ZERO        # frete TOTAL do item (XML + rateio dos CT-e)
+    v_frete_cte: Decimal = ZERO    # só a parcela rateada dos CT-e (transparência)
     v_seg: Decimal = ZERO
     v_outro: Decimal = ZERO
     v_desc: Decimal = ZERO
@@ -122,6 +123,16 @@ class MemoriaCalculo:
     # cita-se a norma no laudo/carta em vez de só o id interno da matriz.
     mva_base_legal: str | None = None
     aliquota_base_legal: str | None = None
+
+    # Composição do CUSTO que formou a base (Seção 4.1): a resposta do "como
+    # verificar o rateio de frete/IPI" fica NA memória — conta aberta na tela.
+    custo_produto: Decimal = ZERO
+    custo_frete: Decimal = ZERO       # frete total (XML + CT-e rateado)
+    custo_frete_cte: Decimal = ZERO   # parcela vinda do rateio dos CT-e
+    custo_seguro: Decimal = ZERO
+    custo_outras: Decimal = ZERO
+    custo_desconto: Decimal = ZERO
+    custo_ipi: Decimal = ZERO
 
 
 class StatusAuditoria(str):

@@ -44,6 +44,7 @@ def _item_fiscal(it: NotaItem, frete_rateado: Decimal) -> ItemFiscal:
         mod_bc_st=it.mod_bc_st,
         v_prod=it.valor_produto, q_com=it.quantidade,
         v_frete=(it.valor_frete or ZERO) + frete_rateado,
+        v_frete_cte=frete_rateado,
         v_seg=it.valor_seguro, v_outro=it.valor_outro, v_desc=it.valor_desconto,
         v_ipi=it.valor_ipi,
         v_bc=it.base_calculo, v_icms=it.valor_icms, p_icms=it.p_icms, p_red_bc=it.p_red_bc,

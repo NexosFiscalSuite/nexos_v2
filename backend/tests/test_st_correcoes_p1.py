@@ -175,6 +175,20 @@ def test_parser_extrai_st_retido():
     assert item["v_fcp_st_ret"] == 3.0
 
 
+def test_memoria_grava_a_composicao_do_custo():
+    """A resposta do "como verificar o rateio de frete/IPI": a memória guarda
+    cada componente do custo, com a parcela do CT-e separada."""
+    op = Operacao(uf_emit="SP", uf_dest="MG", crt=Crt.NORMAL, data=DATA)
+    item = _item(v_frete=_D("100"), v_frete_cte=_D("80"), v_ipi=_D("50"),
+                 v_desc=_D("10"))
+    r = _engine().auditar_item(item, op)
+
+    m = r.memoria
+    assert m.custo_produto == _D("1000.00")
+    assert m.custo_frete == _D("100.00") and m.custo_frete_cte == _D("80.00")
+    assert m.custo_ipi == _D("50.00") and m.custo_desconto == _D("10.00")
+
+
 def test_schema_protocolo_aceita_sem_acordo_e_ncm():
     """O registro explícito de ausência de acordo (botão "Não há acordo") e o
     escopo por NCM entram pelo schema — antes toda linha nascia ATIVO."""

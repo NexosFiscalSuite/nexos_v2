@@ -242,6 +242,13 @@ class StAuditEngine:
             protocolo_fonte=protocolo_fonte,
             mva_base_legal=(getattr(mva_info, "base_legal", None) if tem_mva else None),
             aliquota_base_legal=getattr(aliq_uf, "base_legal", None),
+            custo_produto=centavos(item.v_prod),
+            custo_frete=centavos(item.v_frete),
+            custo_frete_cte=centavos(item.v_frete_cte),
+            custo_seguro=centavos(item.v_seg),
+            custo_outras=centavos(item.v_outro),
+            custo_desconto=centavos(item.v_desc),
+            custo_ipi=centavos(item.v_ipi),
         )
 
         # 11. Sem acordo vigente origem→destino, o remetente NÃO é o substituto:
