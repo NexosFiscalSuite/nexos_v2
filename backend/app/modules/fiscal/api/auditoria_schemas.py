@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 class DivergenciaStItem(BaseModel):
     chave_acesso: str
+    nota_id: str | None = None    # habilita ações por nota na tela (ex.: sem CT-e)
     numero_item: int
     # Identificação do produto (join com nota_itens — a auditoria só guarda o nº)
     descricao: str | None = None

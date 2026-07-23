@@ -321,6 +321,8 @@ export const api = {
   reprocessarPendentes: (empresaId) =>
     request('POST', '/auditoria/st/reprocessar-pendentes' + (empresaId ? `?empresa_id=${empresaId}` : '')),
   stCatalogoErros: () => request('GET', '/auditoria/st/catalogo-erros'),
+  // Confirma que a nota não tem CT-e (gate do frete) e reaudita
+  stConfirmarSemCte: (notaId) => request('POST', `/auditoria/st/notas/${notaId}/confirmar-sem-cte`),
   // Carta timbrada (PDF) de cobrança de ST ao fornecedor (sem antecipações)
   stCartaFornecedor: (empresaId, params = {}) => {
     const q = new URLSearchParams(

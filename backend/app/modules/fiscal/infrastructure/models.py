@@ -53,6 +53,12 @@ class Nota(Base):
     uf_dest: Mapped[str | None] = mapped_column(String(2), nullable=True)
     transportadora_cnpj: Mapped[str | None] = mapped_column(String(14), nullable=True)
     transportadora_nome: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # Gate do frete/CT-e no motor de ST: modFrete do XML + confirmação explícita
+    # de que NÃO há CT-e (com trilha de quem/quando — defensibilidade).
+    mod_frete: Mapped[str | None] = mapped_column(String(1), nullable=True)
+    frete_sem_cte_confirmado: Mapped[bool] = mapped_column(Boolean, default=False)
+    frete_confirmado_por: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    frete_confirmado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     tipo_nota: Mapped[str | None] = mapped_column(String(80), nullable=True)  # classificação da entrada
 
     valor_total: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))

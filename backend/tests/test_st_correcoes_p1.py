@@ -35,8 +35,19 @@ from app.modules.fiscal.infrastructure.matrizes_loaders import (
     MatrizesLoader,
     _ProtocoloSnapshot,
 )
-from app.modules.fiscal.infrastructure.matrizes_models import MatrizProtocoloSt
-from app.modules.fiscal.infrastructure.models import AuditoriaIcmsSt, Nota, NotaItem
+from app.modules.fiscal.infrastructure.matrizes_models import (
+    MatrizAliquota,
+    MatrizEnquadramentoSt,
+    MatrizFcp,
+    MatrizMva,
+    MatrizProtocoloSt,
+)
+from app.modules.fiscal.infrastructure.models import (
+    AuditoriaIcmsSt,
+    NfeCteVinculo,
+    Nota,
+    NotaItem,
+)
 
 _D = Decimal
 DATA = date(2026, 6, 1)
@@ -214,7 +225,9 @@ def test_schema_protocolo_aceita_sem_acordo_e_ncm():
 
 # ── 4. Data de emissão inválida não derruba o lote (+ loader do protocolo) ── #
 _TABELAS = [Nota.__table__, NotaItem.__table__, AuditoriaIcmsSt.__table__,
-            MatrizProtocoloSt.__table__]
+            NfeCteVinculo.__table__, MatrizProtocoloSt.__table__,
+            MatrizMva.__table__, MatrizEnquadramentoSt.__table__,
+            MatrizFcp.__table__, MatrizAliquota.__table__]
 
 
 @pytest_asyncio.fixture
@@ -248,6 +261,57 @@ async def test_nota_sem_data_vira_diagnostico_por_item(sessao):
     assert registros[0].codigo_erro == "ERRO_DATA_EMISSAO_INVALIDA"
     persistido = await sessao.scalar(select(AuditoriaIcmsSt))
     assert persistido is not None and "data de emiss" in persistido.observacao
+
+
+async def test_gate_do_frete_trava_e_destrava(sessao):
+    """Entrada FOB (modFrete=1) sem CT-e vinculado e sem frete nos itens: a
+    base sairia a menor — trava com ERRO_FRETE_PENDENTE_CTE. Confirmar "não há
+    CT-e" (flag na nota) destrava e a auditoria segue (cai na pendência de
+    matriz, provando que o gate passou)."""
+    tenant, empresa = uuid4(), uuid4()
+    nota = Nota(
+        id=uuid4(), tenant_id=tenant, empresa_id=empresa, chave_acesso="7" * 44,
+        tipo="NFe", fluxo="entrada", modelo="55", numero="88", crt_emit="3",
+        nome_emit="TRANSP FOB", cnpj_emit="11111111000111", uf_emit="SP",
+        uf_dest="MG", mod_frete="1",
+        data_emissao="2026-06-01", ano="2026", mes="06",
+    )
+    sessao.add(nota)
+    sessao.add(NotaItem(id=uuid4(), tenant_id=tenant, nota_id=nota.id,
+                        numero_item=1, descricao="P", cst="00", ncm="40117000",
+                        valor_produto=_D("100")))
+    await sessao.flush()
+
+    r1 = await StAuditService(sessao).auditar_nota(empresa, nota.id)
+    assert r1[0].status == "NAO_AUDITAVEL"
+    assert r1[0].codigo_erro == "ERRO_FRETE_PENDENTE_CTE"
+
+    nota.frete_sem_cte_confirmado = True
+    await sessao.flush()
+    r2 = await StAuditService(sessao).auditar_nota(empresa, nota.id)
+    assert r2[0].codigo_erro != "ERRO_FRETE_PENDENTE_CTE"   # gate passou
+
+    # CIF na entrada (modFrete=0: quem paga é o emitente) NÃO trava.
+    nota.mod_frete = "0"
+    nota.frete_sem_cte_confirmado = False
+    await sessao.flush()
+    r3 = await StAuditService(sessao).auditar_nota(empresa, nota.id)
+    assert r3[0].codigo_erro != "ERRO_FRETE_PENDENTE_CTE"
+
+
+def test_parser_extrai_mod_frete():
+    xml = f"""<nfeProc><NFe><infNFe Id="NFe{'8' * 44}">
+      <ide><mod>55</mod><serie>1</serie><nNF>9</nNF><dhEmi>2026-06-01T10:00:00-03:00</dhEmi></ide>
+      <emit><CNPJ>11111111000111</CNPJ><xNome>F</xNome><CRT>3</CRT>
+        <enderEmit><UF>MG</UF></enderEmit></emit>
+      <dest><CNPJ>22222222000122</CNPJ><xNome>C</xNome><enderDest><UF>MG</UF></enderDest></dest>
+      <det nItem="1"><prod><cProd>P</cProd><xProd>X</xProd><NCM>40111000</NCM><CFOP>5405</CFOP>
+        <uCom>UN</uCom><qCom>1</qCom><vUnCom>10</vUnCom><vProd>10</vProd></prod>
+        <imposto><ICMS><ICMS00><CST>00</CST></ICMS00></ICMS></imposto></det>
+      <transp><modFrete>1</modFrete></transp>
+      <total><ICMSTot><vNF>10.00</vNF></ICMSTot></total>
+    </infNFe></NFe></nfeProc>""".encode()
+    assert parse_xml(xml)["mod_frete"] == "1"
 
 
 async def test_loader_protocolo_sem_acordo_cura_o_par(sessao):

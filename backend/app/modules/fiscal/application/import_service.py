@@ -204,6 +204,7 @@ class ImportService:
             uf_dest=parsed.get("uf_dest"),
             transportadora_cnpj=parsed.get("transportadora_cnpj"),
             transportadora_nome=parsed.get("transportadora_nome"),
+            mod_frete=parsed.get("mod_frete"),
             valor_total=_dec(parsed.get("valor_total")),
             data_emissao=parsed.get("data_emissao"),
             competencia=competencia,

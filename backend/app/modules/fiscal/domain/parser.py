@@ -365,6 +365,9 @@ def _parse_nfe(root) -> dict:
         "endereco_dest": _endereco_nfe(_find_local(dest, "enderDest")),
         "transportadora_cnpj": _clean_cnpj(_g(transporta, "CNPJ") or _g(transporta, "CPF")),
         "transportadora_nome": _g(transporta, "xNome"),
+        # modFrete: 0=CIF (emitente paga) 1=FOB (destinatário) 2=terceiros
+        # 3/4=próprio 9=sem transporte — decide o gate do CT-e no motor de ST.
+        "mod_frete": _g(transp, "modFrete") or None,
         "valor_total": _f(_g(icms_tot, "vNF")),
         "protocolo": _g(prot, "nProt") if prot is not None else "",
         "iss_retido": None,

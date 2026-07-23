@@ -177,6 +177,7 @@ async def listar_divergencias(
 def _linha(a_row, n_row, descricao, codigo, ncm, cest, ctes: list[str]) -> dict:
     return {
         "chave_acesso": a_row.chave_acesso,
+        "nota_id": str(a_row.nota_id),
         "numero_item": a_row.numero_item,
         "descricao": descricao,
         "codigo": codigo,

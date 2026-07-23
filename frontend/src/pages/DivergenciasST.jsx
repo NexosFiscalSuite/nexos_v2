@@ -249,6 +249,16 @@ export default function DivergenciasST() {
     } catch (e) { toast(e.message, 'error') }
   }
 
+  // "Não há CT-e": confirma a ausência (fica registrado quem/quando) e reaudita.
+  async function confirmarSemCte(it) {
+    if (!confirm(`Confirmar que a NF-e ${it.numero_nota || ''} NÃO tem CT-e? A auditoria recalcula sem frete de conhecimento e a confirmação fica registrada no seu usuário.`)) return
+    try {
+      await api.stConfirmarSemCte(it.nota_id)
+      toast('Confirmado — nota reauditada sem CT-e.', 'ok')
+      carregar()
+    } catch (e) { toast(e.message, 'error') }
+  }
+
   // Carta PDF de cobrança por fornecedor (ranking) — sem antecipações.
   const [cartaBusy, setCartaBusy] = useState(null)
   async function gerarCarta(cnpj) {
@@ -478,7 +488,7 @@ export default function DivergenciasST() {
                     <FragmentoNota
                       key={nota.chave} nota={nota} aberto={aberto} catalogo={catalogo}
                       onToggle={() => toggle(nota.chave)} onMemoria={setDetalhe}
-                      onSemAcordo={registrarSemAcordo}
+                      onSemAcordo={registrarSemAcordo} onSemCte={confirmarSemCte}
                     />
                   )
                 })}
@@ -513,7 +523,7 @@ const RotuloSt = ({ children }) => (
 // A conduta do analista como selo destacado; o ⓘ abre o balão com a
 // explicação técnica do motor (padrão do balão da classificação — clique
 // abre, clique fora fecha). Nada de tooltip escondido no hover.
-function AcaoSugerida({ acao, destinoMatriz, onIrMatriz, onSemAcordo, verificar, diagnostico, onVerMemoria, ressalva }) {
+function AcaoSugerida({ acao, destinoMatriz, onIrMatriz, onSemAcordo, verificar, diagnostico, onVerMemoria, ressalva, onImportarCte, onSemCte }) {
   const [aberto, setAberto] = useState(false)
   const [pos, setPos] = useState(null)
   const ref = useRef(null)
@@ -611,12 +621,26 @@ function AcaoSugerida({ acao, destinoMatriz, onIrMatriz, onSemAcordo, verificar,
           <i className="ti ti-ban" /> Não há acordo
         </button>
       )}
+      {onImportarCte && (
+        <button className="btn btn-secondary btn-sm" style={{ padding: '3px 10px', fontSize: 11.5 }}
+          title="Vai para a tela de Upload — importe o CT-e da nota e a auditoria destrava sozinha no reprocesso"
+          onClick={(e) => { e.stopPropagation(); onImportarCte() }}>
+          <i className="ti ti-truck" /> Importar CT-e
+        </button>
+      )}
+      {onSemCte && (
+        <button className="btn btn-secondary btn-sm" style={{ padding: '3px 10px', fontSize: 11.5 }}
+          title="Confirma que NÃO há CT-e para esta nota (fica registrado quem confirmou e quando) e reaudita na hora"
+          onClick={(e) => { e.stopPropagation(); onSemCte() }}>
+          <i className="ti ti-truck-off" /> Não há CT-e
+        </button>
+      )}
     </div>
   )
 }
 
 // ── Linha-mestre (Nota) + linhas-filhas (itens) quando expandida ──
-function FragmentoNota({ nota, aberto, onToggle, onMemoria, catalogo, onSemAcordo }) {
+function FragmentoNota({ nota, aberto, onToggle, onMemoria, catalogo, onSemAcordo, onSemCte }) {
   const navigate = useNavigate()
   const temCte = nota.ctes.length > 0
   // Primeira ação sugerida do catálogo do motor para os códigos do item.
@@ -697,6 +721,10 @@ function FragmentoNota({ nota, aberto, onToggle, onMemoria, catalogo, onSemAcord
                 verificar={comoVerificar(it.codigo_erro)}
                 diagnostico={diagnosticoAutomatico(it)}
                 onVerMemoria={it.memoria ? () => onMemoria(it) : null}
+                onImportarCte={(it.codigo_erro || '').includes('ERRO_FRETE_PENDENTE_CTE')
+                  ? () => navigate('/upload') : null}
+                onSemCte={(it.codigo_erro || '').includes('ERRO_FRETE_PENDENTE_CTE')
+                  ? () => onSemCte(it) : null}
                 ressalva={it.fluxo !== 'saida' && it.status === 'DIVERGENTE'
                   && !(it.codigo_erro || '').match(/ERRO_110|ERRO_111/)
                   ? 'Antes de cobrar: a retenção pode ser legitimamente dispensada conforme o estado ou o regime do remetente (acordo não aplicável ao produto, regime especial, inscrição de substituto). Se for o caso, a obrigação vira antecipação nossa — confirme o enquadramento do par de UFs antes de contestar.'

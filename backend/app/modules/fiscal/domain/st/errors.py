@@ -90,6 +90,14 @@ class ErroST(_Erro, Enum):
         "Cadastrar o protocolo/convênio do par de UFs (situação ATIVO; ou uma linha "
         "INATIVO/DENUNCIADO para registrar que NÃO há acordo) e reauditar.",
     )
+    FRETE_PENDENTE_CTE = (
+        "ERRO_FRETE_PENDENTE_CTE",
+        "Frete por conta do tomador (modFrete) sem CT-e vinculado e sem frete "
+        "nos itens — a base do ST sairia a menor; o motor não calcula com "
+        "frete possivelmente faltante (fail-closed).",
+        "Importar o CT-e da nota (tela Upload) OU confirmar que não há CT-e "
+        "no botão da pendência — aí a auditoria roda.",
+    )
     DATA_EMISSAO_INVALIDA = (
         "ERRO_DATA_EMISSAO_INVALIDA",
         "Nota sem data de emissão válida no XML — a auditoria depende da data "

@@ -88,10 +88,27 @@ class StAuditService:
         try:
             data_emissao = date.fromisoformat((nota.data_emissao or "").strip())
         except ValueError:
-            return await self._marcar_sem_data(nota, empresa_id, itens_db)
+            return await self._marcar_todos(nota, empresa_id, itens_db,
+                                            ErroST.DATA_EMISSAO_INVALIDA)
 
         # ADR-0001: agrega o frete dos CT-e vinculados e rateia por item.
         vinculos = await self.repo.ctes_da_nfe(empresa_id, nota.chave_acesso)
+
+        # Gate do frete (fail-closed): quando o TOMADOR do frete é o nosso
+        # cliente (entrada FOB modFrete=1; saída CIF modFrete=0), não há CT-e
+        # vinculado, os itens vieram sem frete e ninguém confirmou a ausência —
+        # a base sairia a menor em silêncio. Pendência reprocessável: importar
+        # o CT-e destrava sozinho; confirmar "não há" também.
+        toma_frete = (
+            (nota.fluxo != "saida" and nota.mod_frete == "1")
+            or (nota.fluxo == "saida" and nota.mod_frete == "0")
+        )
+        sem_frete_itens = all((it.valor_frete or ZERO) == ZERO for it in itens_db)
+        if (toma_frete and sem_frete_itens and not vinculos
+                and not nota.frete_sem_cte_confirmado):
+            return await self._marcar_todos(nota, empresa_id, itens_db,
+                                            ErroST.FRETE_PENDENTE_CTE)
+
         rateio = ratear_frete(itens_db, agregar_frete(vinculos))
         operacao = Operacao(
             uf_emit=nota.uf_emit or "", uf_dest=nota.uf_dest or "",
@@ -137,12 +154,11 @@ class StAuditService:
         await self.session.flush()
         return registros
 
-    async def _marcar_sem_data(
-        self, nota, empresa_id: UUID, itens_db: list[NotaItem]
+    async def _marcar_todos(
+        self, nota, empresa_id: UUID, itens_db: list[NotaItem], erro: ErroST
     ) -> list[AuditoriaIcmsSt]:
-        """Nota sem data de emissão válida: cada item vira NAO_AUDITAVEL com
-        código próprio (reprocessável após correção do XML) — nunca exceção."""
-        erro = ErroST.DATA_EMISSAO_INVALIDA
+        """Pendência de nota inteira (data podre, frete/CT-e pendente...): cada
+        item vira NAO_AUDITAVEL com o código — reprocessável, nunca exceção."""
         await self.session.execute(
             delete(AuditoriaIcmsSt).where(AuditoriaIcmsSt.nota_id == nota.id)
         )

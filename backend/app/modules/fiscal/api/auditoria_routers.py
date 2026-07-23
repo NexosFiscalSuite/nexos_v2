@@ -1,7 +1,9 @@
 """Rotas do relatório de divergências de ICMS-ST (REL_Divergencia_ST)."""
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Response
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
@@ -15,10 +17,13 @@ from app.modules.fiscal.application.auditoria_query import (
     listar_divergencias,
 )
 from app.modules.fiscal.application.reprocess_service import ReprocessService
+from app.modules.fiscal.application.st_audit_service import StAuditService
 from app.modules.fiscal.application.st_carta import gerar_carta_st
 from app.modules.fiscal.application.st_diagnostico import gerar_diagnostico_pdf
 from app.modules.fiscal.application.st_export import gerar_xlsx_divergencias
 from app.modules.fiscal.domain.st.errors import ErroST
+from app.modules.fiscal.infrastructure.repositories import NotaRepository
+from app.modules.identity.infrastructure.models import User
 from app.shared.domain.value_objects import only_digits
 
 router = APIRouter(prefix="/auditoria/st", tags=["Auditoria ST"])
@@ -43,6 +48,27 @@ async def reprocessar_pendentes(
     """Retroatividade: re-aplica o De/Para CFOP e re-audita as notas travadas
     (gargalo de CFOP ou NAO_AUDITAVEL por matriz faltante)."""
     return await ReprocessService(session).reprocessar_pendentes(empresa_id)
+
+
+@router.post("/notas/{nota_id}/confirmar-sem-cte")
+async def confirmar_sem_cte(
+    nota_id: UUID,
+    claims: TokenClaims = Depends(get_current_claims),
+    session: AsyncSession = Depends(tenant_session),
+):
+    """Confirma que a nota NÃO tem CT-e (frete por conta do tomador sem
+    conhecimento): grava quem/quando — trilha de auditoria — e reaudita a
+    nota na hora, destravando o ERRO_FRETE_PENDENTE_CTE."""
+    nota = await NotaRepository(session).by_id(nota_id)
+    if nota is None:
+        raise NotFoundError("Nota não encontrada.")
+    email = await session.scalar(select(User.email).where(User.id == claims.sub))
+    nota.frete_sem_cte_confirmado = True
+    nota.frete_confirmado_por = email
+    nota.frete_confirmado_em = datetime.now(UTC)
+    await session.flush()
+    await StAuditService(session).auditar_nota(nota.empresa_id, nota_id)
+    return {"confirmado": True, "por": email}
 
 
 @router.get("/diagnostico")
