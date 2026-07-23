@@ -95,8 +95,12 @@ def gerar_carta_st(
         pedido = (
             "Solicitamos a correção das próximas emissões e, conforme o caso, NF-e "
             "complementar (retenção a menor) ou providências para ressarcimento "
-            "(retenção a maior). A memória de cálculo de cada item — MVA aplicada, "
-            "alíquotas e base — está à disposição para conferência conjunta."
+            "(retenção a maior). Caso a operação esteja amparada por dispensa de "
+            "retenção (ausência de convênio/protocolo aplicável ao produto, regime "
+            "especial ou condição específica de inscrição), pedimos a gentileza de "
+            "nos indicar a base normativa para a baixa do apontamento. A memória de "
+            "cálculo de cada item — MVA aplicada, alíquotas e base — está à "
+            "disposição para conferência conjunta."
         )
 
     metodo = (

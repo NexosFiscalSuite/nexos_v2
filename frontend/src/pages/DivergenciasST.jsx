@@ -18,7 +18,7 @@ const classeValor = (v) => `tnum${Math.abs(Number(v || 0)) < 0.005 ? ' val-zero'
 // Cards do topo: o dinheiro em jogo por tipo de pendência. Clicar filtra a
 // lista (sobre os itens carregados) — mesmo padrão dos cards do IBS/CBS.
 const CARDS = [
-  { key: 'a_recolher', label: 'ST a menor (cobrar fornecedor)', tone: 'err', icon: 'ti-trending-down', dinheiro: true,
+  { key: 'a_recolher', label: 'ST a recolher', tone: 'err', icon: 'ti-receipt-tax', dinheiro: true,
     filtro: it => it.status === 'DIVERGENTE' && Number(it.diferenca) < 0 && !(it.codigo_erro || '').includes('ERRO_111') },
   { key: 'a_favor', label: 'Pago a maior (a favor)', tone: 'info', icon: 'ti-arrow-back-up', dinheiro: true,
     filtro: it => it.status === 'DIVERGENTE' && Number(it.diferenca) > 0 },
@@ -119,10 +119,9 @@ function corDiferenca(v) {
   return 'var(--text-3)'
 }
 
-// Selo de AÇÃO: traduz o código de erro na conduta do analista (bater o olho).
-//  • Antecipação devida (laranja) → recolher guia local (responsabilidade nossa).
-//  • Erro do fornecedor / emissão (vermelho) → cobrar correção de quem emitiu.
-//  • A favor do cliente (azul) → ST paga a maior, pleitear estorno.
+// Selo de situação: DESCRITIVO, não acusatório — a divergência pode ter causa
+// legítima (dispensa de retenção pelo estado/regime do remetente); a culpa só
+// se afirma depois de verificar. O selo diz O QUE aconteceu com o imposto.
 function seloAcao(item) {
   if (item.status === 'NAO_AUDITAVEL')
     return { txt: 'Não auditável', cls: 'badge-neutral', icon: 'ti-help-circle' }
@@ -131,10 +130,13 @@ function seloAcao(item) {
     return { txt: 'Antecipação devida', cls: 'badge-warn', icon: 'ti-receipt-tax' }
   if (cod.includes('ERRO_110'))
     return { txt: 'A favor do cliente', cls: 'badge-info', icon: 'ti-arrow-back-up' }
-  if (item.status === 'DIVERGENTE')
+  if (item.status === 'DIVERGENTE') {
+    if (Number(item.diferenca || 0) > 0.004)
+      return { txt: 'Pago a maior', cls: 'badge-info', icon: 'ti-arrow-back-up' }
     return item.fluxo === 'saida'
-      ? { txt: 'Erro de emissão', cls: 'badge-error', icon: 'ti-alert-octagon' }
-      : { txt: 'Erro do fornecedor', cls: 'badge-error', icon: 'ti-alert-octagon' }
+      ? { txt: 'Complemento a recolher', cls: 'badge-error', icon: 'ti-receipt-tax' }
+      : { txt: 'ST a recolher', cls: 'badge-error', icon: 'ti-receipt-tax' }
+  }
   return null
 }
 
@@ -511,7 +513,7 @@ const RotuloSt = ({ children }) => (
 // A conduta do analista como selo destacado; o ⓘ abre o balão com a
 // explicação técnica do motor (padrão do balão da classificação — clique
 // abre, clique fora fecha). Nada de tooltip escondido no hover.
-function AcaoSugerida({ acao, destinoMatriz, onIrMatriz, onSemAcordo, verificar, diagnostico, onVerMemoria }) {
+function AcaoSugerida({ acao, destinoMatriz, onIrMatriz, onSemAcordo, verificar, diagnostico, onVerMemoria, ressalva }) {
   const [aberto, setAberto] = useState(false)
   const [pos, setPos] = useState(null)
   const ref = useRef(null)
@@ -575,6 +577,12 @@ function AcaoSugerida({ acao, destinoMatriz, onIrMatriz, onSemAcordo, verificar,
                 <ol style={{ margin: '4px 0 0', paddingLeft: 18 }}>
                   {verificar.map((p, i) => <li key={i} style={{ marginBottom: 3 }}>{p}</li>)}
                 </ol>
+              </div>
+            )}
+
+            {ressalva && (
+              <div style={{ marginTop: 8, background: 'var(--warn-bg)', color: 'var(--warn-text)', borderRadius: 8, padding: '8px 11px', fontSize: 12, lineHeight: 1.55 }}>
+                <i className="ti ti-scale" style={{ marginRight: 4 }} />{ressalva}
               </div>
             )}
 
@@ -688,7 +696,11 @@ function FragmentoNota({ nota, aberto, onToggle, onMemoria, catalogo, onSemAcord
                   ? () => onSemAcordo(it) : null}
                 verificar={comoVerificar(it.codigo_erro)}
                 diagnostico={diagnosticoAutomatico(it)}
-                onVerMemoria={it.memoria ? () => onMemoria(it) : null} />
+                onVerMemoria={it.memoria ? () => onMemoria(it) : null}
+                ressalva={it.fluxo !== 'saida' && it.status === 'DIVERGENTE'
+                  && !(it.codigo_erro || '').match(/ERRO_110|ERRO_111/)
+                  ? 'Antes de cobrar: a retenção pode ser legitimamente dispensada conforme o estado ou o regime do remetente (acordo não aplicável ao produto, regime especial, inscrição de substituto). Se for o caso, a obrigação vira antecipação nossa — confirme o enquadramento do par de UFs antes de contestar.'
+                  : null} />
             )}
           </td>
           <td colSpan={2}>
