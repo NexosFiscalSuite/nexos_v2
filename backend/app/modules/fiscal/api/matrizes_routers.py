@@ -1,10 +1,11 @@
 """CRUD de Matrizes Fiscais — tabelas GLOBAIS (sem RLS): MVA, Enquadramento,
 FCP, Protocolos e Alíquotas.
 
-Leitura: qualquer usuário autenticado. Escrita: curadoria (`require_curador`:
-ADMIN e, se configurado, e-mail na lista de curadores — a regra vale para todas
-as empresas). Um factory registra os 4 verbos por matriz para não repetir o
-mesmo CRUD cinco vezes.
+Leitura: qualquer usuário autenticado. Escrita: também aberta a qualquer
+usuário autenticado (`require_curador` — a curadoria é trabalho diário dos
+analistas); `NEXOS_MATRIZ_CURADORES` preenchido vira freio de emergência por
+e-mail. Um factory registra os 4 verbos por matriz para não repetir o mesmo
+CRUD cinco vezes.
 """
 from collections.abc import Callable
 from uuid import UUID

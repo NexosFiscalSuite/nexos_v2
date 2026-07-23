@@ -55,7 +55,8 @@ class Settings(BaseSettings):
     # UF do nicho do escritório alvo do upsert das matrizes (job agendado).
     crawler_uf_alvo: str = "MG"
 
-    # Curadoria das matrizes fiscais -------------------------------------------
+    # Curadoria das matrizes fiscais: vazio = todo usuário autenticado escreve;
+    # preenchido (e-mails por vírgula) = freio de emergência só para a lista. --
     # E-mails (separados por vírgula) autorizados a ESCREVER nas matrizes
     # globais. Vazio = qualquer ADMIN (comportamento histórico).
     matriz_curadores: str = ""
