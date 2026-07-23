@@ -28,6 +28,69 @@ const CARDS = [
     filtro: it => it.status === 'NAO_AUDITAVEL' },
 ]
 
+// "Como verificar AQUI na plataforma" — o roteiro por código de erro que a
+// ação sugerida sozinha não dá (o balão deixa de ser seco).
+const COMO_VERIFICAR = {
+  ERRO_101: [
+    'Abra a memória de cálculo: o passo 2 mostra a MVA original × aplicada e o motivo do (não) ajuste.',
+    'Operação interna ou emitente do Simples NÃO ajustam MVA — se a nota ajustou, a retenção veio a maior.',
+  ],
+  ERRO_102: [
+    'Abra a memória de cálculo: o passo 3 mostra o custo aberto (produto + frete — com a parcela dos CT-e — + IPI − desconto).',
+    'Compare com a base "Na nota" no quadro Onde nasce a diferença: o valor que falta costuma ser exatamente o frete do CT-e ou o IPI que o fornecedor não somou.',
+  ],
+  ERRO_103: [
+    'Abra a memória de cálculo: o passo 5 mostra qual dedução o motor usou (real, teórica do Simples, isenta).',
+    'Confira o CRT do emitente e o CST da operação própria no detalhe da nota (tela Notas).',
+  ],
+  ERRO_104: [
+    'Abra a memória de cálculo: se MVA e base conferem no quadro, o erro está só na conta final do fornecedor.',
+    'Diferença negativa = complemento a cobrar; positiva = ressarcimento a pleitear.',
+  ],
+  ERRO_105: [
+    'Abra a memória de cálculo: a trilha do FCP-ST mostra débito − FCP próprio = devido.',
+    'Confira na aba FCP das Matrizes se a alíquota da UF/NCM está vigente na data da nota.',
+  ],
+  ERRO_107: [
+    'A operação própria veio zerada no XML (vICMS/vBC) — o motor recalculou a dedução esperada.',
+    'Peça a correção da operação própria ao fornecedor; o detalhe do item está na tela Notas.',
+  ],
+  ERRO_109: [
+    'O produto tem MVA cadastrada, mas o XML usou base sem MVA (modBCST=6) — base subdimensionada.',
+    'A memória mostra a base recalculada COM a MVA; a diferença é o complemento a exigir.',
+  ],
+}
+
+function comoVerificar(codigoErro) {
+  for (const [pref, passos] of Object.entries(COMO_VERIFICAR)) {
+    if ((codigoErro || '').includes(pref)) return passos
+  }
+  return null
+}
+
+// Diagnóstico automático do ERRO_102: cruza a diferença de base com os
+// componentes do custo (memórias novas) e aponta a causa provável.
+function diagnosticoAutomatico(it) {
+  const m = it.memoria || {}
+  if (!(it.codigo_erro || '').includes('ERRO_102') || m.custo_produto == null) return null
+  const fator = 1 + Number(m.mva_aplicada || 0) / 100
+  const difBase = Math.abs(Number(it.vbc_st_xml || 0) - Number(it.vbc_st_calculado || 0))
+  if (difBase < 0.05) return null
+  const candidatos = [
+    ['o frete rateado dos CT-e', Number(m.custo_frete_cte || 0)],
+    ['o IPI', Number(m.custo_ipi || 0)],
+    ['o frete total', Number(m.custo_frete || 0)],
+    ['o frete dos CT-e somado ao IPI', Number(m.custo_frete_cte || 0) + Number(m.custo_ipi || 0)],
+  ].filter(([, v]) => v > 0.004)
+  for (const [nome, v] of candidatos) {
+    const esperado = v * fator
+    if (Math.abs(difBase - esperado) <= Math.max(0.05, esperado * 0.01)) {
+      return `A diferença de base (${brl(difBase)}) bate com ${nome} (${brl(v)} × margem de ${pct(m.mva_aplicada)}): provável que o fornecedor não somou ${nome} na base do ST.`
+    }
+  }
+  return null
+}
+
 // Pendência de matriz faltante → deep-link para a aba certa das Matrizes,
 // já pré-preenchida (o modal abre pronto para salvar; depois é só reprocessar).
 function linkMatriz(item) {
@@ -448,7 +511,7 @@ const RotuloSt = ({ children }) => (
 // A conduta do analista como selo destacado; o ⓘ abre o balão com a
 // explicação técnica do motor (padrão do balão da classificação — clique
 // abre, clique fora fecha). Nada de tooltip escondido no hover.
-function AcaoSugerida({ acao, destinoMatriz, onIrMatriz, onSemAcordo }) {
+function AcaoSugerida({ acao, destinoMatriz, onIrMatriz, onSemAcordo, verificar, diagnostico, onVerMemoria }) {
   const [aberto, setAberto] = useState(false)
   const [pos, setPos] = useState(null)
   const ref = useRef(null)
@@ -486,7 +549,7 @@ function AcaoSugerida({ acao, destinoMatriz, onIrMatriz, onSemAcordo }) {
         </button>
         {aberto && pos && (
           <div className="balao-classif" style={{
-            position: 'fixed', top: pos.top, left: pos.left, zIndex: 2000, width: 400,
+            position: 'fixed', top: pos.top, left: pos.left, zIndex: 2000, width: 440,
             background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
             boxShadow: '0 10px 30px rgba(0,0,0,.18)', padding: '13px 15px', textAlign: 'left',
           }}>
@@ -494,10 +557,36 @@ function AcaoSugerida({ acao, destinoMatriz, onIrMatriz, onSemAcordo }) {
               Por que este item foi apontado
             </div>
             <div style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.55 }}>{acao.mensagem}</div>
+
+            {diagnostico && (
+              <div style={{ marginTop: 8, background: 'var(--info-bg)', color: 'var(--info-text)', borderRadius: 8, padding: '8px 11px', fontSize: 12.5, lineHeight: 1.55 }}>
+                <i className="ti ti-sparkles" style={{ marginRight: 4 }} />
+                <strong>Diagnóstico:</strong> {diagnostico}
+              </div>
+            )}
+
             <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border-2)', fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.55 }}>
               <strong style={{ color: 'var(--accent-text)' }}>O que fazer:</strong> {acao.acao}
             </div>
-            <div className="mono" style={{ marginTop: 8, fontSize: 10.5, color: 'var(--text-4)' }}>{acao.cod}</div>
+
+            {verificar && (
+              <div style={{ marginTop: 8, fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.55 }}>
+                <strong style={{ color: 'var(--text-1)' }}>Como verificar aqui:</strong>
+                <ol style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+                  {verificar.map((p, i) => <li key={i} style={{ marginBottom: 3 }}>{p}</li>)}
+                </ol>
+              </div>
+            )}
+
+            <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+              {onVerMemoria && (
+                <button className="btn btn-secondary btn-sm" style={{ padding: '3px 10px', fontSize: 11.5 }}
+                  onClick={(e) => { e.stopPropagation(); setAberto(false); onVerMemoria() }}>
+                  <i className="ti ti-calculator" /> Abrir memória de cálculo
+                </button>
+              )}
+              <span className="mono" style={{ marginLeft: 'auto', fontSize: 10.5, color: 'var(--text-4)' }}>{acao.cod}</span>
+            </div>
           </div>
         )}
       </span>
@@ -596,7 +685,10 @@ function FragmentoNota({ nota, aberto, onToggle, onMemoria, catalogo, onSemAcord
               <AcaoSugerida acao={acao} destinoMatriz={destinoMatriz}
                 onIrMatriz={() => navigate(destinoMatriz)}
                 onSemAcordo={(it.codigo_erro || '').includes('ERRO_PROTOCOLO_NAO_AVALIADO')
-                  ? () => onSemAcordo(it) : null} />
+                  ? () => onSemAcordo(it) : null}
+                verificar={comoVerificar(it.codigo_erro)}
+                diagnostico={diagnosticoAutomatico(it)}
+                onVerMemoria={it.memoria ? () => onMemoria(it) : null} />
             )}
           </td>
           <td colSpan={2}>
