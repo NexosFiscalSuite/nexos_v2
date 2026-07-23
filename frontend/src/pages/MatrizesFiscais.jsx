@@ -131,7 +131,12 @@ const ABAS = [
     colunas: [
       { key: 'uf_origem', label: 'UF Origem', render: (m) => badge(m.uf_origem, 'warn') },
       { key: 'uf_destino', label: 'UF Destino', render: (m) => badge(m.uf_destino) },
+      { key: 'ncm', label: 'NCM', mono: true, render: (m) => m.ncm || 'par inteiro' },
       { key: 'numero_acordo', label: 'Acordo', strong: true },
+      { key: 'situacao', label: 'Situação', render: (m) => badge(
+          m.situacao === 'SEM_ACORDO' ? 'SEM ACORDO' : (m.situacao || 'ATIVO'),
+          m.situacao === 'ATIVO' || !m.situacao ? 'ok' : (m.situacao === 'SEM_ACORDO' ? 'warn' : 'err'),
+        ) },
       { key: 'base_legal', label: 'Base Legal', muted: true },
       { key: 'vigencia', label: 'Vigência', muted: true, small: true, render: vigencia },
       { key: 'created_at', label: 'Cadastro', muted: true, small: true, render: dataCadastro },
@@ -139,8 +144,15 @@ const ABAS = [
     campos: [
       { key: 'uf_origem', label: 'UF Origem', uf: true, required: true, placeholder: 'SP' },
       { key: 'uf_destino', label: 'UF Destino', uf: true, required: true, placeholder: 'MG' },
-      { key: 'numero_acordo', label: 'Acordo', full: true, required: true, placeholder: 'Protocolo ICMS 41/2008' },
-      { key: 'base_legal', label: 'Base Legal', full: true, placeholder: 'Decreto estadual que ratifica' },
+      { key: 'numero_acordo', label: 'Acordo', required: true, placeholder: 'Protocolo ICMS 41/2008' },
+      { key: 'situacao', label: 'Situação', type: 'select', required: true, options: [
+        { value: 'ATIVO', label: 'ATIVO — acordo vigente (ativa a ST)' },
+        { value: 'SEM_ACORDO', label: 'SEM ACORDO — registro de que NÃO há acordo (antecipação)' },
+        { value: 'DENUNCIADO', label: 'DENUNCIADO — acordo encerrado' },
+        { value: 'INATIVO', label: 'INATIVO — acordo suspenso' },
+      ] },
+      { key: 'ncm', label: 'NCM (vazio = par inteiro)', placeholder: '40117000' },
+      { key: 'base_legal', label: 'Base Legal', placeholder: 'Decreto estadual que ratifica' },
       ...VIGENCIA_CAMPOS,
     ],
   },

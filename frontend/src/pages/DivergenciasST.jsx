@@ -168,6 +168,22 @@ export default function DivergenciasST() {
     finally { setReproBusy(false) }
   }
 
+  // "Não há acordo": registra a ausência de protocolo no par de UFs (linha
+  // SEM_ACORDO — cura o par sem criar acordo) e reaudita na sequência.
+  async function registrarSemAcordo(it) {
+    if (!confirm(`Registrar que NÃO há protocolo/convênio de ST no par ${it.uf_origem}→${it.uf_destino}? As notas desse par serão reauditadas como antecipação do destinatário.`)) return
+    try {
+      await api.criarMatrizProtocolo({
+        uf_origem: it.uf_origem, uf_destino: it.uf_destino,
+        numero_acordo: 'SEM ACORDO (registro do escritório)',
+        situacao: 'SEM_ACORDO',
+        data_inicio_vigencia: '2000-01-01', data_fim_vigencia: null,
+      })
+      toast(`Registrado: sem acordo ${it.uf_origem}→${it.uf_destino}. Reprocessando…`, 'ok')
+      await reprocessar()
+    } catch (e) { toast(e.message, 'error') }
+  }
+
   // Carta PDF de cobrança por fornecedor (ranking) — sem antecipações.
   const [cartaBusy, setCartaBusy] = useState(null)
   async function gerarCarta(cnpj) {
@@ -397,6 +413,7 @@ export default function DivergenciasST() {
                     <FragmentoNota
                       key={nota.chave} nota={nota} aberto={aberto} catalogo={catalogo}
                       onToggle={() => toggle(nota.chave)} onMemoria={setDetalhe}
+                      onSemAcordo={registrarSemAcordo}
                     />
                   )
                 })}
@@ -431,7 +448,7 @@ const RotuloSt = ({ children }) => (
 // A conduta do analista como selo destacado; o ⓘ abre o balão com a
 // explicação técnica do motor (padrão do balão da classificação — clique
 // abre, clique fora fecha). Nada de tooltip escondido no hover.
-function AcaoSugerida({ acao, destinoMatriz, onIrMatriz }) {
+function AcaoSugerida({ acao, destinoMatriz, onIrMatriz, onSemAcordo }) {
   const [aberto, setAberto] = useState(false)
   const [pos, setPos] = useState(null)
   const ref = useRef(null)
@@ -490,12 +507,19 @@ function AcaoSugerida({ acao, destinoMatriz, onIrMatriz }) {
           <i className="ti ti-table-plus" /> Cadastrar matriz
         </button>
       )}
+      {onSemAcordo && (
+        <button className="btn btn-secondary btn-sm" style={{ padding: '3px 10px', fontSize: 11.5 }}
+          title="Registra na matriz de protocolos que NÃO há acordo entre as UFs (antecipação do destinatário) e reaudita"
+          onClick={(e) => { e.stopPropagation(); onSemAcordo() }}>
+          <i className="ti ti-ban" /> Não há acordo
+        </button>
+      )}
     </div>
   )
 }
 
 // ── Linha-mestre (Nota) + linhas-filhas (itens) quando expandida ──
-function FragmentoNota({ nota, aberto, onToggle, onMemoria, catalogo }) {
+function FragmentoNota({ nota, aberto, onToggle, onMemoria, catalogo, onSemAcordo }) {
   const navigate = useNavigate()
   const temCte = nota.ctes.length > 0
   // Primeira ação sugerida do catálogo do motor para os códigos do item.
@@ -570,7 +594,9 @@ function FragmentoNota({ nota, aberto, onToggle, onMemoria, catalogo }) {
             )}
             {acao && (
               <AcaoSugerida acao={acao} destinoMatriz={destinoMatriz}
-                onIrMatriz={() => navigate(destinoMatriz)} />
+                onIrMatriz={() => navigate(destinoMatriz)}
+                onSemAcordo={(it.codigo_erro || '').includes('ERRO_PROTOCOLO_NAO_AVALIADO')
+                  ? () => onSemAcordo(it) : null} />
             )}
           </td>
           <td colSpan={2}>

@@ -31,7 +31,11 @@ from app.modules.fiscal.domain.st import (
     StatusAuditoria,
     StAuditEngine,
 )
-from app.modules.fiscal.infrastructure.matrizes_loaders import _ProtocoloSnapshot
+from app.modules.fiscal.infrastructure.matrizes_loaders import (
+    MatrizesLoader,
+    _ProtocoloSnapshot,
+)
+from app.modules.fiscal.infrastructure.matrizes_models import MatrizProtocoloSt
 from app.modules.fiscal.infrastructure.models import AuditoriaIcmsSt, Nota, NotaItem
 
 _D = Decimal
@@ -171,8 +175,32 @@ def test_parser_extrai_st_retido():
     assert item["v_fcp_st_ret"] == 3.0
 
 
-# ── 4. Data de emissão inválida não derruba o lote ────────────────────────── #
-_TABELAS = [Nota.__table__, NotaItem.__table__, AuditoriaIcmsSt.__table__]
+def test_schema_protocolo_aceita_sem_acordo_e_ncm():
+    """O registro explícito de ausência de acordo (botão "Não há acordo") e o
+    escopo por NCM entram pelo schema — antes toda linha nascia ATIVO."""
+    import pytest
+
+    from app.modules.fiscal.api.matrizes_schemas import MatrizProtocoloCreate
+
+    d = MatrizProtocoloCreate(
+        uf_origem="go", uf_destino="mg",
+        numero_acordo="SEM ACORDO (registro do escritório)",
+        situacao="sem_acordo", ncm="4011.70.00",
+        data_inicio_vigencia=date(2000, 1, 1),
+    ).normalizado()
+    assert d["situacao"] == "SEM_ACORDO"
+    assert d["uf_origem"] == "GO" and d["ncm"] == "40117000"
+
+    with pytest.raises(ValueError):
+        MatrizProtocoloCreate(
+            uf_origem="GO", uf_destino="MG", numero_acordo="X 1/2020",
+            situacao="QUALQUER", data_inicio_vigencia=date(2000, 1, 1),
+        )
+
+
+# ── 4. Data de emissão inválida não derruba o lote (+ loader do protocolo) ── #
+_TABELAS = [Nota.__table__, NotaItem.__table__, AuditoriaIcmsSt.__table__,
+            MatrizProtocoloSt.__table__]
 
 
 @pytest_asyncio.fixture
@@ -206,3 +234,24 @@ async def test_nota_sem_data_vira_diagnostico_por_item(sessao):
     assert registros[0].codigo_erro == "ERRO_DATA_EMISSAO_INVALIDA"
     persistido = await sessao.scalar(select(AuditoriaIcmsSt))
     assert persistido is not None and "data de emiss" in persistido.observacao
+
+
+async def test_loader_protocolo_sem_acordo_cura_o_par(sessao):
+    """Linha SEM_ACORDO: o par vira CURADO sem virar acordo — o motor decide
+    antecipação em vez de travar em 'não avaliado'."""
+    loader = MatrizesLoader(sessao)
+
+    # Par nunca avaliado → None (trava com código próprio no motor).
+    snap = await loader._protocolo("GO", "MG", date(2026, 6, 1))
+    assert snap.tem_protocolo("GO", "MG", date(2026, 6, 1), "40117000") is None
+
+    sessao.add(MatrizProtocoloSt(
+        uf_origem="GO", uf_destino="MG",
+        numero_acordo="SEM ACORDO (registro do escritório)", situacao="SEM_ACORDO",
+        data_inicio_vigencia=date(2000, 1, 1),
+    ))
+    await sessao.flush()
+
+    snap2 = await loader._protocolo("GO", "MG", date(2026, 6, 1))
+    assert snap2.curado is True
+    assert snap2.tem_protocolo("GO", "MG", date(2026, 6, 1), "40117000") is False

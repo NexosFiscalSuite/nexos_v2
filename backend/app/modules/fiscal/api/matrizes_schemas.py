@@ -154,14 +154,42 @@ class MatrizAliquotaResponse(_MatrizAliquotaCampos):
 
 
 # ── Protocolo / Convênio (ativa a ST interestadual no par UF origem→destino) ──
+# Situações: só ATIVO conta como acordo vigente para o motor; SEM_ACORDO é o
+# registro explícito de que NÃO há acordo no par (→ antecipação do destinatário);
+# INATIVO/DENUNCIADO = acordo encerrado. Qualquer linha marca o par como CURADO.
+SITUACOES_PROTOCOLO = ("ATIVO", "SEM_ACORDO", "INATIVO", "DENUNCIADO")
+
+
 class _MatrizProtocoloCampos(BaseModel):
     uf_origem: str = Field(..., min_length=2, max_length=2, examples=["SP"])
     uf_destino: str = Field(..., min_length=2, max_length=2, examples=["MG"])
+    ncm: str | None = Field(default=None,
+                            description="Escopo do acordo por NCM (vazio = par inteiro)")
     numero_acordo: str = Field(..., min_length=2, max_length=80,
                                examples=["Protocolo ICMS 41/2008"], description="Acordo (texto livre)")
+    situacao: str = Field(default="ATIVO", examples=["ATIVO"])
     base_legal: str | None = None
     data_inicio_vigencia: date
     data_fim_vigencia: date | None = None
+
+    @field_validator("situacao")
+    @classmethod
+    def _situacao_valida(cls, v: str) -> str:
+        v = (v or "ATIVO").strip().upper()
+        if v not in SITUACOES_PROTOCOLO:
+            raise ValueError(f"situação inválida (use: {', '.join(SITUACOES_PROTOCOLO)})")
+        return v
+
+    @field_validator("ncm")
+    @classmethod
+    def _ncm_digitos(cls, v: str | None) -> str | None:
+        """Aceita formatado ('4011.70.00') e normaliza para dígitos."""
+        if v is None:
+            return None
+        digitos = "".join(ch for ch in v if ch.isdigit())
+        if len(digitos) > 8:
+            raise ValueError("NCM tem no máximo 8 dígitos")
+        return digitos or None
 
     def normalizado(self) -> dict:
         d = self.model_dump()
