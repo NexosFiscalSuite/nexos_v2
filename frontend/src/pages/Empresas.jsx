@@ -42,7 +42,7 @@ export default function Empresas() {
   const [looking, setLooking] = useState(false)
 
   // Busca + paginação: a carteira cresce; a tela não pode virar um rolo.
-  const POR_PAGINA = 15
+  const [porPagina, setPorPagina] = useState(25)
   const [busca, setBusca] = useState('')
   const [page, setPage] = useState(1)
   const filtradas = useMemo(() => {
@@ -55,9 +55,9 @@ export default function Empresas() {
       || (e.municipio || '').toLowerCase().includes(t)
       || (dig && (e.cnpj || '').includes(dig)))
   }, [lista, busca])
-  useEffect(() => { setPage(1) }, [busca])
-  const totalPaginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA))
-  const pagina = filtradas.slice((page - 1) * POR_PAGINA, page * POR_PAGINA)
+  useEffect(() => { setPage(1) }, [busca, porPagina])
+  const totalPaginas = Math.max(1, Math.ceil(filtradas.length / porPagina))
+  const pagina = filtradas.slice((page - 1) * porPagina, page * porPagina)
 
   // Cadastro em lote (planilha): template = export; import = upsert por CNPJ.
   const fileRef = useRef(null)
@@ -190,6 +190,13 @@ export default function Empresas() {
           <span style={{ fontSize: 12.5, color: 'var(--text-3)' }}>
             {filtradas.length} de {lista.length} empresa(s)
           </span>
+          <div style={{ marginLeft: 'auto', width: 150 }}>
+            <Dropdown value={String(porPagina)} onChange={v => setPorPagina(Number(v))} options={[
+              { value: '25', label: '25 por página' },
+              { value: '50', label: '50 por página' },
+              { value: '100', label: '100 por página' },
+            ]} />
+          </div>
         </div>
 
         {filtradas.length === 0 ? (
