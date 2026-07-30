@@ -84,9 +84,19 @@ async def atualizar_cadastros_lote(
             job.total = len(linhas)
 
     pausa = intervalo_lote(len(linhas))
-    resumo = {"total": len(linhas), "atualizadas": 0, "falhas": [], "avisos": []}
+    resumo = {"total": len(linhas), "atualizadas": 0, "pf_puladas": 0,
+              "falhas": [], "avisos": []}
 
     for i, (empresa_id, cnpj, razao) in enumerate(linhas):
+        # Produtor rural PF (CPF): não existe consulta pública — cadastro manual.
+        if len(cnpj or "") != 14:
+            resumo["pf_puladas"] += 1
+            async with sessao_factory() as s:
+                job = await JobRepository(s).by_id(job_id)
+                if job:
+                    job.processed = i + 1
+            continue
+
         res = await asyncio.to_thread(consultar, cnpj, "empresa")
         if not res.get("ok") and "429" in (res.get("error") or ""):
             await dormir(PAUSA_RATE_LIMIT)

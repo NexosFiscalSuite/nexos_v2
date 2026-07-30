@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.core.exceptions import DomainError
 from app.modules.companies.infrastructure.models import Empresa
 from app.shared.bulk_csv import BulkSpec
-from app.shared.domain.value_objects import CNPJ
+from app.shared.domain.value_objects import DocumentoFiscal
 
 _UFS = {
     "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS",
@@ -45,7 +45,8 @@ class EmpresaLinha(BaseModel):
     """Uma linha da planilha — ordem dos campos = ordem das colunas do template."""
 
     cnpj: str = Field(..., examples=["11.444.777/0001-61"],
-                      description="Com ou sem pontuação — normalizado e validado (DV)")
+                      description="CNPJ ou CPF (produtor rural PF), com ou sem "
+                                  "pontuação — normalizado e validado (DV)")
     razao_social: str = Field(..., min_length=2, max_length=200)
     nome_fantasia: str | None = Field(default=None, max_length=200)
     regime: str | None = Field(default=None, max_length=40,
@@ -64,8 +65,8 @@ class EmpresaLinha(BaseModel):
     @classmethod
     def _cnpj_valido(cls, v: str) -> str:
         try:
-            return CNPJ(v).value          # 14 dígitos, DV conferido
-        except DomainError as e:          # pydantic espera ValueError
+            return DocumentoFiscal(v).value   # CNPJ (14) ou CPF (11), DV conferido
+        except DomainError as e:              # pydantic espera ValueError
             raise ValueError(e.message if hasattr(e, "message") else str(e)) from e
 
     @field_validator("uf")

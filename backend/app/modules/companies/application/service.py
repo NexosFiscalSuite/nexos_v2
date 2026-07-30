@@ -10,7 +10,7 @@ from app.core.security import TokenClaims
 from app.modules.companies.infrastructure.models import Empresa
 from app.modules.companies.infrastructure.repositories import EmpresaRepository
 from app.modules.grupos.infrastructure.repositories import GrupoRepository
-from app.shared.domain.value_objects import CNPJ
+from app.shared.domain.value_objects import DocumentoFiscal
 
 # Só o ADMIN enxerga todas as empresas do escritório. Supervisor e usuário
 # comum veem apenas as empresas dos grupos em que estão — o supervisor do
@@ -54,7 +54,8 @@ class EmpresaService:
     )
 
     async def create(self, *, tenant_id: UUID, cnpj: str, razao_social: str, **extra) -> Empresa:
-        cnpj_vo = CNPJ(cnpj)
+        # CNPJ ou CPF (produtor rural PF) — validado por DV, gravado só dígitos.
+        cnpj_vo = DocumentoFiscal(cnpj)
         if await self.repo.by_cnpj(tenant_id, cnpj_vo.value):
             raise ConflictError("Empresa já cadastrada para este escritório.")
         empresa = Empresa(

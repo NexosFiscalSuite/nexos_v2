@@ -48,3 +48,44 @@ class CNPJ:
     def formatted(self) -> str:
         d = self.value
         return f"{d[:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:]}"
+
+
+def _cpf_check_digits(base9: str) -> str:
+    def calc(nums: str, primeiro_peso: int) -> str:
+        total = sum(int(d) * w for d, w in zip(nums, range(primeiro_peso, 1, -1), strict=False))
+        resto = total % 11
+        return "0" if resto < 2 else str(11 - resto)
+
+    d1 = calc(base9, 10)
+    d2 = calc(base9 + d1, 11)
+    return d1 + d2
+
+
+@dataclass(frozen=True, slots=True)
+class DocumentoFiscal:
+    """CPF (11 dígitos) ou CNPJ (14) validado por DV — produtor rural pessoa
+    física também é cliente do escritório. Normaliza para só dígitos."""
+
+    value: str
+
+    def __post_init__(self) -> None:
+        digits = only_digits(self.value)
+        if len(digits) == 14:
+            object.__setattr__(self, "value", CNPJ(digits).value)
+            return
+        if len(digits) != 11:
+            raise DomainError(
+                "Informe um CPF (11 dígitos) ou CNPJ (14 dígitos).", code="invalid_documento"
+            )
+        if digits == digits[0] * 11:
+            raise DomainError("CPF inválido.", code="invalid_cpf")
+        if _cpf_check_digits(digits[:9]) != digits[9:]:
+            raise DomainError("CPF inválido (dígitos verificadores).", code="invalid_cpf")
+        object.__setattr__(self, "value", digits)
+
+    @property
+    def formatted(self) -> str:
+        d = self.value
+        if len(d) == 11:
+            return f"{d[:3]}.{d[3:6]}.{d[6:9]}-{d[9:]}"
+        return f"{d[:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:]}"

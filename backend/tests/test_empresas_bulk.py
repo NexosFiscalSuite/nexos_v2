@@ -60,6 +60,35 @@ def test_uf_aceita_nome_por_extenso():
         uf("Minas")
 
 
+def test_documento_fiscal_aceita_cpf_e_cnpj():
+    """Produtor rural PF: CPF validado por DV próprio; CNPJ segue como era."""
+    import pytest
+
+    from app.core.exceptions import DomainError
+    from app.shared.domain.value_objects import DocumentoFiscal
+
+    assert DocumentoFiscal("111.444.777-35").value == "11144477735"
+    assert DocumentoFiscal("11144477735").formatted == "111.444.777-35"
+    assert DocumentoFiscal("11.444.777/0001-61").value == "11444777000161"
+
+    with pytest.raises(DomainError):
+        DocumentoFiscal("111.444.777-36")      # DV errado
+    with pytest.raises(DomainError):
+        DocumentoFiscal("111.111.111-11")      # dígitos repetidos
+    with pytest.raises(DomainError):
+        DocumentoFiscal("123456")              # nem CPF nem CNPJ
+
+
+async def test_import_aceita_cpf_produtor_rural(sessao):
+    tid = uuid4()
+    r = await importar_csv(sessao, spec_empresas(tid), _csv([
+        "111.444.777-35;JOSE DA SILVA (PRODUTOR RURAL);;Produtor Rural;MG;;;;;;;",
+    ]))
+    assert r["inseridos"] == 1 and not r["erros"]
+    prod = await sessao.scalar(select(Empresa).where(Empresa.cnpj == "11144477735"))
+    assert prod is not None and prod.regime == "Produtor Rural"
+
+
 async def test_import_upsert_e_validacao(sessao):
     tid = uuid4()
     conteudo = _csv([
