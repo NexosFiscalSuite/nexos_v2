@@ -347,6 +347,9 @@ def _parse_nfe(root) -> dict:
         "chave_acesso": chave,
         "serie": _g(ide, "serie"),
         "numero": _g(ide, "nNF"),
+        # tpNF: 0=entrada, 1=saída — do ponto de vista do EMITENTE. Desempata
+        # a classificação de fluxo (nota de entrada emitida pelo comprador).
+        "tp_nf": _g(ide, "tpNF") or None,
         "data_emissao": data_iso,
         "ano": ano,
         "mes": mes,

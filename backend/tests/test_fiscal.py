@@ -59,6 +59,22 @@ def test_classificar_fluxo():
         classificar_fluxo(p, "99999999000199")
 
 
+def test_classificar_fluxo_nota_de_entrada_tpnf0():
+    """Nota de ENTRADA (tpNF=0) emitida pelo comprador — padrão na compra de
+    produtor rural: para o emitente é compra; quem está no destinatário (o
+    produtor) é o remetente da mercadoria, ou seja, fez a VENDA."""
+    p = xmlparser.parse_xml(NFE_XML)
+    p["tp_nf"] = "0"
+    assert classificar_fluxo(p, "11444777000161") == "entrada"   # comprador
+    assert classificar_fluxo(p, "11222333000181") == "saida"     # produtor
+
+
+def test_parser_extrai_tpnf():
+    xml = NFE_XML.replace(b"<mod>55</mod>", b"<mod>55</mod><tpNF>0</tpNF>")
+    assert xmlparser.parse_xml(xml)["tp_nf"] == "0"
+    assert xmlparser.parse_xml(NFE_XML)["tp_nf"] is None   # sem a tag: padrão
+
+
 def test_cfop_sped():
     assert sugerir_tipo_sped("1102") == "Mercadoria para Revenda"
     assert sugerir_tipo_sped("1551") == "Ativo Imobilizado"
