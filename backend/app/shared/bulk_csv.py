@@ -131,7 +131,10 @@ async def _upsert(
                     setattr(atual, c, d[c])
             atualizados += 1
         else:
-            novo = spec.modelo(**{c: d[c] for c in spec.colunas if c in d})
+            # O dict vem do `normalizar` do spec (confiável): pode carregar
+            # campos ALÉM das colunas da planilha — ex.: tenant_id injetado
+            # para tabelas com RLS (empresas), que o CSV nunca expõe.
+            novo = spec.modelo(**d)
             session.add(novo)
             existentes[chave] = novo                # evita duplicar dentro do mesmo arquivo
             if chave_vig:

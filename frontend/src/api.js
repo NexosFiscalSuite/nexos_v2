@@ -140,6 +140,13 @@ export const api = {
 
   // ── Empresas ──
   empresas: () => request('GET', '/empresas'),
+  // Cadastro em lote de empresas (planilha CSV — padrão das matrizes)
+  exportarEmpresas: () => downloadBlob('/empresas/export', { fallback: 'empresas.csv' }),
+  importarEmpresas: (file) => {
+    const fd = new FormData()
+    fd.append('arquivo', file)
+    return request('POST', '/empresas/import', fd, true)
+  },
   empresa: (id) => request('GET', `/empresas/${id}`),
   criarEmpresa: (data) => request('POST', '/empresas', data),
   editarEmpresa: (id, data) => request('PATCH', `/empresas/${id}`, data),

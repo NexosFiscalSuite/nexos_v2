@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Dropdown from '../components/Dropdown'
-import { api } from '../api'
+import ResumoImportModal from '../components/ResumoImportModal'
+import { api, saveBlob } from '../api'
 import { useEmpresa } from '../context/EmpresaContext'
 import { useToast, ToastContainer } from '../hooks/useToast'
 
@@ -29,6 +30,36 @@ export default function Empresas() {
   const [form, setForm] = useState(VAZIO)
   const [saving, setSaving] = useState(false)
   const [looking, setLooking] = useState(false)
+
+  // Cadastro em lote (planilha): template = export; import = upsert por CNPJ.
+  const fileRef = useRef(null)
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [resultado, setResultado] = useState(null)
+
+  async function exportarPlanilha() {
+    setBulkBusy(true)
+    try {
+      const { blob, filename } = await api.exportarEmpresas()
+      saveBlob(blob, filename)
+      toast('Planilha exportada — vazia é o modelo: preencha uma linha por empresa.', 'ok')
+    } catch (e) { toast(e.message, 'error') }
+    finally { setBulkBusy(false) }
+  }
+
+  async function importarPlanilha(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setBulkBusy(true)
+    try {
+      const r = await api.importarEmpresas(file)
+      carregar()
+      reload()
+      if (r.erros?.length) setResultado(r)
+      else toast(`Importação concluída: ${r.inseridos} nova(s), ${r.atualizados} atualizada(s).`, 'ok')
+    } catch (e2) { toast(e2.message, 'error') }
+    finally { setBulkBusy(false) }
+  }
 
   function abrirNova() { setEditId(null); setForm(VAZIO); setModal(true) }
   function abrirEdicao(e) {
@@ -93,9 +124,20 @@ export default function Empresas() {
   return (
     <div>
       <ToastContainer toasts={toasts} />
+      <input ref={fileRef} type="file" accept=".csv" onChange={importarPlanilha} style={{ display: 'none' }} />
       <div className="page-header">
         <h1 className="page-title">Empresas</h1>
-        <button className="btn btn-primary" onClick={abrirNova}><i className="ti ti-plus" /> Nova empresa</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-secondary" disabled={bulkBusy} onClick={exportarPlanilha}
+            title="Baixa a planilha modelo (com as empresas atuais); preencha e importe de volta">
+            <i className="ti ti-file-spreadsheet" /> Exportar Planilha
+          </button>
+          <button className="btn btn-secondary" disabled={bulkBusy} onClick={() => fileRef.current?.click()}
+            title="Cadastro em lote: upsert por CNPJ, linha inválida vira relatório sem derrubar o lote">
+            <i className="ti ti-upload" /> Importar Planilha
+          </button>
+          <button className="btn btn-primary" onClick={abrirNova}><i className="ti ti-plus" /> Nova empresa</button>
+        </div>
       </div>
 
       {loading ? (
@@ -217,6 +259,8 @@ export default function Empresas() {
           </div>
         </div>
       )}
+
+      {resultado && <ResumoImportModal r={resultado} onClose={() => setResultado(null)} />}
     </div>
   )
 }
