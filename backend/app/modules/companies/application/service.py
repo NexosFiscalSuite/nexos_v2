@@ -54,7 +54,7 @@ class EmpresaService:
     )
 
     async def create(self, *, tenant_id: UUID, cnpj: str, razao_social: str, **extra) -> Empresa:
-        # CNPJ ou CPF (produtor rural PF) — validado por DV, gravado só dígitos.
+        # CNPJ, CPF (produtor rural) ou CEI (obra/INSS) — DV validado, só dígitos.
         cnpj_vo = DocumentoFiscal(cnpj)
         if await self.repo.by_cnpj(tenant_id, cnpj_vo.value):
             raise ConflictError("Empresa já cadastrada para este escritório.")

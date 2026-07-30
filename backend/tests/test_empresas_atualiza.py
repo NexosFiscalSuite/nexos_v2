@@ -143,14 +143,16 @@ async def test_lote_atualiza_avisa_e_registra_progresso(ambiente):
         assert job.result["atualizadas"] == 2
 
 
-async def test_lote_pula_cpf_de_produtor_rural(ambiente):
-    """PF não tem consulta pública: sai do lote SEM contar como falha (e sem
-    pausa — nenhuma chamada de API foi feita)."""
+async def test_lote_pula_cpf_e_cei(ambiente):
+    """CPF (produtor rural) e CEI (obra) não têm consulta pública: saem do
+    lote SEM contar como falha e sem gastar pausa de API."""
     fabrica, sessao_factory = ambiente
     tid, job_id = uuid4(), uuid4()
     async with sessao_factory() as s:
         s.add(Empresa(id=uuid4(), tenant_id=tid, cnpj="11144477735",
                       razao_social="JOSE DA SILVA (PRODUTOR RURAL)"))
+        s.add(Empresa(id=uuid4(), tenant_id=tid, cnpj="123456789010",
+                      razao_social="OBRA SEDE ACME (CEI)"))
         s.add(Empresa(id=uuid4(), tenant_id=tid, cnpj="11444777000161",
                       razao_social="ACME LTDA"))
         s.add(ProcessingJob(id=job_id, tenant_id=tid, user_id=uuid4(),
@@ -170,12 +172,12 @@ async def test_lote_pula_cpf_de_produtor_rural(ambiente):
         consultar=consultar, dormir=dormir,
     )
 
-    assert consultados == ["11444777000161"]      # o CPF nunca vai à API
-    assert resumo["pf_puladas"] == 1 and resumo["atualizadas"] == 1
+    assert consultados == ["11444777000161"]      # CPF e CEI nunca vão à API
+    assert resumo["sem_consulta"] == 2 and resumo["atualizadas"] == 1
     assert not resumo["falhas"]
     async with fabrica() as s:
         job = await s.get(ProcessingJob, job_id)
-        assert job.processed == 2 and job.status == STATUS_DONE
+        assert job.processed == 3 and job.status == STATUS_DONE
 
 
 async def test_429_espera_e_tenta_de_novo(ambiente):

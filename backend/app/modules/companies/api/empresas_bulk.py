@@ -45,8 +45,8 @@ class EmpresaLinha(BaseModel):
     """Uma linha da planilha — ordem dos campos = ordem das colunas do template."""
 
     cnpj: str = Field(..., examples=["11.444.777/0001-61"],
-                      description="CNPJ ou CPF (produtor rural PF), com ou sem "
-                                  "pontuação — normalizado e validado (DV)")
+                      description="CNPJ, CPF (produtor rural) ou CEI (obra/INSS), "
+                                  "com ou sem pontuação — normalizado e validado (DV)")
     razao_social: str = Field(..., min_length=2, max_length=200)
     nome_fantasia: str | None = Field(default=None, max_length=200)
     regime: str | None = Field(default=None, max_length=40,
@@ -65,7 +65,7 @@ class EmpresaLinha(BaseModel):
     @classmethod
     def _cnpj_valido(cls, v: str) -> str:
         try:
-            return DocumentoFiscal(v).value   # CNPJ (14) ou CPF (11), DV conferido
+            return DocumentoFiscal(v).value   # CNPJ (14), CEI (12) ou CPF (11)
         except DomainError as e:              # pydantic espera ValueError
             raise ValueError(e.message if hasattr(e, "message") else str(e)) from e
 

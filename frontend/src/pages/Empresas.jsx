@@ -150,9 +150,10 @@ export default function Empresas() {
   }, [jobAtu?.id])           // eslint-disable-line react-hooks/exhaustive-deps
 
   async function puxarCNPJ() {
-    // Produtor rural PF: não existe consulta pública por CPF — cadastro manual.
-    if ((form.cnpj || '').replace(/\D/g, '').length === 11) {
-      toast('Consulta pela Receita vale só para CNPJ — cadastro por CPF (produtor rural) é manual.', 'info')
+    // CPF (produtor rural) e CEI (obra/INSS) não têm consulta pública — manual.
+    const digitos = (form.cnpj || '').replace(/\D/g, '').length
+    if (digitos === 11 || digitos === 12) {
+      toast('Consulta pela Receita vale só para CNPJ — cadastro por CPF ou CEI é manual.', 'info')
       return
     }
     setLooking(true)
@@ -276,7 +277,7 @@ export default function Empresas() {
           <div className="tbl-wrap">
             <table className="tbl">
               <thead>
-                <tr><th>Razão social</th><th>CNPJ / CPF</th><th>Regime</th><th>UF</th><th></th></tr>
+                <tr><th>Razão social</th><th>Documento</th><th>Regime</th><th>UF</th><th></th></tr>
               </thead>
               <tbody>
                 {pagina.map(e => (
@@ -335,9 +336,9 @@ export default function Empresas() {
             <form onSubmit={salvar}>
               <div className="modal-body">
                 <div className="field">
-                  <label>CNPJ / CPF (produtor rural)</label>
+                  <label>CNPJ / CPF (produtor rural) / CEI (obra)</label>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <input value={form.cnpj} onChange={set('cnpj')} placeholder="00.000.000/0000-00 ou 000.000.000-00" required disabled={!!editId} />
+                    <input value={form.cnpj} onChange={set('cnpj')} placeholder="CNPJ, CPF ou matrícula CEI" required disabled={!!editId} />
                     <button type="button" className="btn btn-secondary btn-icon" disabled={looking} onClick={puxarCNPJ}
                       title={editId ? 'Atualizar dados pela Receita' : 'Buscar dados pelo CNPJ'}>
                       {looking
@@ -433,7 +434,7 @@ export default function Empresas() {
               <p style={{ fontSize: 12.5, color: 'var(--text-3)' }}>
                 O regime tributário só muda quando a Receita confirma Simples Nacional ou MEI —
                 Lucro Presumido × Real continua sendo escolha do escritório. Nenhum campo é apagado.
-                Cadastros por CPF (produtor rural) são pulados: não há consulta pública para pessoa física.
+                Cadastros por CPF (produtor rural) ou CEI (obra) são pulados: a consulta pública só existe para CNPJ.
               </p>
             </div>
             <div className="modal-footer">
@@ -457,8 +458,8 @@ export default function Empresas() {
               <p style={{ fontSize: 13.5, color: 'var(--text-2)' }}>
                 <b>{resumoAtu.atualizadas ?? 0}</b> de <b>{resumoAtu.total ?? 0}</b> empresa(s)
                 atualizada(s) pela Receita.
-                {resumoAtu.pf_puladas > 0 && <> <b>{resumoAtu.pf_puladas}</b> cadastro(s) por CPF
-                (produtor rural) não têm consulta pública — atualização manual.</>}
+                {resumoAtu.sem_consulta > 0 && <> <b>{resumoAtu.sem_consulta}</b> cadastro(s) por
+                CPF ou CEI não têm consulta pública — atualização manual.</>}
               </p>
               {(resumoAtu.avisos?.length > 0) && (
                 <div>

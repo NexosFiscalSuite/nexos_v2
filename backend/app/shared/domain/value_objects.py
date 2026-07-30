@@ -50,6 +50,15 @@ class CNPJ:
         return f"{d[:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:]}"
 
 
+def _cei_check_digit(base11: str) -> str:
+    """DV da matrícula CEI/CNO (INSS): pesos fixos, soma o algarismo da dezena
+    com o da unidade e subtrai de 10 (10 vira 0)."""
+    pesos = (7, 4, 1, 8, 5, 2, 1, 6, 3, 7, 4)
+    soma = sum(int(d) * p for d, p in zip(base11, pesos, strict=True))
+    dezena_mais_unidade = (soma // 10) % 10 + soma % 10
+    return str((10 - dezena_mais_unidade % 10) % 10)
+
+
 def _cpf_check_digits(base9: str) -> str:
     def calc(nums: str, primeiro_peso: int) -> str:
         total = sum(int(d) * w for d, w in zip(nums, range(primeiro_peso, 1, -1), strict=False))
@@ -63,8 +72,9 @@ def _cpf_check_digits(base9: str) -> str:
 
 @dataclass(frozen=True, slots=True)
 class DocumentoFiscal:
-    """CPF (11 dígitos) ou CNPJ (14) validado por DV — produtor rural pessoa
-    física também é cliente do escritório. Normaliza para só dígitos."""
+    """CPF (11 dígitos), CEI/CNO (12) ou CNPJ (14) validado por DV — produtor
+    rural PF e matrícula de obra também são clientes do escritório. Normaliza
+    para só dígitos (o comprimento distingue o tipo)."""
 
     value: str
 
@@ -73,9 +83,17 @@ class DocumentoFiscal:
         if len(digits) == 14:
             object.__setattr__(self, "value", CNPJ(digits).value)
             return
+        if len(digits) == 12:
+            if digits == digits[0] * 12:
+                raise DomainError("CEI inválido.", code="invalid_cei")
+            if _cei_check_digit(digits[:11]) != digits[11]:
+                raise DomainError("CEI inválido (dígito verificador).", code="invalid_cei")
+            object.__setattr__(self, "value", digits)
+            return
         if len(digits) != 11:
             raise DomainError(
-                "Informe um CPF (11 dígitos) ou CNPJ (14 dígitos).", code="invalid_documento"
+                "Informe um CPF (11 dígitos), CEI (12) ou CNPJ (14).",
+                code="invalid_documento",
             )
         if digits == digits[0] * 11:
             raise DomainError("CPF inválido.", code="invalid_cpf")
@@ -88,4 +106,6 @@ class DocumentoFiscal:
         d = self.value
         if len(d) == 11:
             return f"{d[:3]}.{d[3:6]}.{d[6:9]}-{d[9:]}"
+        if len(d) == 12:
+            return f"{d[:2]}.{d[2:5]}.{d[5:10]}/{d[10:]}"
         return f"{d[:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:]}"

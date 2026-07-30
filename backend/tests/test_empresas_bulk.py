@@ -60,8 +60,9 @@ def test_uf_aceita_nome_por_extenso():
         uf("Minas")
 
 
-def test_documento_fiscal_aceita_cpf_e_cnpj():
-    """Produtor rural PF: CPF validado por DV próprio; CNPJ segue como era."""
+def test_documento_fiscal_aceita_cpf_cei_e_cnpj():
+    """Produtor rural PF (CPF) e matrícula de obra (CEI) validados por DV
+    próprio; CNPJ segue como era. O comprimento distingue o tipo."""
     import pytest
 
     from app.core.exceptions import DomainError
@@ -69,24 +70,33 @@ def test_documento_fiscal_aceita_cpf_e_cnpj():
 
     assert DocumentoFiscal("111.444.777-35").value == "11144477735"
     assert DocumentoFiscal("11144477735").formatted == "111.444.777-35"
+    assert DocumentoFiscal("12.345.67890/10").value == "123456789010"
+    assert DocumentoFiscal("123456789010").formatted == "12.345.67890/10"
     assert DocumentoFiscal("11.444.777/0001-61").value == "11444777000161"
 
     with pytest.raises(DomainError):
-        DocumentoFiscal("111.444.777-36")      # DV errado
+        DocumentoFiscal("111.444.777-36")      # CPF com DV errado
+    with pytest.raises(DomainError):
+        DocumentoFiscal("123456789015")        # CEI com DV errado
     with pytest.raises(DomainError):
         DocumentoFiscal("111.111.111-11")      # dígitos repetidos
     with pytest.raises(DomainError):
-        DocumentoFiscal("123456")              # nem CPF nem CNPJ
+        DocumentoFiscal("000000000000")        # CEI todo zero
+    with pytest.raises(DomainError):
+        DocumentoFiscal("123456")              # tamanho não reconhecido
 
 
-async def test_import_aceita_cpf_produtor_rural(sessao):
+async def test_import_aceita_cpf_e_cei(sessao):
     tid = uuid4()
     r = await importar_csv(sessao, spec_empresas(tid), _csv([
         "111.444.777-35;JOSE DA SILVA (PRODUTOR RURAL);;Produtor Rural;MG;;;;;;;",
+        "12.345.67890/10;OBRA SEDE ACME (CEI);;;MG;;;;;;;",
     ]))
-    assert r["inseridos"] == 1 and not r["erros"]
+    assert r["inseridos"] == 2 and not r["erros"]
     prod = await sessao.scalar(select(Empresa).where(Empresa.cnpj == "11144477735"))
     assert prod is not None and prod.regime == "Produtor Rural"
+    obra = await sessao.scalar(select(Empresa).where(Empresa.cnpj == "123456789010"))
+    assert obra is not None
 
 
 async def test_import_upsert_e_validacao(sessao):

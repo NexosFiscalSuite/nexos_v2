@@ -84,13 +84,14 @@ async def atualizar_cadastros_lote(
             job.total = len(linhas)
 
     pausa = intervalo_lote(len(linhas))
-    resumo = {"total": len(linhas), "atualizadas": 0, "pf_puladas": 0,
+    resumo = {"total": len(linhas), "atualizadas": 0, "sem_consulta": 0,
               "falhas": [], "avisos": []}
 
     for i, (empresa_id, cnpj, razao) in enumerate(linhas):
-        # Produtor rural PF (CPF): não existe consulta pública — cadastro manual.
+        # CPF (produtor rural) e CEI (obra/INSS): não existe consulta pública
+        # — cadastro manual, sai do lote sem contar como falha.
         if len(cnpj or "") != 14:
-            resumo["pf_puladas"] += 1
+            resumo["sem_consulta"] += 1
             async with sessao_factory() as s:
                 job = await JobRepository(s).by_id(job_id)
                 if job:
