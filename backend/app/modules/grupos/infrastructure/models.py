@@ -1,7 +1,8 @@
 """Grupos = controle de acesso. Grupo tem empresas + membros (1 supervisor).
 
-`user` só enxerga as empresas dos grupos a que pertence; admin/supervisor veem
-todas. Todas as tabelas são tenant-scoped (RLS).
+Supervisor e `user` só enxergam as empresas dos grupos a que pertencem (o
+supervisor entra como membro com papel próprio); apenas o admin vê todas.
+Todas as tabelas são tenant-scoped (RLS).
 """
 from datetime import datetime
 from uuid import UUID, uuid4

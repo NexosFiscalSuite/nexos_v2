@@ -12,8 +12,11 @@ from app.modules.companies.infrastructure.repositories import EmpresaRepository
 from app.modules.grupos.infrastructure.repositories import GrupoRepository
 from app.shared.domain.value_objects import CNPJ
 
-# Papéis com visão de todas as empresas do escritório (sem filtro por grupo).
-_FULL_ACCESS = {"admin", "supervisor"}
+# Só o ADMIN enxerga todas as empresas do escritório. Supervisor e usuário
+# comum veem apenas as empresas dos grupos em que estão — o supervisor do
+# grupo é gravado como membro (papel "supervisor"), então a mesma consulta
+# por grupo cobre os dois papéis.
+_FULL_ACCESS = {"admin"}
 
 
 class EmpresaService:
@@ -25,7 +28,7 @@ class EmpresaService:
         return await self.repo.list_by_tenant(tenant_id)
 
     async def list_for(self, claims: TokenClaims) -> list[Empresa]:
-        """admin/supervisor veem todas; `user` só vê empresas dos seus grupos."""
+        """admin vê todas; supervisor e `user` só veem empresas dos seus grupos."""
         if claims.role in _FULL_ACCESS:
             return await self.repo.list_by_tenant(claims.tid)
         ids = await GrupoRepository(self.session).empresa_ids_for_user(claims.sub)

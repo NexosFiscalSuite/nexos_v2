@@ -127,15 +127,16 @@ export default function Grupos() {
     try { await api.excluirGrupo(id); toast('Excluído.', 'ok'); carregar() } catch (e) { toast(e.message, 'error') }
   }
 
-  // Espelha o backend (_FULL_ACCESS): admin/supervisor já enxergam todas as
-  // empresas — o campo Supervisor lista só supervisores e o de membros só
-  // usuários comuns. Quem já está no grupo (dado legado) continua aparecendo.
+  // Espelha o backend: só ADMIN enxerga todas as empresas — por isso admin não
+  // entra em grupo. O campo Supervisor sugere apenas supervisores; o de membros
+  // aceita supervisores e usuários comuns (ambos dependem do grupo para ver as
+  // empresas). Quem já está no grupo (dado legado) continua aparecendo.
   const supOpts = [
     { value: '', label: '— sem supervisor —' },
     ...users.filter(u => u.role === 'supervisor' || u.id === form.supervisor_id)
       .map(u => ({ value: u.id, label: u.full_name })),
   ]
-  const membroOpts = users.filter(u => u.role === 'user' || form.user_ids.includes(u.id))
+  const membroOpts = users.filter(u => u.role !== 'admin' || form.user_ids.includes(u.id))
 
   return (
     <div>
@@ -221,7 +222,7 @@ export default function Grupos() {
                     vazio="Nenhum membro no grupo ainda."
                   />
                 </div>
-                <p style={{ fontSize: 11.5, color: 'var(--text-4)', marginTop: 4 }}>Admins e supervisores enxergam todas as empresas. Usuários comuns só veem as empresas dos grupos a que pertencem.</p>
+                <p style={{ fontSize: 11.5, color: 'var(--text-4)', marginTop: 4 }}>Somente admins enxergam todas as empresas. Supervisores e usuários comuns veem apenas as empresas dos grupos em que estão.</p>
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-ghost" onClick={() => setModal(false)}>Cancelar</button>
