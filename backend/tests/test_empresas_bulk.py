@@ -40,6 +40,26 @@ async def test_template_tem_cnpj_primeiro(sessao):
     assert "bairro" in cabecalho and "tenant_id" not in cabecalho
 
 
+def test_uf_aceita_nome_por_extenso():
+    """Planilha do mundo real: "Minas Gerais", "são paulo", "mg " — tudo vira
+    sigla; só o irreconhecível dá erro (em português, com dica)."""
+    import pytest
+
+    from app.modules.companies.api.empresas_bulk import EmpresaLinha
+
+    def uf(v):
+        return EmpresaLinha(cnpj="11.444.777/0001-61", razao_social="X LTDA", uf=v).uf
+
+    assert uf("Minas Gerais") == "MG"
+    assert uf("são paulo") == "SP"
+    assert uf(" mg ") == "MG"
+    assert uf("Espírito Santo") == "ES"
+    assert uf("") is None
+
+    with pytest.raises(ValueError, match="não reconhecida"):
+        uf("Minas")
+
+
 async def test_import_upsert_e_validacao(sessao):
     tid = uuid4()
     conteudo = _csv([

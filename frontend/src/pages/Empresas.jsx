@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Dropdown from '../components/Dropdown'
 import ResumoImportModal from '../components/ResumoImportModal'
@@ -9,6 +9,16 @@ import { useToast, ToastContainer } from '../hooks/useToast'
 const VAZIO = {
   cnpj: '', razao_social: '', nome_fantasia: '', regime: '', uf: '', municipio: '',
   inscricao_estadual: '', cnae: '', cep: '', logradouro: '', numero: '', bairro: '',
+}
+
+// Números de página com janela: 1 … 4 [5] 6 … 20 (elipse onde saltar).
+function paginasVisiveis(atual, total) {
+  const nums = []
+  for (let i = 1; i <= total; i++) {
+    if (i === 1 || i === total || Math.abs(i - atual) <= 2) nums.push(i)
+    else if (nums[nums.length - 1] !== '…') nums.push('…')
+  }
+  return nums
 }
 
 // Empresa (o próprio cliente do escritório) mantém as opções detalhadas de regime.
@@ -30,6 +40,24 @@ export default function Empresas() {
   const [form, setForm] = useState(VAZIO)
   const [saving, setSaving] = useState(false)
   const [looking, setLooking] = useState(false)
+
+  // Busca + paginação: a carteira cresce; a tela não pode virar um rolo.
+  const POR_PAGINA = 15
+  const [busca, setBusca] = useState('')
+  const [page, setPage] = useState(1)
+  const filtradas = useMemo(() => {
+    const t = busca.trim().toLowerCase()
+    if (!t) return lista
+    const dig = t.replace(/\D/g, '')
+    return lista.filter(e =>
+      (e.razao_social || '').toLowerCase().includes(t)
+      || (e.nome_fantasia || '').toLowerCase().includes(t)
+      || (e.municipio || '').toLowerCase().includes(t)
+      || (dig && (e.cnpj || '').includes(dig)))
+  }, [lista, busca])
+  useEffect(() => { setPage(1) }, [busca])
+  const totalPaginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA))
+  const pagina = filtradas.slice((page - 1) * POR_PAGINA, page * POR_PAGINA)
 
   // Cadastro em lote (planilha): template = export; import = upsert por CNPJ.
   const fileRef = useRef(null)
@@ -145,6 +173,28 @@ export default function Empresas() {
       ) : lista.length === 0 ? (
         <div className="empty-state"><i className="ti ti-building-store" /><p>Nenhuma empresa cadastrada.</p></div>
       ) : (
+        <>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+          <div style={{ position: 'relative', width: 320, maxWidth: '100%' }}>
+            <i className="ti ti-search" style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-4)', fontSize: 14 }} />
+            <input value={busca} onChange={e => setBusca(e.target.value)}
+              placeholder="Buscar razão social, fantasia, CNPJ, município…"
+              style={{ width: '100%', paddingLeft: 32, paddingRight: busca ? 30 : 12 }} />
+            {busca && (
+              <button onClick={() => setBusca('')} title="Limpar busca"
+                style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-4)', padding: 2, display: 'flex' }}>
+                <i className="ti ti-x" style={{ fontSize: 13 }} />
+              </button>
+            )}
+          </div>
+          <span style={{ fontSize: 12.5, color: 'var(--text-3)' }}>
+            {filtradas.length} de {lista.length} empresa(s)
+          </span>
+        </div>
+
+        {filtradas.length === 0 ? (
+          <div className="empty-state"><i className="ti ti-search-off" /><p>Nenhuma empresa encontrada para “{busca}”.</p></div>
+        ) : (
         <div className="card" style={{ padding: 0 }}>
           <div className="tbl-wrap">
             <table className="tbl">
@@ -152,7 +202,7 @@ export default function Empresas() {
                 <tr><th>Razão social</th><th>CNPJ</th><th>Regime</th><th>UF</th><th></th></tr>
               </thead>
               <tbody>
-                {lista.map(e => (
+                {pagina.map(e => (
                   <tr key={e.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/empresas/${e.id}`)}>
                     <td>
                       <div style={{ fontWeight: 500, color: 'var(--text-1)' }}>{e.razao_social}</div>
@@ -173,7 +223,29 @@ export default function Empresas() {
               </tbody>
             </table>
           </div>
+          {totalPaginas > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: 12, borderTop: '1px solid var(--border-2)' }}>
+              <button className="btn btn-ghost btn-sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>
+                <i className="ti ti-chevron-left" />
+              </button>
+              {paginasVisiveis(page, totalPaginas).map((n, i) => n === '…'
+                ? <span key={`e${i}`} style={{ padding: '0 6px', color: 'var(--text-4)' }}>…</span>
+                : (
+                  <button key={n} onClick={() => setPage(n)} className="btn btn-sm"
+                    style={{
+                      minWidth: 32, justifyContent: 'center', border: 'none',
+                      background: n === page ? 'var(--primary)' : 'transparent',
+                      color: n === page ? '#fff' : 'var(--text-2)', fontWeight: n === page ? 700 : 500,
+                    }}>{n}</button>
+                ))}
+              <button className="btn btn-ghost btn-sm" disabled={page === totalPaginas} onClick={() => setPage(p => p + 1)}>
+                <i className="ti ti-chevron-right" />
+              </button>
+            </div>
+          )}
         </div>
+        )}
+        </>
       )}
 
       {modal && (

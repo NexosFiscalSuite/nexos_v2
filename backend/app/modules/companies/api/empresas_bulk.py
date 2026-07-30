@@ -6,6 +6,7 @@ Linha inválida vira erro relatado (linha + motivo) — não derruba o lote.
 """
 from __future__ import annotations
 
+import unicodedata
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -14,6 +15,30 @@ from app.core.exceptions import DomainError
 from app.modules.companies.infrastructure.models import Empresa
 from app.shared.bulk_csv import BulkSpec
 from app.shared.domain.value_objects import CNPJ
+
+_UFS = {
+    "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS",
+    "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC",
+    "SP", "SE", "TO",
+}
+_NOME_UF = {
+    "acre": "AC", "alagoas": "AL", "amapa": "AP", "amazonas": "AM",
+    "bahia": "BA", "ceara": "CE", "distrito federal": "DF",
+    "espirito santo": "ES", "goias": "GO", "maranhao": "MA",
+    "mato grosso": "MT", "mato grosso do sul": "MS", "minas gerais": "MG",
+    "para": "PA", "paraiba": "PB", "parana": "PR", "pernambuco": "PE",
+    "piaui": "PI", "rio de janeiro": "RJ", "rio grande do norte": "RN",
+    "rio grande do sul": "RS", "rondonia": "RO", "roraima": "RR",
+    "santa catarina": "SC", "sao paulo": "SP", "sergipe": "SE",
+    "tocantins": "TO",
+}
+
+
+def _sem_acentos(s: str) -> str:
+    return "".join(
+        ch for ch in unicodedata.normalize("NFD", s)
+        if unicodedata.category(ch) != "Mn"
+    )
 
 
 class EmpresaLinha(BaseModel):
@@ -25,7 +50,8 @@ class EmpresaLinha(BaseModel):
     nome_fantasia: str | None = Field(default=None, max_length=200)
     regime: str | None = Field(default=None, max_length=40,
                                description="Ex.: Simples Nacional, Lucro Presumido, Lucro Real")
-    uf: str | None = Field(default=None, max_length=2)
+    uf: str | None = Field(default=None,
+                           description="Sigla (MG) ou nome por extenso (Minas Gerais)")
     municipio: str | None = Field(default=None, max_length=120)
     inscricao_estadual: str | None = Field(default=None, max_length=30)
     cnae: str | None = Field(default=None, max_length=20)
@@ -44,8 +70,19 @@ class EmpresaLinha(BaseModel):
 
     @field_validator("uf")
     @classmethod
-    def _uf_maiuscula(cls, v: str | None) -> str | None:
-        return v.strip().upper() if v else v
+    def _uf_normalizada(cls, v: str | None) -> str | None:
+        """Planilha do mundo real traz "Minas Gerais", "mg", "MG " — converte
+        tudo para a sigla; só reclama quando não dá para reconhecer."""
+        if v is None or not v.strip():
+            return None
+        bruto = v.strip()
+        sigla = bruto.upper()
+        if len(sigla) == 2 and sigla in _UFS:
+            return sigla
+        nome = _sem_acentos(bruto.lower())
+        if nome in _NOME_UF:
+            return _NOME_UF[nome]
+        raise ValueError(f"UF '{bruto}' não reconhecida — use a sigla (ex.: MG)")
 
 
 def spec_empresas(tenant_id: UUID) -> BulkSpec:
