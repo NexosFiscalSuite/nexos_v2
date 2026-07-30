@@ -127,7 +127,15 @@ export default function Grupos() {
     try { await api.excluirGrupo(id); toast('Excluído.', 'ok'); carregar() } catch (e) { toast(e.message, 'error') }
   }
 
-  const supOpts = [{ value: '', label: '— sem supervisor —' }, ...users.map(u => ({ value: u.id, label: u.full_name }))]
+  // Espelha o backend (_FULL_ACCESS): admin/supervisor já enxergam todas as
+  // empresas — o campo Supervisor lista só supervisores e o de membros só
+  // usuários comuns. Quem já está no grupo (dado legado) continua aparecendo.
+  const supOpts = [
+    { value: '', label: '— sem supervisor —' },
+    ...users.filter(u => u.role === 'supervisor' || u.id === form.supervisor_id)
+      .map(u => ({ value: u.id, label: u.full_name })),
+  ]
+  const membroOpts = users.filter(u => u.role === 'user' || form.user_ids.includes(u.id))
 
   return (
     <div>
@@ -201,7 +209,7 @@ export default function Grupos() {
                 <div className="field">
                   <label>Membros com acesso ({form.user_ids.length})</label>
                   <ChipsPicker
-                    itens={users.map(u => ({ id: u.id, label: u.full_name }))}
+                    itens={membroOpts.map(u => ({ id: u.id, label: u.full_name }))}
                     selecionados={form.user_ids.filter(id => id !== form.supervisor_id)}
                     fixos={users.filter(u => u.id === form.supervisor_id).map(u => ({
                       id: u.id, label: `${u.full_name} (supervisor)`,
