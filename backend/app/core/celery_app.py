@@ -18,6 +18,7 @@ celery_app = Celery(
         "app.modules.fiscal.crawlers.workers",
         "app.modules.reporting.workers",
         "app.modules.contrapartes.workers",
+        "app.modules.companies.workers",
     ],
 )
 

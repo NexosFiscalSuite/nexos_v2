@@ -11,6 +11,13 @@ const VAZIO = {
   inscricao_estadual: '', cnae: '', cep: '', logradouro: '', numero: '', bairro: '',
 }
 
+// Espelha o ritmo do backend (pausa entre consultas cresce com o lote) para
+// estimar a duração antes de o usuário confirmar a atualização em massa.
+function minutosEstimados(total) {
+  const pausa = total <= 30 ? 1 : total <= 120 ? 2 : 3
+  return Math.max(1, Math.ceil((total * pausa) / 60))
+}
+
 // Números de página com janela: 1 … 4 [5] 6 … 20 (elipse onde saltar).
 function paginasVisiveis(atual, total) {
   const nums = []
@@ -64,6 +71,11 @@ export default function Empresas() {
   const [bulkBusy, setBulkBusy] = useState(false)
   const [resultado, setResultado] = useState(null)
 
+  // Atualização em massa pela Receita: roda no worker; aqui só polling do job.
+  const [confirmAtu, setConfirmAtu] = useState(false)
+  const [jobAtu, setJobAtu] = useState(null)         // {id,total,processed}
+  const [resumoAtu, setResumoAtu] = useState(null)
+
   async function exportarPlanilha() {
     setBulkBusy(true)
     try {
@@ -96,6 +108,46 @@ export default function Empresas() {
     setModal(true)
   }
 
+  async function iniciarAtualizacao() {
+    setConfirmAtu(false)
+    try {
+      const r = await api.atualizarCadastrosEmpresas()
+      setJobAtu({ id: r.job_id, total: r.total, processed: 0 })
+    } catch (e) { toast(e.message, 'error') }
+  }
+
+  // Se já havia uma atualização rodando (outra aba, F5), retoma o acompanhamento.
+  useEffect(() => {
+    (async () => {
+      try {
+        const js = await api.jobs()
+        const ativo = (js || []).find(j => j.kind === 'atualiza_cadastro'
+          && (j.status === 'queued' || j.status === 'running'))
+        if (ativo) setJobAtu({ id: ativo.id, total: ativo.total, processed: ativo.processed })
+      } catch { /* silencioso: só perde a retomada do chip */ }
+    })()
+  }, [])
+
+  useEffect(() => {
+    if (!jobAtu) return
+    const t = setInterval(async () => {
+      try {
+        const j = await api.job(jobAtu.id)
+        if (j.status === 'done') {
+          setJobAtu(null)
+          setResumoAtu(j.result || {})
+          carregar(); reload()
+        } else if (j.status === 'failed') {
+          setJobAtu(null)
+          toast(j.error || 'A atualização de cadastros falhou.', 'error')
+        } else {
+          setJobAtu(a => (a ? { ...a, processed: j.processed, total: j.total || a.total } : a))
+        }
+      } catch { /* rede oscilou: tenta no próximo tick */ }
+    }, 3000)
+    return () => clearInterval(t)
+  }, [jobAtu?.id])           // eslint-disable-line react-hooks/exhaustive-deps
+
   async function puxarCNPJ() {
     setLooking(true)
     try {
@@ -115,7 +167,7 @@ export default function Empresas() {
         numero: d.numero || f.numero,
         bairro: d.bairro || f.bairro,
       }))
-      toast('Dados preenchidos pela Receita.', 'ok')
+      toast(editId ? 'Dados atualizados pela Receita — confira e salve.' : 'Dados preenchidos pela Receita.', 'ok')
     } catch (e) { toast(e.message, 'error') }
     finally { setLooking(false) }
   }
@@ -155,7 +207,19 @@ export default function Empresas() {
       <input ref={fileRef} type="file" accept=".csv" onChange={importarPlanilha} style={{ display: 'none' }} />
       <div className="page-header">
         <h1 className="page-title">Empresas</h1>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {jobAtu ? (
+            <span className="btn btn-secondary" style={{ cursor: 'default', gap: 8 }}
+              title="Consultando CNPJ a CNPJ na base pública — com pausa entre consultas para não derrubar a API">
+              <span className="spinner" style={{ width: 14, height: 14 }} />
+              Atualizando {jobAtu.processed} de {jobAtu.total}…
+            </span>
+          ) : (
+            <button className="btn btn-secondary" disabled={bulkBusy} onClick={() => setConfirmAtu(true)}
+              title="Consulta cada CNPJ na base pública da Receita e atualiza razão social, endereço e CNAE">
+              <i className="ti ti-refresh" /> Atualizar pela Receita
+            </button>
+          )}
           <button className="btn btn-secondary" disabled={bulkBusy} onClick={exportarPlanilha}
             title="Baixa a planilha modelo (com as empresas atuais); preencha e importe de volta">
             <i className="ti ti-file-spreadsheet" /> Exportar Planilha
@@ -268,11 +332,12 @@ export default function Empresas() {
                   <label>CNPJ</label>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <input value={form.cnpj} onChange={set('cnpj')} placeholder="00.000.000/0000-00" required disabled={!!editId} />
-                    {!editId && (
-                      <button type="button" className="btn btn-secondary btn-icon" title="Buscar dados pelo CNPJ" disabled={looking} onClick={puxarCNPJ}>
-                        {looking ? <span className="spinner" style={{ width: 16, height: 16 }} /> : <i className="ti ti-search" style={{ fontSize: 17 }} />}
-                      </button>
-                    )}
+                    <button type="button" className="btn btn-secondary btn-icon" disabled={looking} onClick={puxarCNPJ}
+                      title={editId ? 'Atualizar dados pela Receita' : 'Buscar dados pelo CNPJ'}>
+                      {looking
+                        ? <span className="spinner" style={{ width: 16, height: 16 }} />
+                        : <i className={`ti ${editId ? 'ti-refresh' : 'ti-search'}`} style={{ fontSize: 17 }} />}
+                    </button>
                   </div>
                 </div>
                 <div className="field">
@@ -340,6 +405,93 @@ export default function Empresas() {
       )}
 
       {resultado && <ResumoImportModal r={resultado} onClose={() => setResultado(null)} />}
+
+      {confirmAtu && (
+        <div className="modal-overlay" onClick={() => setConfirmAtu(false)}>
+          <div className="modal" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Atualizar cadastros pela Receita</h2>
+              <button className="btn btn-icon" onClick={() => setConfirmAtu(false)}><i className="ti ti-x" /></button>
+            </div>
+            <div className="modal-body" style={{ fontSize: 13.5, color: 'var(--text-2)', display: 'grid', gap: 10 }}>
+              <p>
+                As <b>{lista.length} empresa(s)</b> serão consultadas uma a uma na base pública
+                da Receita (OpenCNPJ) — razão social, nome fantasia, endereço e CNAE são atualizados
+                com os dados oficiais.
+              </p>
+              <p>
+                Para não derrubar a API gratuita, há uma pausa entre as consultas: a atualização roda
+                em segundo plano e leva cerca de <b>{minutosEstimados(lista.length)} min</b>. Pode
+                continuar usando o sistema normalmente.
+              </p>
+              <p style={{ fontSize: 12.5, color: 'var(--text-3)' }}>
+                O regime tributário só muda quando a Receita confirma Simples Nacional ou MEI —
+                Lucro Presumido × Real continua sendo escolha do escritório. Nenhum campo é apagado.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-ghost" onClick={() => setConfirmAtu(false)}>Cancelar</button>
+              <button className="btn btn-primary" onClick={iniciarAtualizacao}>
+                <i className="ti ti-refresh" /> Atualizar {lista.length} empresa(s)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {resumoAtu && (
+        <div className="modal-overlay" onClick={() => setResumoAtu(null)}>
+          <div className="modal" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Atualização concluída</h2>
+              <button className="btn btn-icon" onClick={() => setResumoAtu(null)}><i className="ti ti-x" /></button>
+            </div>
+            <div className="modal-body" style={{ display: 'grid', gap: 12 }}>
+              <p style={{ fontSize: 13.5, color: 'var(--text-2)' }}>
+                <b>{resumoAtu.atualizadas ?? 0}</b> de <b>{resumoAtu.total ?? 0}</b> empresa(s)
+                atualizada(s) pela Receita.
+              </p>
+              {(resumoAtu.avisos?.length > 0) && (
+                <div>
+                  <div className="section-label">Situação cadastral exige atenção</div>
+                  <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid var(--border-2)', borderRadius: 8 }}>
+                    <table className="tbl">
+                      <tbody>
+                        {resumoAtu.avisos.map((a, i) => (
+                          <tr key={i}>
+                            <td style={{ fontSize: 12.5 }}>{a.razao_social}<div className="mono" style={{ fontSize: 11, color: 'var(--text-4)' }}>{a.cnpj}</div></td>
+                            <td style={{ fontSize: 12.5, color: 'var(--warning, #b45309)', whiteSpace: 'nowrap' }}>{a.situacao}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+              {(resumoAtu.falhas?.length > 0) && (
+                <div>
+                  <div className="section-label">Não foi possível consultar</div>
+                  <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid var(--border-2)', borderRadius: 8 }}>
+                    <table className="tbl">
+                      <tbody>
+                        {resumoAtu.falhas.map((f, i) => (
+                          <tr key={i}>
+                            <td style={{ fontSize: 12.5 }}>{f.razao_social}<div className="mono" style={{ fontSize: 11, color: 'var(--text-4)' }}>{f.cnpj}</div></td>
+                            <td style={{ fontSize: 12.5, color: 'var(--text-3)' }}>{f.erro}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-primary" onClick={() => setResumoAtu(null)}>Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

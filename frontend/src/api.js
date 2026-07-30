@@ -147,6 +147,8 @@ export const api = {
     fd.append('arquivo', file)
     return request('POST', '/empresas/import', fd, true)
   },
+  // Atualização em lote pela Receita (OpenCNPJ) — roda no worker, acompanhar via job
+  atualizarCadastrosEmpresas: () => request('POST', '/empresas/atualizar-cadastros'),
   empresa: (id) => request('GET', `/empresas/${id}`),
   criarEmpresa: (data) => request('POST', '/empresas', data),
   editarEmpresa: (id, data) => request('PATCH', `/empresas/${id}`, data),

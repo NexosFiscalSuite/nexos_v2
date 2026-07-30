@@ -1,14 +1,16 @@
 """Rotas de empresas (clientes do escritório)."""
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, UploadFile, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import Response
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import DomainError, NotFoundError
 from app.core.rbac import Role, require_role
 from app.core.rls import tenant_session
 from app.core.security import TokenClaims, get_current_claims
+from app.core.worker_db import worker_tenant_session
 from app.modules.audit.application.service import AuditService
 from app.modules.companies.api.empresas_bulk import spec_empresas
 from app.modules.companies.api.schemas import (
@@ -17,6 +19,15 @@ from app.modules.companies.api.schemas import (
     EmpresaUpdate,
 )
 from app.modules.companies.application.service import EmpresaService
+from app.modules.companies.infrastructure.models import Empresa
+from app.modules.companies.workers import atualizar_cadastros
+from app.modules.jobs.infrastructure.models import (
+    KIND_ATUALIZA_CADASTRO,
+    STATUS_QUEUED,
+    STATUS_RUNNING,
+    ProcessingJob,
+)
+from app.modules.jobs.infrastructure.repositories import JobRepository
 from app.shared.bulk_csv import exportar_csv, importar_csv
 
 router = APIRouter(prefix="/empresas", tags=["Empresas"])
@@ -64,6 +75,43 @@ async def importar_empresas(
         },
     )
     return resumo
+
+
+@router.post("/atualizar-cadastros")
+async def atualizar_cadastros_receita(
+    claims: TokenClaims = Depends(require_role(Role.SUPERVISOR)),
+):
+    """Atualiza TODAS as empresas pela base pública da Receita (OpenCNPJ), em
+    segundo plano e com pausa entre consultas (rajada derruba a API gratuita).
+    Retorna o job — o frontend acompanha o progresso por polling."""
+    job_id = uuid4()
+    # Transação própria (padrão do upload): o job commita ANTES do .delay,
+    # senão o worker pode acordar e não encontrar a linha.
+    async with worker_tenant_session(claims.tid) as s:
+        ja_rodando = await s.scalar(
+            select(func.count()).select_from(ProcessingJob).where(
+                ProcessingJob.tenant_id == claims.tid,
+                ProcessingJob.kind == KIND_ATUALIZA_CADASTRO,
+                ProcessingJob.status.in_((STATUS_QUEUED, STATUS_RUNNING)),
+            )
+        )
+        if ja_rodando:
+            raise DomainError("Já existe uma atualização de cadastros em andamento.")
+        total = await s.scalar(
+            select(func.count()).select_from(Empresa).where(Empresa.tenant_id == claims.tid)
+        )
+        if not total:
+            raise DomainError("Nenhuma empresa cadastrada para atualizar.")
+        JobRepository(s).add(ProcessingJob(
+            id=job_id, tenant_id=claims.tid, user_id=claims.sub,
+            kind=KIND_ATUALIZA_CADASTRO, status=STATUS_QUEUED, total=total,
+        ))
+        await AuditService(s).registrar(
+            tenant_id=claims.tid, user_id=claims.sub, acao="empresas.atualizar_cadastros",
+            entidade="empresa", detalhe={"total": total, "job_id": str(job_id)},
+        )
+    atualizar_cadastros.delay(str(job_id), str(claims.tid))
+    return {"job_id": str(job_id), "total": total, "status": STATUS_QUEUED}
 
 
 @router.get("/{empresa_id}", response_model=EmpresaResponse)
