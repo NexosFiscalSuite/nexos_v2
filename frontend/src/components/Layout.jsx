@@ -7,6 +7,7 @@ import { useRefresh } from '../context/RefreshContext'
 import { api } from '../api'
 import CompetenciaPicker from './CompetenciaPicker'
 import logoEmblema from '../assets/sol-emblema.svg'
+import logoConsole from '../assets/sol-logo-console.png'   // mesma marca do SOL Treinamentos
 import { iniciarTour } from '../tour'
 
 // Ações rápidas do topo direito: círculos flutuando no canvas (padrão do
@@ -305,7 +306,7 @@ export default function Layout() {
             display:'flex', alignItems:'center', gap:11, minWidth:0,
             justifyContent: collapsed ? 'center' : 'flex-start', textDecoration:'none',
           }}>
-            <img src={logoEmblema} alt="Sol" style={{ width:34, height:34, objectFit:'contain', flexShrink:0 }} />
+            <img src={logoConsole} alt="Sol" style={{ width:34, height:34, objectFit:'contain', flexShrink:0 }} />
             {!collapsed && (
               <span style={{ display:'flex', flexDirection:'column', minWidth:0, lineHeight:1.2 }}>
                 <strong style={{ fontSize:14.5, color:'var(--text-1)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>Sol Contabilidade</strong>
