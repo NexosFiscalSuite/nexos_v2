@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Dropdown from '../components/Dropdown'
 import EmptyState from '../components/EmptyState'
+import Paginacao from '../components/Paginacao'
 import ResumoImportModal from '../components/ResumoImportModal'
 import { api, saveBlob } from '../api'
 import { useToast, ToastContainer } from '../hooks/useToast'
@@ -12,6 +13,7 @@ export default function CfopRegras() {
   const [lista, setLista] = useState([])
   const [tipos, setTipos] = useState([])
   const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(1)
   const [modal, setModal] = useState(false)
   const [form, setForm] = useState(VAZIO)
   const [editId, setEditId] = useState(null)
@@ -122,7 +124,7 @@ export default function CfopRegras() {
             <table className="tbl">
               <thead><tr><th>Tipo de Item</th><th>CFOP origem</th><th>CFOP destino</th><th>Extensão</th><th>Descrição</th><th></th></tr></thead>
               <tbody>
-                {lista.map(r => (
+                {lista.slice((page - 1) * 25, page * 25).map(r => (
                   <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => editar(r)}>
                     <td style={{ fontWeight: 500, color: 'var(--text-1)' }}>{r.tipo_item}</td>
                     <td className="mono">{r.cfop_origem}</td>
@@ -137,6 +139,7 @@ export default function CfopRegras() {
               </tbody>
             </table>
           </div>
+          <Paginacao page={page} total={lista.length} pageSize={25} onChange={setPage} />
         </div>
       )}
 

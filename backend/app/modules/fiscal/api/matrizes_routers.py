@@ -98,7 +98,7 @@ def _registrar_crud(
         ncm: str | None = Query(default=None, description="Filtra por NCM (prefixo)"),
         cest: str | None = Query(default=None, description="Filtra por CEST (prefixo)"),
         page: int = Query(default=1, ge=1),
-        page_size: int = Query(default=50, ge=1, le=500),
+        page_size: int = Query(default=50, ge=1, le=50),
         claims: TokenClaims = Depends(get_current_claims),
         session: AsyncSession = Depends(tenant_session),
     ):

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import Dropdown from '../components/Dropdown'
+import Paginacao from '../components/Paginacao'
 import { api } from '../api'
 import { useToast, ToastContainer } from '../hooks/useToast'
 
@@ -22,6 +23,7 @@ export default function Auditoria() {
   const [acoes, setAcoes] = useState([])
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(1)
   const [filtro, setFiltro] = useState({ acao: '', user_id: '', dias: '30' })
 
   const carregar = useCallback(async () => {
@@ -32,6 +34,7 @@ export default function Auditoria() {
   }, [filtro, toast])
 
   useEffect(() => { carregar() }, [carregar])
+  useEffect(() => { setPage(1) }, [filtro])
   useEffect(() => {
     api.auditAcoes().then(setAcoes).catch(() => {})
     api.listUsers().then(setUsers).catch(() => {})
@@ -64,11 +67,16 @@ export default function Auditoria() {
         : lista.length === 0 ? <div className="empty-state"><i className="ti ti-history" /><p>Nenhum registro no período/filtro.</p></div>
           : (
             <div className="card" style={{ padding: 0 }}>
+              {lista.length >= 200 && (
+                <div style={{ padding: '10px 16px', fontSize: 12.5, color: 'var(--text-3)', borderBottom: '1px solid var(--border-2)' }}>
+                  Mostrando os 200 registros mais recentes do período — refine o filtro para ver além.
+                </div>
+              )}
               <div className="tbl-wrap">
                 <table className="tbl">
                   <thead><tr><th style={{ width: 160 }}>Data/Hora</th><th>Usuário</th><th>Ação</th><th>Alvo</th><th>Detalhes</th></tr></thead>
                   <tbody>
-                    {lista.map(a => (
+                    {lista.slice((page - 1) * 25, page * 25).map(a => (
                       <tr key={a.id}>
                         <td className="mono" style={{ whiteSpace: 'nowrap', fontSize: 12 }}>{fmtData(a.created_at)}</td>
                         <td style={{ color: 'var(--text-1)' }}>{a.user_nome || '—'}</td>
@@ -80,6 +88,7 @@ export default function Auditoria() {
                   </tbody>
                 </table>
               </div>
+              <Paginacao page={page} total={lista.length} pageSize={25} onChange={setPage} />
             </div>
           )}
     </div>

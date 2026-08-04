@@ -1,7 +1,8 @@
 """Rotas de contrapartes (clientes/fornecedores) + lookup de CNPJ (OpenCNPJ)."""
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.rls import tenant_session
@@ -18,15 +19,30 @@ from app.shared.cnpj_lookup import consultar_opencnpj
 router = APIRouter(prefix="/contrapartes", tags=["Cadastros"])
 
 
-@router.get("/empresas/{empresa_id}", response_model=list[ContraparteResponse])
+class PaginaContrapartes(BaseModel):
+    """Envelope de paginação: uma empresa acumula milhares de fornecedores
+    (upsert dos XMLs) — a tela busca uma página por vez."""
+
+    items: list[ContraparteResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+@router.get("/empresas/{empresa_id}", response_model=PaginaContrapartes)
 async def listar(
     empresa_id: UUID,
     tipo: str | None = None,
     search: str | None = None,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=50),
     claims: TokenClaims = Depends(get_current_claims),
     session: AsyncSession = Depends(tenant_session),
 ):
-    return await ContraparteService(session).list(empresa_id, tipo, search)
+    items, total = await ContraparteService(session).list(
+        empresa_id, tipo, search, page=page, page_size=page_size
+    )
+    return PaginaContrapartes(items=items, total=total, page=page, page_size=page_size)
 
 
 @router.post("/empresas/{empresa_id}", response_model=ContraparteResponse, status_code=status.HTTP_201_CREATED)

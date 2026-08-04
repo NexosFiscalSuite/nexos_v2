@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.contrapartes.infrastructure.models import Contraparte
@@ -26,7 +26,12 @@ class ContraparteRepository:
         )
         return res.scalar_one_or_none()
 
-    async def list(self, empresa_id: UUID, tipo: str | None = None, search: str | None = None) -> list[Contraparte]:
+    async def list(
+        self, empresa_id: UUID, tipo: str | None = None, search: str | None = None,
+        page: int = 1, page_size: int = 25,
+    ) -> tuple[list[Contraparte], int]:
+        """Página de contrapartes + total do filtro. Uma empresa acumula
+        milhares de fornecedores (upsert dos XMLs) — a lista nunca vem inteira."""
         stmt = select(Contraparte).where(Contraparte.empresa_id == empresa_id)
         if tipo:
             stmt = stmt.where(Contraparte.tipo == tipo)
@@ -37,8 +42,14 @@ class ContraparteRepository:
                 Contraparte.razao_social.ilike(like),
                 Contraparte.nome_fantasia.ilike(like),
             ))
-        res = await self.session.execute(stmt.order_by(Contraparte.razao_social))
-        return list(res.scalars().all())
+        total = await self.session.scalar(
+            select(func.count()).select_from(stmt.subquery())
+        ) or 0
+        res = await self.session.execute(
+            stmt.order_by(Contraparte.razao_social)
+            .offset((page - 1) * page_size).limit(page_size)
+        )
+        return list(res.scalars().all()), total
 
     async def sem_regime(self, empresa_id: UUID) -> list[Contraparte]:
         """Contrapartes ainda sem regime definido — candidatas à consulta optante."""

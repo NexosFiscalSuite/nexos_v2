@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from 'react'
 import { api, saveBlob } from '../api'
 import ErroCarga from '../components/ErroCarga'
+import Paginacao from '../components/Paginacao'
 import { useEmpresa } from '../context/EmpresaContext'
 import { useCompetencia } from '../context/CompetenciaContext'
 import { useToast, ToastContainer } from '../hooks/useToast'
@@ -224,6 +225,8 @@ export default function VerificacaoIbsCbs() {
   const [filtroStatus, setFiltroStatus] = useState(null)
 
   const notasApontadas = useMemo(() => agruparPorNota(dados?.itens || []), [dados])
+  const [pageNotas, setPageNotas] = useState(1)
+  useEffect(() => { setPageNotas(1) }, [dados])
   const toggle = (chave) => setExpandido(prev => {
     const s = new Set(prev); s.has(chave) ? s.delete(chave) : s.add(chave); return s
   })
@@ -412,7 +415,7 @@ export default function VerificacaoIbsCbs() {
                     </tr>
                   </thead>
                   <tbody>
-                    {notasApontadas.map(n => {
+                    {notasApontadas.slice((pageNotas - 1) * 25, pageNotas * 25).map(n => {
                       const aberto = expandido.has(n.chave)
                       return (
                         <Fragment key={n.chave}>
@@ -469,6 +472,7 @@ export default function VerificacaoIbsCbs() {
                 </table>
               </div>
               )}
+              <Paginacao page={pageNotas} total={notasApontadas.length} pageSize={25} onChange={setPageNotas} />
             </div>
           )}
         </>

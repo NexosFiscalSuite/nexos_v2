@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import Dropdown from '../components/Dropdown'
+import Paginacao from '../components/Paginacao'
 import { api } from '../api'
 import { useEmpresa } from '../context/EmpresaContext'
 import { useToast, ToastContainer } from '../hooks/useToast'
@@ -27,6 +28,8 @@ export default function Cadastros() {
   const [tipo, setTipo] = useState('cliente')
   const [search, setSearch] = useState('')
   const [lista, setLista] = useState([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(false)
   const [modal, setModal] = useState(false)
   const [form, setForm] = useState(VAZIO)
@@ -35,14 +38,22 @@ export default function Cadastros() {
   const [looking, setLooking] = useState(false)
 
   const carregar = useCallback(async () => {
-    if (!selectedEmpresa) { setLista([]); return }
+    if (!selectedEmpresa) { setLista([]); setTotal(0); return }
     setLoading(true)
-    try { setLista(await api.contrapartes(selectedEmpresa.id, tipo, search) || []) }
+    try {
+      // Paginação no servidor: fornecedor entra por upsert de XML aos milhares.
+      const r = await api.contrapartes(selectedEmpresa.id, {
+        tipo, search: search || undefined, page, page_size: 25,
+      })
+      setLista(r?.items || (Array.isArray(r) ? r : []))
+      setTotal(r?.total ?? 0)
+    }
     catch (e) { toast(e.message, 'error') }
     finally { setLoading(false) }
-  }, [selectedEmpresa, tipo, search, toast])
+  }, [selectedEmpresa, tipo, search, page, toast])
 
   useEffect(() => { const t = setTimeout(carregar, 250); return () => clearTimeout(t) }, [carregar])
+  useEffect(() => { setPage(1) }, [tipo, search, selectedEmpresa])
 
   function abrirNovo() { setForm(VAZIO); setEditId(null); setModal(true) }
   function abrirEdicao(c) {
@@ -151,6 +162,7 @@ export default function Cadastros() {
               </tbody>
             </table>
           </div>
+          <Paginacao page={page} total={total} pageSize={25} onChange={setPage} />
         </div>
       )}
 

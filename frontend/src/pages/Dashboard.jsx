@@ -1,8 +1,12 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import Paginacao from '../components/Paginacao'
 import { api } from '../api'
 import { useRefresh } from '../context/RefreshContext'
 import { useCompetencia } from '../context/CompetenciaContext'
+
+// A carteira cresce: a tabela pagina no cliente (os KPIs precisam do total).
+const PAGE_SIZE = 15
 
 const fmt = n => (n || 0).toLocaleString('pt-BR')
 const fmtBRL = n => 'R$ ' + (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
@@ -93,6 +97,7 @@ export default function Dashboard() {
   const [empresas, setEmpresas] = useState([])
   const [loading, setLoading] = useState(true)
   const [aberto, setAberto] = useState(null)
+  const [page, setPage] = useState(1)
 
   const carregar = useCallback(async () => {
     setLoading(true)
@@ -104,7 +109,16 @@ export default function Dashboard() {
   }, [ano, mes, dataVersion])
 
   useEffect(() => { carregar() }, [carregar])
-  useEffect(() => { setAberto(null) }, [ano, mes])
+  useEffect(() => { setAberto(null); setPage(1) }, [ano, mes])
+
+  // Quem tem mais dinheiro em jogo / mais pendências aparece primeiro —
+  // a página 1 é a fila de trabalho do escritório.
+  const ordenadas = [...empresas].sort((a, b) =>
+    (b.impacto_financeiro || 0) - (a.impacto_financeiro || 0)
+    || ((b.divergencias_fornecedor + b.antecipacoes + b.gargalos_cfop)
+      - (a.divergencias_fornecedor + a.antecipacoes + a.gargalos_cfop))
+    || (a.razao_social || '').localeCompare(b.razao_social || ''))
+  const pagina = ordenadas.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   const comAlerta = empresas.filter(e => (e.divergencias_fornecedor + e.antecipacoes + e.gargalos_cfop) > 0).length
   const totalEmpresas = empresas.length
@@ -179,13 +193,14 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {empresas.map(e => (
+                {pagina.map(e => (
                   <LinhaEmpresa key={e.empresa_id} e={e} aberto={aberto === e.empresa_id}
                     onToggle={() => setAberto(aberto === e.empresa_id ? null : e.empresa_id)} />
                 ))}
               </tbody>
             </table>
           </div>
+          <Paginacao page={page} total={ordenadas.length} pageSize={PAGE_SIZE} onChange={setPage} />
         </div>
       )}
     </div>

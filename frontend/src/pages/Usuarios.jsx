@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Dropdown from '../components/Dropdown'
 import ErroCarga from '../components/ErroCarga'
+import Paginacao from '../components/Paginacao'
 import { api } from '../api'
 import { useAuth } from '../context/AuthContext'
 import { useToast, ToastContainer } from '../hooks/useToast'
@@ -19,6 +20,7 @@ export default function Usuarios() {
   const [lista, setLista] = useState([])
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState(null)
+  const [page, setPage] = useState(1)
   const [modal, setModal] = useState(false)
   const [editId, setEditId] = useState(null)   // null = criando; id = editando
   const [form, setForm] = useState(VAZIO)
@@ -93,7 +95,7 @@ export default function Usuarios() {
             <table className="tbl">
               <thead><tr><th>Nome</th><th>E-mail</th><th>Papel</th><th>Status</th><th></th></tr></thead>
               <tbody>
-                {lista.map(u => (
+                {lista.slice((page - 1) * 25, page * 25).map(u => (
                   <tr key={u.id} style={{ cursor: 'pointer', opacity: u.is_active ? 1 : 0.55 }} onClick={() => abrirEdicao(u)}>
                     <td style={{ fontWeight: 500, color: 'var(--text-1)' }}>
                       {u.full_name}{u.id === eu?.id && <span style={{ color: 'var(--text-4)', fontWeight: 400 }}> (você)</span>}
@@ -119,6 +121,7 @@ export default function Usuarios() {
               </tbody>
             </table>
           </div>
+          <Paginacao page={page} total={lista.length} pageSize={25} onChange={setPage} />
         </div>
       )}
 

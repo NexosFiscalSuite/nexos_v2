@@ -65,7 +65,7 @@ async def listar_propostas(
     tipo: str | None = Query(default=None, description="mva | enquadramento | fcp | protocolos | aliquotas"),
     uf: str | None = Query(default=None, description="Filtra pela UF da chave"),
     page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=50, ge=1, le=500),
+    page_size: int = Query(default=50, ge=1, le=50),
     claims: TokenClaims = Depends(get_current_claims),
     session: AsyncSession = Depends(tenant_session),
 ):

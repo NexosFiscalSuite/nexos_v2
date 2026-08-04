@@ -46,8 +46,12 @@ class ContraparteService:
         self.session = session
         self.repo = ContraparteRepository(session)
 
-    async def list(self, empresa_id: UUID, tipo: str | None = None, search: str | None = None):
-        return await self.repo.list(empresa_id, tipo, search)
+    async def list(
+        self, empresa_id: UUID, tipo: str | None = None, search: str | None = None,
+        page: int = 1, page_size: int = 25,
+    ):
+        """(itens, total) da página — o router monta o envelope."""
+        return await self.repo.list(empresa_id, tipo, search, page=page, page_size=page_size)
 
     async def create(self, *, tenant_id: UUID, empresa_id: UUID, tipo: str, cnpj: str, **data) -> Contraparte:
         if tipo not in _TIPOS:

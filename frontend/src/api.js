@@ -302,8 +302,8 @@ export const api = {
   dashSaude: (ano, mes) => request('GET', `/dashboard/saude?ano=${ano}&mes=${mes}`),
 
   // ── Cadastros (contrapartes) + lookup de CNPJ ──
-  contrapartes: (empresaId, tipo, search) => {
-    const q = new URLSearchParams(Object.entries({ tipo, search }).filter(([, v]) => v)).toString()
+  contrapartes: (empresaId, params = {}) => {
+    const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
     return request('GET', `/contrapartes/empresas/${empresaId}${q ? `?${q}` : ''}`)
   },
   criarContraparte: (empresaId, data) => request('POST', `/contrapartes/empresas/${empresaId}`, data),

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Dropdown from '../components/Dropdown'
+import Paginacao from '../components/Paginacao'
 import { api, getUser } from '../api'
 import { useToast, ToastContainer } from '../hooks/useToast'
 
@@ -72,6 +73,7 @@ export default function Grupos() {
   const [empresas, setEmpresas] = useState([])
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(1)
 
   const [modal, setModal] = useState(false)
   const [editId, setEditId] = useState(null)
@@ -157,7 +159,7 @@ export default function Grupos() {
                 <table className="tbl">
                   <thead><tr><th>Nome</th><th>Descrição</th><th>Empresas</th><th>Membros</th><th>Supervisor</th>{isAdmin && <th style={{ width: 90 }}></th>}</tr></thead>
                   <tbody>
-                    {lista.map(g => (
+                    {lista.slice((page - 1) * 25, page * 25).map(g => (
                       <tr key={g.id}>
                         <td style={{ fontWeight: 500, color: 'var(--text-1)' }}>{g.nome}</td>
                         <td style={{ color: 'var(--text-3)' }}>{g.descricao || '—'}</td>
@@ -177,6 +179,7 @@ export default function Grupos() {
                   </tbody>
                 </table>
               </div>
+              <Paginacao page={page} total={lista.length} pageSize={25} onChange={setPage} />
             </div>
           )}
 
