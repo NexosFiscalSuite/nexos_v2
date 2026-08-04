@@ -120,7 +120,8 @@ function NavItem({ to, icon, label, collapsed, subItems, badge }) {
   )
 
   return (
-    <NavLink to={to} style={({ isActive: a }) => base(a)} data-tour={'nav' + to.replace(/\//g, '-')}>
+    <NavLink to={to} style={({ isActive: a }) => base(a)} data-tour={'nav' + to.replace(/\//g, '-')}
+      title={collapsed ? label : undefined}>
       <i className={`ti ${icon}`} style={{ fontSize:18, flexShrink:0 }} />
       {!collapsed && <span style={{ whiteSpace:'nowrap' }}>{label}</span>}
       <Dot />
@@ -255,7 +256,11 @@ export default function Layout() {
   const { dataVersion } = useRefresh()
   const navigate  = useNavigate()
   const location  = useLocation()
-  const [collapsed, setCollapsed] = useState(false)
+  // Preferência do usuário persiste entre sessões (estilo SOL Treinamentos).
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sol_sidebar') === '1')
+  function alternarSidebar() {
+    setCollapsed(c => { localStorage.setItem('sol_sidebar', c ? '0' : '1'); return !c })
+  }
   const [quebraCount, setQuebraCount] = useState(0)
   const [boasVindas, setBoasVindas] = useState(false)
   const pageTitle = PAGE_TITLES[location.pathname] || 'Sol'
@@ -290,20 +295,37 @@ export default function Layout() {
   return (
     <div style={{ display:'flex', minHeight:'100vh', background:'var(--bg)' }}>
 
-      {/* Sidebar */}
+      {/* Sidebar — card flutuante (estilo SOL Treinamentos): cantos
+          arredondados, respiro das bordas da janela, recolhível pelo
+          botão-círculo do topo e usuário no rodapé. */}
       <aside style={{
         width: collapsed ? 'var(--sidebar-w-c)' : 'var(--sidebar-w)',
         flexShrink:0, background:'var(--sidebar-bg)',
         display:'flex', flexDirection:'column',
         transition:'width .22s cubic-bezier(.4,0,.2,1)',
-        position:'fixed', left:0, top:0, bottom:0, overflow:'hidden', zIndex:100, borderRight:'1px solid var(--hairline)',
+        position:'fixed', left:12, top:12, bottom:12, overflow:'hidden', zIndex:100,
+        border:'1px solid var(--hairline)', borderRadius:'var(--radius-lg)',
+        boxShadow:'0 2px 14px rgba(29,29,31,0.06)',
       }}>
-        {/* Logo (SVG vetorial): mesma altura da topbar — a linha divisória
-            continua a linha do "Dashboard". */}
-        <div style={{ padding: collapsed ? 0 : '0 14px', height:'var(--topbar-h)', display:'flex', alignItems:'center', justifyContent: collapsed ? 'center' : 'flex-start', borderBottom:'1px solid var(--border-2)', flexShrink:0 }}>
+        {/* Logo + botão-círculo de recolher (chevron), como no Treinamentos. */}
+        <div style={{
+          padding: collapsed ? '12px 0 10px' : '0 10px 0 14px',
+          minHeight:'var(--topbar-h)',
+          display:'flex', flexDirection: collapsed ? 'column' : 'row',
+          alignItems:'center', justifyContent: collapsed ? 'center' : 'space-between',
+          gap:8, borderBottom:'1px solid var(--border-2)', flexShrink:0,
+        }}>
           {collapsed
-            ? <img src={logoEmblema} alt="Sol Contabilidade" style={{ height:40, width:'auto', maxWidth:48, objectFit:'contain', flexShrink:0 }} />
-            : <img src={logoMarca} alt="Sol Contabilidade" style={{ height:42, width:'auto', maxWidth:195, objectFit:'contain', flexShrink:0 }} />}
+            ? <img src={logoEmblema} alt="Sol Contabilidade" style={{ height:32, width:'auto', maxWidth:40, objectFit:'contain', flexShrink:0 }} />
+            : <img src={logoMarca} alt="Sol Contabilidade" style={{ height:42, width:'auto', maxWidth:170, objectFit:'contain', flexShrink:0, minWidth:0 }} />}
+          <button onClick={alternarSidebar} title={collapsed ? 'Expandir menu' : 'Recolher menu'}
+            style={{
+              width:26, height:26, borderRadius:'50%', border:'1px solid var(--border)',
+              background:'var(--surface)', color:'var(--text-3)', cursor:'pointer',
+              display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
+            }}>
+            <i className={`ti ti-chevron-${collapsed ? 'right' : 'left'}`} style={{ fontSize:14 }} />
+          </button>
         </div>
 
         <nav style={{ flex:1, padding:'12px 8px', overflowY:'auto', overflowX:'hidden' }}>
@@ -319,16 +341,26 @@ export default function Layout() {
           )}
         </nav>
 
-        <div style={{ padding:'10px 8px', borderTop:'1px solid var(--border-2)', flexShrink:0 }}>
-          <button onClick={() => setCollapsed(c => !c)} style={{ width:'100%', display:'flex', alignItems:'center', justifyContent: collapsed ? 'center' : 'flex-end', gap:8, padding:'8px 10px', borderRadius:'var(--radius)', border:'none', background:'transparent', color:'var(--text-4)', cursor:'pointer', fontSize:13 }}>
-            {!collapsed && <span style={{ fontSize:12 }}>Recolher</span>}
-            <i className={`ti ti-chevron-${collapsed ? 'right' : 'left'}`} style={{ fontSize:16 }} />
-          </button>
+        {/* Usuário no rodapé do card (estilo Treinamentos). */}
+        <div style={{
+          padding:'12px 10px', borderTop:'1px solid var(--border-2)', flexShrink:0,
+          display:'flex', alignItems:'center', gap:10,
+          justifyContent: collapsed ? 'center' : 'flex-start',
+        }}>
+          <div style={{ width:34, height:34, borderRadius:'50%', background:'var(--primary-lt)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, fontWeight:700, color:'var(--primary-text)', flexShrink:0 }}>
+            {(user?.full_name || 'U')[0].toUpperCase()}
+          </div>
+          {!collapsed && (
+            <div style={{ minWidth:0, lineHeight:1.25 }}>
+              <div style={{ fontSize:12.5, fontWeight:600, color:'var(--text-1)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{user?.full_name}</div>
+              <div style={{ fontSize:11, color:'var(--text-4)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{user?.email || user?.role}</div>
+            </div>
+          )}
         </div>
       </aside>
 
       {/* Main */}
-      <div style={{ flex:1, display:'flex', flexDirection:'column', marginLeft: collapsed ? 'var(--sidebar-w-c)' : 'var(--sidebar-w)', transition:'margin-left .22s cubic-bezier(.4,0,.2,1)', minWidth:0 }}>
+      <div style={{ flex:1, display:'flex', flexDirection:'column', marginLeft: collapsed ? 'calc(var(--sidebar-w-c) + 24px)' : 'calc(var(--sidebar-w) + 24px)', transition:'margin-left .22s cubic-bezier(.4,0,.2,1)', minWidth:0 }}>
 
         {/* Topbar */}
         <header style={{ height:'var(--topbar-h)', background:'var(--topbar-bg)', borderBottom:'1px solid var(--hairline)', display:'flex', alignItems:'center', padding:'0 24px', gap:12, position:'sticky', top:0, zIndex:90, boxShadow:'none' }}>
@@ -349,17 +381,8 @@ export default function Layout() {
           {/* Divider */}
           <div style={{ width:1, height:28, background:'var(--border)', flexShrink:0 }} />
 
-          {/* Avatar (apenas visual) + Sair */}
-          <div style={{ display:'flex', alignItems:'center', gap:8, padding:'4px 8px' }}>
-            <div style={{ width:30, height:30, borderRadius:'50%', background:'var(--primary-lt)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:700, color:'var(--primary-text)' }}>
-              {(user?.full_name || 'U')[0].toUpperCase()}
-            </div>
-            <div style={{ lineHeight:1.2 }}>
-              <div style={{ fontSize:12, fontWeight:600, color:'var(--text-1)', maxWidth:100, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{user?.full_name?.split(' ')[0]}</div>
-              <div style={{ fontSize:10, color:'var(--text-4)', textTransform:'capitalize' }}>{user?.role}</div>
-            </div>
-          </div>
-          <button onClick={() => { logout(); navigate('/login') }} className="btn btn-ghost btn-sm" style={{ color:'var(--text-3)' }}>
+          {/* Sair (o usuário agora mora no rodapé da sidebar) */}
+          <button onClick={() => { logout(); navigate('/login') }} className="btn btn-ghost btn-sm" title="Sair" style={{ color:'var(--text-3)' }}>
             <i className="ti ti-logout" style={{ fontSize:16 }} />
           </button>
         </header>

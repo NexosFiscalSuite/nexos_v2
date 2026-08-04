@@ -43,7 +43,9 @@ os comandos de deploy.
 - **PDF (fpdf2)**: tudo passa por `carta_base.py` (`CartaTimbrada`, `_t`
   latin-1 com mapa `_TROCAS` para “—”/“→”, `_brl/_pct/_cnpj`). O timbrado
   mantém o navy da marca Sol (#24477B) mesmo com a paleta nova do app.
-- **Front**: paleta viva #0056D2 (referência Coursera), fonte Manrope,
+- **Front**: paleta roxo claro #8B5FBF (pedido do João em ago/2026 — antes
+  azul #0056D2; sidebar em card flutuante recolhível, estilo SOL
+  Treinamentos), fonte Manrope,
   balões clicáveis `.balao-classif` (nunca tooltip de hover), números com
   `.tnum`, textos para leigos (nada de jargão seco).
 - **Linguagem com o usuário**: sempre português; explicar o que mudou em

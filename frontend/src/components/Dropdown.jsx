@@ -21,7 +21,7 @@ export default function Dropdown({ value, onChange, options, placeholder = 'Sele
           background: disabled ? 'var(--surface-2)' : 'var(--surface)',
           color: selected && selected.value !== '' ? 'var(--text-1)' : 'var(--text-4)',
           cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.7 : 1,
-          boxShadow: open ? '0 0 0 3px rgba(0,86,210,0.15)' : 'none',
+          boxShadow: open ? '0 0 0 3px rgba(139,95,191,0.15)' : 'none',
           borderColor: open ? 'var(--primary)' : 'var(--border)',
         }}>
         <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
