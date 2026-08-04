@@ -290,7 +290,10 @@ function CrudMatriz({ aba, prefill }) {
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState(null)
-  const [filtroUf, setFiltroUf] = useState('')
+  // Filtros combináveis (UF + NCM + CEST). `filtros` acompanha a digitação;
+  // `filtrosAtivos` é o que consulta o servidor, após a pausa na digitação.
+  const [filtros, setFiltros] = useState({ uf: '', ncm: '', cest: '' })
+  const [filtrosAtivos, setFiltrosAtivos] = useState({ uf: '', ncm: '', cest: '' })
   const [modal, setModal] = useState(false)
   const [editId, setEditId] = useState(null)
   const [form, setForm] = useState(() => vazioDe(aba.campos))
@@ -312,17 +315,37 @@ function CrudMatriz({ aba, prefill }) {
     setLoading(true)
     setErro(null)
     try {
-      const r = await aba.api.list({ uf: filtroUf || undefined, page, page_size: PAGE_SIZE })
+      const r = await aba.api.list({
+        uf: filtrosAtivos.uf || undefined,
+        ncm: filtrosAtivos.ncm || undefined,
+        cest: filtrosAtivos.cest || undefined,
+        page, page_size: PAGE_SIZE,
+      })
       setLista(r?.items || (Array.isArray(r) ? r : []))
       setTotal(r?.total ?? 0)
     }
     catch (e) { setErro(e.message) }
     finally { setLoading(false) }
-  }, [aba, filtroUf, page])
+  }, [aba, filtrosAtivos, page])
 
   useEffect(() => { carregar() }, [carregar])
-  useEffect(() => { setPage(1) }, [filtroUf])
+  // Espera a digitação parar antes de consultar; referência estável quando
+  // nada mudou evita busca duplicada na montagem.
+  useEffect(() => {
+    const t = setTimeout(() => setFiltrosAtivos(prev => (
+      prev.uf === filtros.uf && prev.ncm === filtros.ncm && prev.cest === filtros.cest
+        ? prev : filtros
+    )), 300)
+    return () => clearTimeout(t)
+  }, [filtros])
+  useEffect(() => { setPage(1) }, [filtrosAtivos])
   const totalPaginas = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const setFiltro = (k, limpar) => (e) => {
+    const v = limpar ? e.target.value.replace(/\D/g, '') : e.target.value.toUpperCase()
+    setFiltros(f => ({ ...f, [k]: v }))
+  }
+  const temNcm = aba.colunas.some(c => c.key === 'ncm')
+  const temCest = aba.colunas.some(c => c.key === 'cest')
 
   function abrirNova() { setEditId(null); setForm(vazioDe(aba.campos)); setModal(true) }
   function abrirEdicao(m) { setEditId(m.id); setForm({ ...vazioDe(aba.campos), ...m, data_fim_vigencia: m.data_fim_vigencia || '' }); setModal(true) }
@@ -351,9 +374,17 @@ function CrudMatriz({ aba, prefill }) {
     <div>
       <ToastContainer toasts={toasts} />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <input value={filtroUf} onChange={e => setFiltroUf(e.target.value.toUpperCase())} maxLength={2}
-            placeholder="Filtrar por UF…" style={{ width: 160 }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <input value={filtros.uf} onChange={setFiltro('uf')} maxLength={2}
+            placeholder="UF…" style={{ width: 90 }} />
+          {temNcm && (
+            <input value={filtros.ncm} onChange={setFiltro('ncm', true)} maxLength={8}
+              placeholder="NCM (prefixo)…" style={{ width: 150 }} />
+          )}
+          {temCest && (
+            <input value={filtros.cest} onChange={setFiltro('cest', true)} maxLength={7}
+              placeholder="CEST (prefixo)…" style={{ width: 150 }} />
+          )}
           {total > 0 && (
             <span className="tnum" style={{ color: 'var(--text-3)', fontSize: 13 }}>
               {total.toLocaleString('pt-BR')} {total === 1 ? 'regra' : 'regras'}

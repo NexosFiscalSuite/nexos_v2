@@ -13,7 +13,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import Base
@@ -96,6 +96,7 @@ def _registrar_crud(
     async def _listar(
         uf: str | None = Query(default=None, description="Filtra por UF destino"),
         ncm: str | None = Query(default=None, description="Filtra por NCM (prefixo)"),
+        cest: str | None = Query(default=None, description="Filtra por CEST (prefixo)"),
         page: int = Query(default=1, ge=1),
         page_size: int = Query(default=50, ge=1, le=500),
         claims: TokenClaims = Depends(get_current_claims),
@@ -103,7 +104,7 @@ def _registrar_crud(
     ):
         stmt = select(modelo)
         if filtrar is not None:
-            stmt = filtrar(stmt, uf, ncm)
+            stmt = filtrar(stmt, uf, ncm, cest)
         total = await session.scalar(
             select(func.count()).select_from(stmt.order_by(None).subquery())
         ) or 0
@@ -172,12 +173,15 @@ def _registrar_crud(
 
 
 def _ordenar(modelo, *cols):
-    """Filtro de UF/NCM + ordenação, fechado sobre o modelo da matriz."""
-    def _f(stmt, uf, ncm):
+    """Filtros combináveis (UF + NCM + CEST, por prefixo) + ordenação, fechados
+    sobre o modelo da matriz. CEST só filtra onde a coluna existe (MVA/Enq.)."""
+    def _f(stmt, uf, ncm, cest):
         if uf:
             stmt = stmt.where(modelo.uf_destino == uf.upper())
         if ncm:
             stmt = stmt.where(modelo.ncm.like(f"{only_digits(ncm)}%"))
+        if cest and hasattr(modelo, "cest"):
+            stmt = stmt.where(modelo.cest.like(f"{only_digits(cest)}%"))
         return stmt.order_by(*cols)
     return _f
 
@@ -204,16 +208,30 @@ _registrar_crud(
     detalhe=lambda m: {"uf": m.uf_destino, "ncm": m.ncm, "fcp_st": str(m.aliq_fcp_st)},
     filtrar=_ordenar(MatrizFcp, MatrizFcp.uf_destino, MatrizFcp.ncm),
 )
+def _filtrar_protocolos(stmt, uf, ncm, cest):
+    """Protocolo: NCM vazio = acordo do PAR INTEIRO (vale p/ qualquer NCM) —
+    filtrar por NCM precisa MANTER essas linhas, senão a tela esconderia um
+    acordo que se aplica ao produto pesquisado."""
+    if uf:
+        stmt = stmt.where(MatrizProtocoloSt.uf_destino == uf.upper())
+    if ncm:
+        stmt = stmt.where(or_(
+            MatrizProtocoloSt.ncm.is_(None),
+            MatrizProtocoloSt.ncm.like(f"{only_digits(ncm)}%"),
+        ))
+    return stmt.order_by(MatrizProtocoloSt.uf_origem, MatrizProtocoloSt.uf_destino)
+
+
 _registrar_crud(
     "protocolos", MatrizProtocoloSt, MatrizProtocoloCreate, MatrizProtocoloUpdate,
     MatrizProtocoloResponse,
     entidade="matriz_protocolo",
     detalhe=lambda m: {"origem": m.uf_origem, "destino": m.uf_destino, "acordo": m.numero_acordo},
-    filtrar=_ordenar(MatrizProtocoloSt, MatrizProtocoloSt.uf_origem, MatrizProtocoloSt.uf_destino),
+    filtrar=_filtrar_protocolos,
 )
 
 
-def _filtrar_aliquota(stmt, uf, ncm):
+def _filtrar_aliquota(stmt, uf, ncm, cest):
     """Alíquota não tem NCM (chave é só a UF) — o filtro genérico não serve."""
     if uf:
         stmt = stmt.where(MatrizAliquota.uf_destino == uf.upper())
