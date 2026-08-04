@@ -26,6 +26,7 @@ from app.modules.fiscal.api.auditoria_routers import router as auditoria_st_rout
 from app.modules.fiscal.api.ibscbs_routers import router as ibscbs_router
 from app.modules.fiscal.api.matrizes_bulk import router as matrizes_bulk_router
 from app.modules.fiscal.api.matrizes_routers import router as matrizes_router
+from app.modules.fiscal.api.propostas_routers import router as matrizes_propostas_router
 from app.modules.fiscal.api.routers import router as fiscal_router
 from app.modules.grupos.api.routers import router as grupos_router
 from app.modules.identity.api.routers import auth_router, users_router
@@ -106,6 +107,9 @@ def create_app() -> FastAPI:
     app.include_router(fiscal_router, prefix=p)
     app.include_router(auditoria_st_router, prefix=p)
     app.include_router(ibscbs_router, prefix=p)
+    # Propostas ANTES do CRUD: GET /matrizes/propostas não pode cair no
+    # GET /matrizes/{sub} genérico (ordem de registro decide o match).
+    app.include_router(matrizes_propostas_router, prefix=p)
     app.include_router(matrizes_router, prefix=p)
     app.include_router(matrizes_bulk_router, prefix=p)
     app.include_router(compliance_router, prefix=p)

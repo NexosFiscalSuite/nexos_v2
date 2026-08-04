@@ -55,10 +55,10 @@ class ConfazCestExtractor(Extractor):
     URL = "https://www.confaz.fazenda.gov.br/legislacao/convenios/2018/CV142_18"
 
     def __init__(self, url: str | None = None):
-        self._url = url or self.URL
+        self.url = url or self.URL   # público: vai ao FonteSnapshot (trilha)
 
     def fetch(self) -> bytes:
-        return self._http_get(self._url)
+        return self._http_get(self.url)
 
     def parse(self, raw: bytes) -> list[CestRecord]:
         coletor = _TabelasHtml()

@@ -1,8 +1,9 @@
 """Tasks Celery de auto-alimentação fiscal (agendadas no beat).
 
+Fase 1 da automação: o crawler NUNCA escreve direto nas matrizes — o diff da
+fonte vira PROPOSTA na fila de revisão (aba Revisão das Matrizes Fiscais).
 Padrão: o I/O da fonte (fetch+parse) roda FORA da transação; só a persistência
-abre a sessão global. Cada task tem seu próprio event loop (asyncio.run), como
-as demais workers do projeto.
+abre a sessão global, POR unidade de trabalho.
 """
 import asyncio
 import logging
@@ -12,7 +13,7 @@ from app.core.celery_app import celery_app
 from app.core.config import get_settings
 from app.core.worker_db import worker_global_session
 from app.modules.fiscal.crawlers.confaz_cest import ConfazCestExtractor
-from app.modules.fiscal.crawlers.upsert import upsert_enquadramento
+from app.modules.fiscal.crawlers.propor import propor_enquadramento, registrar_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -30,9 +31,10 @@ def _ufs_alvo(ufs: str) -> list[str]:
 
 @celery_app.task(name="fiscal.sync_cest_confaz", bind=True, max_retries=3)
 def sync_cest_confaz(self, ufs: str = ""):
-    """Baixa a relação NCM×CEST do CONFAZ (uma vez) e faz upsert na matriz de
-    enquadramento de CADA UF alvo ("MG,SP,..."; vazio = NEXOS_CRAWLER_UF_ALVO).
-    Reagenda (retry exponencial) se a fonte estiver fora do ar."""
+    """Baixa a relação NCM×CEST do CONFAZ (uma vez), registra o snapshot da
+    fonte (hash + conteúdo) e gera PROPOSTAS de enquadramento por UF alvo
+    ("MG,SP,…"; vazio = NEXOS_CRAWLER_UF_ALVO) — nada entra sem curadoria.
+    Reagenda (retry) se a fonte estiver fora do ar."""
     try:
         return asyncio.run(_sync(_ufs_alvo(ufs)))
     except Exception as exc:  # noqa: BLE001 — portal público instável: retry, não falha o beat
@@ -42,18 +44,29 @@ def sync_cest_confaz(self, ufs: str = ""):
 
 async def _sync(ufs: list[str]) -> dict:
     # 1) Extração (rede) UMA vez, fora da transação — a relação é nacional.
-    resultado = ConfazCestExtractor().extract()
-    logger.info("CEST/CONFAZ: %d registros de %s", len(resultado.registros), resultado.fonte)
+    extrator = ConfazCestExtractor()
+    bruto = extrator.fetch()
+    registros = extrator.parse(bruto)
+    logger.info("CEST/CONFAZ: %d registros de %s", len(registros), extrator.fonte)
 
-    # 2) Upsert idempotente por UF, sessão POR unidade de trabalho. Vigência
-    # FIXA da config (piso das competências auditadas): rodadas mensais casam
-    # a mesma família de vigência em vez de abrir uma nova sobreposta.
-    resumos: dict[str, dict] = {}
+    # 2) Snapshot da fonte (trilha de origem + detecção de mudança).
+    async with worker_global_session() as s:
+        mudou, snapshot_id = await registrar_snapshot(
+            s, fonte=extrator.fonte, url=extrator.url, conteudo=bruto,
+            resumo=f"{len(registros)} registros NCM×CEST",
+        )
+
+    # 3) Diff → propostas, POR UF (sessão por unidade de trabalho). Roda mesmo
+    # sem mudança na fonte: uma UF recém-adicionada precisa das propostas
+    # ainda que a página do CONFAZ esteja idêntica; a vigência-piso fixa vem
+    # da config (competências auditadas começam em jun/2026).
     vigencia = date.fromisoformat(get_settings().crawler_vigencia_inicio)
+    resumos: dict[str, dict] = {}
     for uf in ufs:
         async with worker_global_session() as s:
-            resumos[uf] = await upsert_enquadramento(
-                s, resultado.registros, uf=uf, vigencia_inicio=vigencia,
+            resumos[uf] = await propor_enquadramento(
+                s, registros, uf=uf, vigencia_inicio=vigencia,
+                fonte=extrator.fonte, snapshot_id=snapshot_id,
             )
-        logger.info("CEST/CONFAZ upsert %s: %s", uf, resumos[uf])
-    return {"fonte": resultado.fonte, "ufs": resumos}
+        logger.info("CEST/CONFAZ propostas %s: %s", uf, resumos[uf])
+    return {"fonte": extrator.fonte, "fonte_mudou": mudou, "ufs": resumos}

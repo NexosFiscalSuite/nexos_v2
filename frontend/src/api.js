@@ -194,6 +194,16 @@ export const api = {
   editarMatrizAliquota: (id, data) => request('PATCH', `/matrizes/aliquotas/${id}`, data),
   removerMatrizAliquota: (id) => request('DELETE', `/matrizes/aliquotas/${id}`),
 
+  // Fila de revisão da auto-alimentação (robô propõe, curadoria aprova)
+  propostasMatrizes: (params = {}) => {
+    const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
+    return request('GET', '/matrizes/propostas' + (q ? `?${q}` : ''))
+  },
+  propostasResumo: () => request('GET', '/matrizes/propostas/resumo'),
+  aprovarProposta: (id) => request('POST', `/matrizes/propostas/${id}/aprovar`),
+  rejeitarProposta: (id, motivo) => request('POST', `/matrizes/propostas/${id}/rejeitar`, { motivo: motivo || null }),
+  aprovarPropostasLote: (payload = {}) => request('POST', '/matrizes/propostas/aprovar-lote', payload),
+
   // IBS/CBS 2026: destaque das alíquotas de teste da Reforma Tributária
   ibsCbsVerificacao: (params = {}) => {
     const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()

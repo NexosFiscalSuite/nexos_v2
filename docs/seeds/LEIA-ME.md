@@ -10,7 +10,9 @@ entra com revisão humana).
 1. Matrizes Fiscais → aba **Alíquotas** → Importar → `matriz_aliquotas.csv`
 2. Matrizes Fiscais → aba **FCP** → Importar → `matriz_fcp.csv`
 3. O **Enquadramento** (NCM×CEST) das 7 UFs é alimentado pelo crawler CONFAZ
-   (job mensal, dia 1º 04h UTC). Para rodar agora, na VM:
+   (job mensal, dia 1º 04h UTC). Desde a Fase 1 da automação, o robô PROPÕE e
+   a curadoria aprova na aba **Revisão** das Matrizes Fiscais — nada entra
+   direto. Para rodar agora, na VM:
    `docker compose -f docker-compose.prod.yml exec worker celery -A app.core.celery_app call fiscal.sync_cest_confaz`
 
 ## O que cada arquivo contém

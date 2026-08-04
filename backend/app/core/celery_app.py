@@ -53,6 +53,7 @@ from app.modules.compliance.infrastructure import models as _m_compliance  # noq
 from app.modules.contrapartes.infrastructure import models as _m_contrapartes  # noqa: E402,F401
 from app.modules.fiscal.infrastructure import matrizes_models as _m_matrizes  # noqa: E402,F401
 from app.modules.fiscal.infrastructure import models as _m_fiscal  # noqa: E402,F401
+from app.modules.fiscal.infrastructure import propostas_models as _m_propostas  # noqa: E402,F401
 from app.modules.grupos.infrastructure import models as _m_grupos  # noqa: E402,F401
 from app.modules.identity.infrastructure import models as _m_identity  # noqa: E402,F401
 from app.modules.jobs.infrastructure import models as _m_jobs  # noqa: E402,F401

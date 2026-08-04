@@ -170,10 +170,46 @@ const ABAS = [
     ],
   },
   {
+    id: 'revisao', label: 'Revisão', icon: 'ti-inbox', custom: true,
+    descricao: 'Propostas dos robôs de auto-alimentação — nada entra nas matrizes sem aprovação da curadoria',
+  },
+  {
     id: 'cobertura', label: 'Cobertura', icon: 'ti-radar-2', custom: true,
     descricao: 'O que a carteira movimenta × o que as matrizes cobrem — a fila de curadoria, ordenada por valor',
   },
 ]
+
+// ── Revisão: fila de propostas da auto-alimentação (robô propõe, curador decide) ──
+const ACOES_PROPOSTA = {
+  INSERIR: { label: 'Nova regra', tone: 'ok' },
+  ATUALIZAR: { label: 'Alteração', tone: 'warn' },
+  NOVA_VIGENCIA: { label: 'Nova vigência', tone: 'warn' },
+  ENCERRAR_VIGENCIA: { label: 'Encerrar vigência', tone: 'err' },
+}
+const TIPOS_PROPOSTA = {
+  enquadramento: 'Enquadramento', mva: 'MVA', fcp: 'FCP',
+  aliquotas: 'Alíquotas', protocolos: 'Protocolos',
+}
+const CAMPOS_DIFF = {
+  regime: 'Regime', segmento: 'Segmento', mva_original: 'MVA Original',
+  aliq_modal: 'Alíquota modal', aliq_fcp_integrado: 'FCP integrado',
+  aliq_fcp_st: 'FCP-ST', aliq_fcp_interno: 'FCP interno',
+  numero_acordo: 'Acordo', situacao: 'Situação', base_legal: 'Base legal',
+  data_inicio_vigencia: 'Início da vigência', data_fim_vigencia: 'Fim da vigência',
+}
+const fmtDiff = (v) => {
+  if (v == null || v === '') return '—'
+  const s = String(v)
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? dataBr(s) : s
+}
+// Campos em que a proposta difere do vigente (INSERIR: tudo que ela define).
+function mudancasDe(p) {
+  const de = p.linha_atual || {}
+  const para = p.payload || {}
+  return Object.keys(CAMPOS_DIFF)
+    .filter(k => k in para && String(para[k] ?? '') !== String(de[k] ?? ''))
+    .map(k => ({ campo: CAMPOS_DIFF[k], de: de[k], para: para[k] }))
+}
 
 // ── Cobertura: fila de curadoria dirigida pelos próprios XMLs ──
 const brl = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -259,6 +295,216 @@ function CoberturaPanel() {
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RevisaoPanel({ onMudou }) {
+  const { toasts, toast } = useToast()
+  const [dados, setDados] = useState({ items: [], total: 0 })
+  const [loading, setLoading] = useState(true)
+  const [erro, setErro] = useState(null)
+  const [status, setStatus] = useState('PENDENTE')
+  const [tipo, setTipo] = useState('')
+  const [uf, setUf] = useState('')
+  const [page, setPage] = useState(1)
+  const [busy, setBusy] = useState(false)
+  const [detalhe, setDetalhe] = useState(null)
+
+  const carregar = useCallback(async () => {
+    setLoading(true)
+    setErro(null)
+    try {
+      setDados(await api.propostasMatrizes({
+        status, tipo: tipo || undefined, uf: uf || undefined, page, page_size: PAGE_SIZE,
+      }))
+    } catch (e) { setErro(e.message) }
+    finally { setLoading(false) }
+  }, [status, tipo, uf, page])
+
+  useEffect(() => { carregar() }, [carregar])
+  useEffect(() => { setPage(1) }, [status, tipo, uf])
+  const total = dados.total || 0
+  const totalPaginas = Math.max(1, Math.ceil(total / PAGE_SIZE))
+
+  async function agir(fn, msg) {
+    setBusy(true)
+    try { await fn(); toast(msg, 'ok'); setDetalhe(null); await carregar(); onMudou?.() }
+    catch (e) { toast(e.message, 'error') }
+    finally { setBusy(false) }
+  }
+  const aprovar = (p) => agir(() => api.aprovarProposta(p.id), 'Proposta aprovada e aplicada na matriz.')
+  const rejeitar = (p) => {
+    const motivo = window.prompt('Motivo da rejeição (opcional — a proposta não voltará à fila):')
+    if (motivo === null) return
+    agir(() => api.rejeitarProposta(p.id, motivo), 'Proposta rejeitada — não voltará à fila.')
+  }
+  const aprovarTudo = () => {
+    if (!confirm(`Aprovar as ${total.toLocaleString('pt-BR')} propostas do filtro atual?`)) return
+    agir(async () => {
+      const r = await api.aprovarPropostasLote({ tipo_matriz: tipo || null, uf: uf || null })
+      if (r.falhas?.length) {
+        toast(`${r.falhas.length} não puderam ser aplicadas (conflito de vigência) — seguem na fila.`, 'error')
+      }
+    }, 'Lote revisado.')
+  }
+
+  if (loading) return <div className="center-loader"><div className="spinner" /></div>
+  if (erro) return <ErroCarga mensagem={erro} onRetry={carregar} />
+
+  return (
+    <div>
+      <ToastContainer toasts={toasts} />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ width: 170 }}>
+            <Dropdown value={status} onChange={setStatus} options={[
+              { value: 'PENDENTE', label: 'Pendentes' },
+              { value: 'APROVADA', label: 'Aprovadas' },
+              { value: 'REJEITADA', label: 'Rejeitadas' },
+            ]} />
+          </div>
+          <div style={{ width: 190 }}>
+            <Dropdown value={tipo} onChange={setTipo} options={[
+              { value: '', label: 'Todas as matrizes' },
+              ...Object.entries(TIPOS_PROPOSTA).map(([value, label]) => ({ value, label })),
+            ]} />
+          </div>
+          <input value={uf} onChange={e => setUf(e.target.value.toUpperCase())} maxLength={2}
+            placeholder="UF…" style={{ width: 90 }} />
+          {total > 0 && (
+            <span className="tnum" style={{ color: 'var(--text-3)', fontSize: 13 }}>
+              {total.toLocaleString('pt-BR')} {total === 1 ? 'proposta' : 'propostas'}
+            </span>
+          )}
+        </div>
+        {status === 'PENDENTE' && total > 0 && (
+          <button className="btn btn-primary" disabled={busy} onClick={aprovarTudo}>
+            <i className="ti ti-checks" /> Aprovar tudo (filtro atual)
+          </button>
+        )}
+      </div>
+
+      {dados.items.length === 0 ? (
+        <div className="empty-state">
+          <i className="ti ti-inbox" />
+          <p className="empty-title">{status === 'PENDENTE' ? 'Fila limpa' : 'Nada por aqui'}</p>
+          <p className="empty-subtitle">
+            {status === 'PENDENTE'
+              ? 'Nenhuma proposta dos robôs aguardando revisão. Quando uma fonte oficial mudar, ela aparece aqui.'
+              : 'Nenhuma proposta com esse status no filtro atual.'}
+          </p>
+        </div>
+      ) : (
+        <div className="card" style={{ padding: 0 }}>
+          <div className="tbl-wrap">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Ação</th><th>Matriz</th><th>Chave</th><th>Mudança</th>
+                  <th>Fonte</th><th>Criada</th><th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {dados.items.map(p => {
+                  const acao = ACOES_PROPOSTA[p.acao] || { label: p.acao, tone: 'info' }
+                  const muda = mudancasDe(p)
+                  return (
+                    <tr key={p.id} style={{ cursor: 'pointer' }} onClick={() => setDetalhe(p)}>
+                      <td>{badge(acao.label, acao.tone)}</td>
+                      <td>{badge(TIPOS_PROPOSTA[p.tipo_matriz] || p.tipo_matriz)}</td>
+                      <td className="mono" style={{ fontSize: 13 }}>{p.chave_resumo}</td>
+                      <td style={{ color: 'var(--text-2)', fontSize: 13 }}>
+                        {muda.slice(0, 2).map(m => `${m.campo}: ${fmtDiff(m.de)} → ${fmtDiff(m.para)}`).join(' · ')}
+                        {muda.length > 2 ? ` · +${muda.length - 2}` : ''}
+                      </td>
+                      <td style={{ color: 'var(--text-3)', fontSize: 12 }}>{p.fonte}</td>
+                      <td style={{ color: 'var(--text-3)', fontSize: 12 }}>{dataCadastro(p)}</td>
+                      <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        {p.status === 'PENDENTE' ? (
+                          <>
+                            <button className="btn btn-icon" title="Aprovar" disabled={busy}
+                              onClick={ev => { ev.stopPropagation(); aprovar(p) }}>
+                              <i className="ti ti-check" style={{ color: 'var(--ok-text)' }} />
+                            </button>
+                            <button className="btn btn-icon" title="Rejeitar" disabled={busy}
+                              onClick={ev => { ev.stopPropagation(); rejeitar(p) }}>
+                              <i className="ti ti-x" style={{ color: 'var(--err-text)' }} />
+                            </button>
+                          </>
+                        ) : (
+                          <span style={{ color: 'var(--text-3)', fontSize: 12 }}>{p.revisado_por || '—'}</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          {totalPaginas > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: 12, borderTop: '1px solid var(--border-2)' }}>
+              <button className="btn btn-ghost btn-sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>
+                <i className="ti ti-chevron-left" />
+              </button>
+              {paginasVisiveis(page, totalPaginas).map((n, i) => n === '…'
+                ? <span key={`e${i}`} style={{ padding: '0 6px', color: 'var(--text-4)' }}>…</span>
+                : (
+                  <button key={n} onClick={() => setPage(n)} className="btn btn-sm"
+                    style={{
+                      minWidth: 32, justifyContent: 'center', border: 'none',
+                      background: n === page ? 'var(--primary)' : 'transparent',
+                      color: n === page ? '#fff' : 'var(--text-2)', fontWeight: n === page ? 700 : 500,
+                    }}>{n}</button>
+                ))}
+              <button className="btn btn-ghost btn-sm" disabled={page === totalPaginas} onClick={() => setPage(p => p + 1)}>
+                <i className="ti ti-chevron-right" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {detalhe && (
+        <div className="modal-overlay" onClick={() => setDetalhe(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{(ACOES_PROPOSTA[detalhe.acao] || {}).label || detalhe.acao} · {TIPOS_PROPOSTA[detalhe.tipo_matriz] || detalhe.tipo_matriz}</h2>
+              <button className="btn btn-icon" onClick={() => setDetalhe(null)}><i className="ti ti-x" /></button>
+            </div>
+            <div className="modal-body">
+              <p className="mono" style={{ marginBottom: 4 }}>{detalhe.chave_resumo}</p>
+              <p style={{ color: 'var(--text-3)', fontSize: 13, marginBottom: 14 }}>
+                Fonte: {detalhe.fonte} · proposta em {dataCadastro(detalhe)}
+                {detalhe.status !== 'PENDENTE' && (
+                  <> · {detalhe.status === 'APROVADA' ? 'aprovada' : 'rejeitada'} por {detalhe.revisado_por || '—'}
+                    {detalhe.motivo_rejeicao ? ` — “${detalhe.motivo_rejeicao}”` : ''}</>
+                )}
+              </p>
+              <div className="tbl-wrap">
+                <table className="tbl">
+                  <thead><tr><th>Campo</th><th>Vigente</th><th>Proposto</th></tr></thead>
+                  <tbody>
+                    {mudancasDe(detalhe).map(m => (
+                      <tr key={m.campo}>
+                        <td style={{ color: 'var(--text-3)' }}>{m.campo}</td>
+                        <td>{fmtDiff(m.de)}</td>
+                        <td style={{ fontWeight: 600 }}>{fmtDiff(m.para)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            {detalhe.status === 'PENDENTE' && (
+              <div className="modal-footer">
+                <button className="btn btn-ghost" disabled={busy} onClick={() => rejeitar(detalhe)}>Rejeitar</button>
+                <button className="btn btn-primary" disabled={busy} onClick={() => aprovar(detalhe)}>Aprovar e aplicar</button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -514,6 +760,14 @@ export default function MatrizesFiscais() {
   const fileRef = useRef(null)
   const aba = ABAS.find(a => a.id === tab)
 
+  // Contador de propostas pendentes (chip da aba Revisão).
+  const [pendencias, setPendencias] = useState(0)
+  const atualizarPendencias = useCallback(async () => {
+    try { setPendencias((await api.propostasResumo())?.total_pendentes || 0) }
+    catch { /* silencioso: o chip é informativo */ }
+  }, [])
+  useEffect(() => { atualizarPendencias() }, [atualizarPendencias])
+
   async function exportar() {
     setBulkBusy(true)
     try {
@@ -568,14 +822,22 @@ export default function MatrizesFiscais() {
           <button key={a.id} onClick={() => setTab(a.id)} className="btn btn-sm"
             style={{ border: 'none', background: tab === a.id ? 'var(--surface)' : 'transparent', color: tab === a.id ? 'var(--text-1)' : 'var(--text-3)', boxShadow: tab === a.id ? 'var(--shadow-sm)' : 'none' }}>
             <i className={`ti ${a.icon}`} /> {a.label}
+            {a.id === 'revisao' && pendencias > 0 && (
+              <span className="tnum" style={{
+                marginLeft: 6, background: 'var(--primary)', color: '#fff',
+                borderRadius: 999, fontSize: 11, fontWeight: 700, padding: '1px 7px',
+              }}>{pendencias > 99 ? '99+' : pendencias}</span>
+            )}
           </button>
         ))}
       </div>
 
-      {aba.custom
-        ? <CoberturaPanel key={`${tab}:${bulkVersion}`} />
-        : <CrudMatriz key={`${tab}:${bulkVersion}`} aba={aba}
-            prefill={deepLink?.aba === tab ? deepLink.prefill : null} />}
+      {aba.id === 'revisao'
+        ? <RevisaoPanel key={`${tab}:${bulkVersion}`} onMudou={atualizarPendencias} />
+        : aba.custom
+          ? <CoberturaPanel key={`${tab}:${bulkVersion}`} />
+          : <CrudMatriz key={`${tab}:${bulkVersion}`} aba={aba}
+              prefill={deepLink?.aba === tab ? deepLink.prefill : null} />}
       {resultado && <ResumoImportModal r={resultado} onClose={() => setResultado(null)} />}
     </div>
   )
