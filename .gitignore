@@ -24,6 +24,7 @@ node_modules/
 
 # ── Dados locais / artefatos ──────────────────────────────────────────
 data/
+graphify-out/
 *.sqlite
 *.sqlite3
 *.db

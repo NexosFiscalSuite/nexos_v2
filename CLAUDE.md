@@ -127,3 +127,13 @@ paginação e UF por extenso em Empresas. Suite: 160 passed, 4 skipped.
 - Operacional (lado do João): limpar `NEXOS_MATRIZ_CURADORES` no .env do
   servidor; conferir grupos dos supervisores após o deploy do `3720b18`
   (supervisor sem grupo não vê empresa nenhuma).
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
