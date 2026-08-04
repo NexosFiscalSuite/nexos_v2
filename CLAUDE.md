@@ -44,8 +44,11 @@ os comandos de deploy.
   latin-1 com mapa `_TROCAS` para “—”/“→”, `_brl/_pct/_cnpj`). O timbrado
   mantém o navy da marca Sol (#24477B) mesmo com a paleta nova do app.
 - **Front**: paleta roxo claro #8B5FBF (pedido do João em ago/2026 — antes
-  azul #0056D2; sidebar em card flutuante recolhível, estilo SOL
-  Treinamentos), fonte Manrope,
+  azul #0056D2). Layout no padrão do Console do sol-treinamentos-hub
+  (pasta vizinha): sidebar em card flutuante sticky recolhível com marca
+  compacta e usuário no rodapé, SEM topbar branca — competência/empresa/
+  ajuda/sair flutuam no topo direito; cada página tem seu próprio título.
+  Fonte Manrope,
   balões clicáveis `.balao-classif` (nunca tooltip de hover), números com
   `.tnum`, textos para leigos (nada de jargão seco).
 - **Linguagem com o usuário**: sempre português; explicar o que mudou em

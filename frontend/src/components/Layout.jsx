@@ -6,24 +6,17 @@ import { useCompetencia } from '../context/CompetenciaContext'
 import { useRefresh } from '../context/RefreshContext'
 import { api } from '../api'
 import CompetenciaPicker from './CompetenciaPicker'
-import logoMarca from '../assets/sol-logo.svg'
 import logoEmblema from '../assets/sol-emblema.svg'
 import { iniciarTour } from '../tour'
 
-const PAGE_TITLES = {
-  '/dashboard':  'Dashboard',
-  '/upload':     'Upload de XMLs',
-  '/notas':      'Notas Fiscais',
-  '/conformidade': 'Conformidade',
-  '/divergencias-st': 'Divergências de ICMS-ST',
-  '/ibs-cbs': 'IBS/CBS — Ano-teste 2026',
-  '/relatorios': 'Relatórios',
-  '/cadastros':  'Clientes e Fornecedores',
-  '/matrizes-fiscais': 'Matrizes Fiscais',
-  '/empresas':   'Empresas',
-  '/grupos':     'Grupos',
-  '/usuarios':   'Usuários',
-  '/auditoria':  'Auditoria',
+// Ações rápidas do topo direito: círculos flutuando no canvas (padrão do
+// Console do SOL Treinamentos — a topbar branca saiu; cada página tem título).
+const TOP_ICON = {
+  width: 36, height: 36, borderRadius: '50%', padding: 0,
+  border: '1px solid var(--border)', background: 'var(--surface)',
+  color: 'var(--text-3)', cursor: 'pointer',
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+  boxShadow: '0 1px 2px rgba(0,10,40,0.06)',
 }
 
 const NAV = [
@@ -263,7 +256,6 @@ export default function Layout() {
   }
   const [quebraCount, setQuebraCount] = useState(0)
   const [boasVindas, setBoasVindas] = useState(false)
-  const pageTitle = PAGE_TITLES[location.pathname] || 'Sol'
 
   // Primeiro acesso deste usuário neste navegador? Oferece o tour guiado.
   const chaveTour = user ? `sol_tour_v1_${user.id}` : null
@@ -303,30 +295,37 @@ export default function Layout() {
         flexShrink:0, background:'var(--sidebar-bg)',
         display:'flex', flexDirection:'column',
         transition:'width .22s cubic-bezier(.4,0,.2,1)',
-        position:'fixed', left:12, top:12, bottom:12, overflow:'hidden', zIndex:100,
-        border:'1px solid var(--hairline)', borderRadius:'var(--radius-lg)',
+        position:'sticky', top:12, height:'calc(100vh - 24px)', margin:'12px 0 12px 12px',
+        zIndex:100, border:'1px solid var(--hairline)', borderRadius:'var(--radius-lg)',
         boxShadow:'0 2px 14px rgba(29,29,31,0.06)',
       }}>
-        {/* Logo + botão-círculo de recolher (chevron), como no Treinamentos. */}
-        <div style={{
-          padding: collapsed ? '12px 0 10px' : '0 10px 0 14px',
-          minHeight:'var(--topbar-h)',
-          display:'flex', flexDirection: collapsed ? 'column' : 'row',
-          alignItems:'center', justifyContent: collapsed ? 'center' : 'space-between',
-          gap:8, borderBottom:'1px solid var(--border-2)', flexShrink:0,
-        }}>
-          {collapsed
-            ? <img src={logoEmblema} alt="Sol Contabilidade" style={{ height:32, width:'auto', maxWidth:40, objectFit:'contain', flexShrink:0 }} />
-            : <img src={logoMarca} alt="Sol Contabilidade" style={{ height:42, width:'auto', maxWidth:170, objectFit:'contain', flexShrink:0, minWidth:0 }} />}
-          <button onClick={alternarSidebar} title={collapsed ? 'Expandir menu' : 'Recolher menu'}
-            style={{
-              width:26, height:26, borderRadius:'50%', border:'1px solid var(--border)',
-              background:'var(--surface)', color:'var(--text-3)', cursor:'pointer',
-              display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
-            }}>
-            <i className={`ti ti-chevron-${collapsed ? 'right' : 'left'}`} style={{ fontSize:14 }} />
-          </button>
+        {/* Marca compacta (emblema + nome/subtítulo), padrão do Console. */}
+        <div style={{ padding: collapsed ? '16px 0 12px' : '16px 14px 12px', borderBottom:'1px solid var(--border-2)', flexShrink:0 }}>
+          <NavLink to="/dashboard" title="Sol Contabilidade — Nexos Fiscal" style={{
+            display:'flex', alignItems:'center', gap:11, minWidth:0,
+            justifyContent: collapsed ? 'center' : 'flex-start', textDecoration:'none',
+          }}>
+            <img src={logoEmblema} alt="Sol" style={{ width:34, height:34, objectFit:'contain', flexShrink:0 }} />
+            {!collapsed && (
+              <span style={{ display:'flex', flexDirection:'column', minWidth:0, lineHeight:1.2 }}>
+                <strong style={{ fontSize:14.5, color:'var(--text-1)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>Sol Contabilidade</strong>
+                <small style={{ fontSize:11.5, color:'var(--text-4)' }}>Nexos Fiscal</small>
+              </span>
+            )}
+          </NavLink>
         </div>
+
+        {/* Botão de recolher — redondo, flutuando na borda direita do card. */}
+        <button onClick={alternarSidebar} title={collapsed ? 'Expandir menu' : 'Recolher menu'}
+          style={{
+            position:'absolute', top:24, right:-13, zIndex:5,
+            width:26, height:26, borderRadius:'50%', border:'1px solid var(--border)',
+            background:'var(--surface)', color:'var(--text-3)', cursor:'pointer',
+            display:'flex', alignItems:'center', justifyContent:'center',
+            boxShadow:'0 1px 3px rgba(0,0,0,0.08)',
+          }}>
+          <i className={`ti ti-chevron-${collapsed ? 'right' : 'left'}`} style={{ fontSize:14 }} />
+        </button>
 
         <nav style={{ flex:1, padding:'12px 8px', overflowY:'auto', overflowX:'hidden' }}>
           {NAV.map(item => (
@@ -359,13 +358,11 @@ export default function Layout() {
         </div>
       </aside>
 
-      {/* Main */}
-      <div style={{ flex:1, display:'flex', flexDirection:'column', marginLeft: collapsed ? 'calc(var(--sidebar-w-c) + 24px)' : 'calc(var(--sidebar-w) + 24px)', transition:'margin-left .22s cubic-bezier(.4,0,.2,1)', minWidth:0 }}>
+      {/* Main — sem topbar branca: controles flutuam no canto superior
+          direito, direto no canvas (padrão do Console do Treinamentos). */}
+      <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0 }}>
 
-        {/* Topbar */}
-        <header style={{ height:'var(--topbar-h)', background:'var(--topbar-bg)', borderBottom:'1px solid var(--hairline)', display:'flex', alignItems:'center', padding:'0 24px', gap:12, position:'sticky', top:0, zIndex:90, boxShadow:'none' }}>
-          <div style={{ fontWeight:600, fontSize:15, color:'var(--text-1)', flex:1 }}>{pageTitle}</div>
-
+        <div style={{ display:'flex', justifyContent:'flex-end', alignItems:'center', gap:10, padding:'14px 24px 0', minHeight:12, flexWrap:'wrap' }}>
           {/* Competencia global */}
           <div data-tour="topbar-competencia"><CompetenciaPickerTopbar /></div>
 
@@ -373,21 +370,18 @@ export default function Layout() {
           <div data-tour="topbar-empresa"><EmpresaTopbar /></div>
 
           {/* Ajuda: refaz o tour guiado a qualquer momento */}
-          <button className="btn btn-ghost btn-sm" data-tour="topbar-ajuda" title="Refazer o tour guiado"
-            onClick={() => { setCollapsed(false); iniciarTour() }} style={{ color:'var(--text-3)' }}>
+          <button style={TOP_ICON} data-tour="topbar-ajuda" title="Refazer o tour guiado"
+            onClick={() => { setCollapsed(false); iniciarTour() }}>
             <i className="ti ti-help-circle" style={{ fontSize:17 }} />
           </button>
 
-          {/* Divider */}
-          <div style={{ width:1, height:28, background:'var(--border)', flexShrink:0 }} />
-
-          {/* Sair (o usuário agora mora no rodapé da sidebar) */}
-          <button onClick={() => { logout(); navigate('/login') }} className="btn btn-ghost btn-sm" title="Sair" style={{ color:'var(--text-3)' }}>
+          {/* Sair (o usuário mora no rodapé da sidebar) */}
+          <button onClick={() => { logout(); navigate('/login') }} style={TOP_ICON} title="Sair">
             <i className="ti ti-logout" style={{ fontSize:16 }} />
           </button>
-        </header>
+        </div>
 
-        <main style={{ flex:1, padding:'28px 32px', overflow:'auto', minWidth:0 }}>
+        <main style={{ flex:1, padding:'14px 32px 28px', minWidth:0 }}>
           <Outlet />
         </main>
       </div>
