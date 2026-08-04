@@ -45,9 +45,11 @@ async def _sync(ufs: list[str]) -> dict:
     resultado = ConfazCestExtractor().extract()
     logger.info("CEST/CONFAZ: %d registros de %s", len(resultado.registros), resultado.fonte)
 
-    # 2) Upsert idempotente por UF, sessão POR unidade de trabalho.
+    # 2) Upsert idempotente por UF, sessão POR unidade de trabalho. Vigência
+    # FIXA da config (piso das competências auditadas): rodadas mensais casam
+    # a mesma família de vigência em vez de abrir uma nova sobreposta.
     resumos: dict[str, dict] = {}
-    vigencia = date.today().replace(day=1)
+    vigencia = date.fromisoformat(get_settings().crawler_vigencia_inicio)
     for uf in ufs:
         async with worker_global_session() as s:
             resumos[uf] = await upsert_enquadramento(

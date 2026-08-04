@@ -8,11 +8,12 @@ e-mail. Um factory registra os 4 verbos por matriz para não repetir o mesmo
 CRUD cinco vezes.
 """
 from collections.abc import Callable
+from typing import Generic, TypeVar
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import Base
@@ -51,6 +52,19 @@ from app.shared.domain.value_objects import only_digits
 
 router = APIRouter(prefix="/matrizes", tags=["Matrizes Fiscais"])
 
+T = TypeVar("T")
+
+
+class Pagina(BaseModel, Generic[T]):
+    """Envelope de paginação das listagens. A base auto-alimentada (crawler
+    CONFAZ × 7 UFs) tem dezenas de milhares de linhas — a tela pagina no
+    servidor em vez de carregar tudo de uma vez."""
+
+    items: list[T]
+    total: int
+    page: int
+    page_size: int
+
 
 async def _garantir_sem_sobreposicao(session, modelo, dados: dict, excluir_id=None):
     """ADR-0002 (regra 4): mudou a taxa? Encerre a vigência antiga e INSIRA uma
@@ -78,17 +92,25 @@ def _registrar_crud(
 ) -> None:
     """Registra GET/POST/PATCH/DELETE de uma matriz sob /matrizes/{sub}."""
 
-    @router.get(f"/{sub}", response_model=list[response_schema], name=f"listar_{sub}")
+    @router.get(f"/{sub}", response_model=Pagina[response_schema], name=f"listar_{sub}")
     async def _listar(
         uf: str | None = Query(default=None, description="Filtra por UF destino"),
         ncm: str | None = Query(default=None, description="Filtra por NCM (prefixo)"),
+        page: int = Query(default=1, ge=1),
+        page_size: int = Query(default=50, ge=1, le=500),
         claims: TokenClaims = Depends(get_current_claims),
         session: AsyncSession = Depends(tenant_session),
     ):
         stmt = select(modelo)
         if filtrar is not None:
             stmt = filtrar(stmt, uf, ncm)
-        return list((await session.execute(stmt)).scalars().all())
+        total = await session.scalar(
+            select(func.count()).select_from(stmt.order_by(None).subquery())
+        ) or 0
+        rows = (await session.execute(
+            stmt.offset((page - 1) * page_size).limit(page_size)
+        )).scalars().all()
+        return Pagina(items=list(rows), total=total, page=page, page_size=page_size)
 
     @router.post(
         f"/{sub}", response_model=response_schema,

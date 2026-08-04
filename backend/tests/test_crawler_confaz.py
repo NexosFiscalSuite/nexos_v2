@@ -69,6 +69,16 @@ def test_ufs_alvo_normaliza_e_deduplica():
     assert _ufs_alvo("MG, sp,,go,MG") == ["MG", "SP", "GO"]
 
 
+def test_config_padrao_do_crawler():
+    """Defaults: as 7 UFs com clientes do escritório e a vigência-piso de
+    jun/2026 (início das competências auditadas) parseável como data."""
+    from app.core.config import Settings
+
+    s = Settings(_env_file=None, database_url="x", database_privileged_url="x", jwt_secret="x")
+    assert _ufs_alvo(s.crawler_uf_alvo) == ["MG", "PR", "SP", "DF", "RS", "RJ", "GO"]
+    assert date.fromisoformat(s.crawler_vigencia_inicio) == date(2026, 6, 1)
+
+
 @pytest.mark.asyncio
 async def test_upsert_enquadramento_idempotente(sessao):
     regs = ConfazCestExtractor().parse(_HTML.encode("utf-8"))

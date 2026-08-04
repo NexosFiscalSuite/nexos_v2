@@ -12,6 +12,19 @@ const vigencia = (m) =>
 const dataCadastro = (m) =>
   m.created_at ? new Date(m.created_at).toLocaleDateString('pt-BR') : '—'
 
+// Paginação no SERVIDOR: a base auto-alimentada (CONFAZ × 7 UFs) tem dezenas
+// de milhares de linhas — a tela busca uma página por vez.
+const PAGE_SIZE = 50
+// Números de página com janela: 1 … 4 [5] 6 … 20 (mesmo padrão de Empresas).
+function paginasVisiveis(atual, total) {
+  const nums = []
+  for (let i = 1; i <= total; i++) {
+    if (i === 1 || i === total || Math.abs(i - atual) <= 2) nums.push(i)
+    else if (nums[nums.length - 1] !== '…') nums.push('…')
+  }
+  return nums
+}
+
 const REGIME_OPTS = [
   { value: 'ST', label: 'ST — Substituição Tributária' },
   { value: 'TN', label: 'TN — Tributação Normal' },
@@ -273,6 +286,8 @@ function CampoInput({ campo, value, onChange }) {
 function CrudMatriz({ aba, prefill }) {
   const { toasts, toast } = useToast()
   const [lista, setLista] = useState([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState(null)
   const [filtroUf, setFiltroUf] = useState('')
@@ -296,12 +311,18 @@ function CrudMatriz({ aba, prefill }) {
   const carregar = useCallback(async () => {
     setLoading(true)
     setErro(null)
-    try { setLista(await aba.api.list({ uf: filtroUf || undefined }) || []) }
+    try {
+      const r = await aba.api.list({ uf: filtroUf || undefined, page, page_size: PAGE_SIZE })
+      setLista(r?.items || (Array.isArray(r) ? r : []))
+      setTotal(r?.total ?? 0)
+    }
     catch (e) { setErro(e.message) }
     finally { setLoading(false) }
-  }, [aba, filtroUf])
+  }, [aba, filtroUf, page])
 
   useEffect(() => { carregar() }, [carregar])
+  useEffect(() => { setPage(1) }, [filtroUf])
+  const totalPaginas = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   function abrirNova() { setEditId(null); setForm(vazioDe(aba.campos)); setModal(true) }
   function abrirEdicao(m) { setEditId(m.id); setForm({ ...vazioDe(aba.campos), ...m, data_fim_vigencia: m.data_fim_vigencia || '' }); setModal(true) }
@@ -330,8 +351,15 @@ function CrudMatriz({ aba, prefill }) {
     <div>
       <ToastContainer toasts={toasts} />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
-        <input value={filtroUf} onChange={e => setFiltroUf(e.target.value.toUpperCase())} maxLength={2}
-          placeholder="Filtrar por UF…" style={{ width: 160 }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <input value={filtroUf} onChange={e => setFiltroUf(e.target.value.toUpperCase())} maxLength={2}
+            placeholder="Filtrar por UF…" style={{ width: 160 }} />
+          {total > 0 && (
+            <span className="tnum" style={{ color: 'var(--text-3)', fontSize: 13 }}>
+              {total.toLocaleString('pt-BR')} {total === 1 ? 'regra' : 'regras'}
+            </span>
+          )}
+        </div>
         <button className="btn btn-primary" onClick={abrirNova}><i className="ti ti-plus" /> Nova regra</button>
       </div>
 
@@ -377,6 +405,26 @@ function CrudMatriz({ aba, prefill }) {
               </tbody>
             </table>
           </div>
+          {totalPaginas > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: 12, borderTop: '1px solid var(--border-2)' }}>
+              <button className="btn btn-ghost btn-sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>
+                <i className="ti ti-chevron-left" />
+              </button>
+              {paginasVisiveis(page, totalPaginas).map((n, i) => n === '…'
+                ? <span key={`e${i}`} style={{ padding: '0 6px', color: 'var(--text-4)' }}>…</span>
+                : (
+                  <button key={n} onClick={() => setPage(n)} className="btn btn-sm"
+                    style={{
+                      minWidth: 32, justifyContent: 'center', border: 'none',
+                      background: n === page ? 'var(--primary)' : 'transparent',
+                      color: n === page ? '#fff' : 'var(--text-2)', fontWeight: n === page ? 700 : 500,
+                    }}>{n}</button>
+                ))}
+              <button className="btn btn-ghost btn-sm" disabled={page === totalPaginas} onClick={() => setPage(p => p + 1)}>
+                <i className="ti ti-chevron-right" />
+              </button>
+            </div>
+          )}
         </div>
       )}
 

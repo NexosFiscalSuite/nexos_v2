@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     # UFs com clientes do escritório, alvo do upsert das matrizes (job
     # agendado). Separadas por vírgula; a env NEXOS_CRAWLER_UF_ALVO sobrepõe.
     crawler_uf_alvo: str = "MG,PR,SP,DF,RS,RJ,GO"
+    # Vigência-piso das linhas auto-alimentadas: as competências auditadas
+    # começam em jun/2026, então o enquadramento precisa valer desde lá. Data
+    # FIXA também mantém o upsert mensal idempotente (atualiza a mesma família
+    # de vigência) em vez de abrir família nova — e sobreposta — a cada mês.
+    crawler_vigencia_inicio: str = "2026-06-01"
 
     # Curadoria das matrizes fiscais: vazio = todo usuário autenticado escreve;
     # preenchido (e-mails por vírgula) = freio de emergência só para a lista. --
