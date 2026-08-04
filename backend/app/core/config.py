@@ -52,8 +52,9 @@ class Settings(BaseSettings):
     s3_region: str = "us-east-1"
 
     # Crawlers de auto-alimentação (CONFAZ/SEFAZ) -----------------------------
-    # UF do nicho do escritório alvo do upsert das matrizes (job agendado).
-    crawler_uf_alvo: str = "MG"
+    # UFs com clientes do escritório, alvo do upsert das matrizes (job
+    # agendado). Separadas por vírgula; a env NEXOS_CRAWLER_UF_ALVO sobrepõe.
+    crawler_uf_alvo: str = "MG,PR,SP,DF,RS,RJ,GO"
 
     # Curadoria das matrizes fiscais: vazio = todo usuário autenticado escreve;
     # preenchido (e-mails por vírgula) = freio de emergência só para a lista. --
