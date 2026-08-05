@@ -941,8 +941,8 @@ function MemoriaModal({ d, onClose }) {
       : <>O valor destacado confere com o cálculo.</>
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" data-tour="st-memoria" onClick={e => e.stopPropagation()} style={{ width: 920, maxWidth: '96%' }}>
+    <div className="modal-overlay">
+      <div className="modal" data-tour="st-memoria" style={{ width: 920, maxWidth: '96%' }}>
         <div className="modal-header">
           <h2><i className="ti ti-calculator" style={{ marginRight: 8 }} />Como chegamos ao valor devido</h2>
           <button className="btn btn-icon" data-tour="st-memoria-fechar" onClick={onClose}><i className="ti ti-x" /></button>
