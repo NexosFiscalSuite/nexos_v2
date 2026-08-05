@@ -113,18 +113,22 @@ os comandos de deploy.
 ## Estado atual (05/08/2026)
 
 Automação das matrizes (proposta em docs/proposta_automacao_matrizes_st.md):
-Fases 1–4 entregues — crawler CONFAZ NCM×CEST (7 UFs: MG,PR,SP,DF,RS,RJ,GO;
+Fases 1–5 entregues — crawler CONFAZ NCM×CEST (7 UFs: MG,PR,SP,DF,RS,RJ,GO;
 vigência-piso 2026-06-01) propõe na FILA de revisão (aba Revisão, nada entra
 sem curadoria; rejeição suprime re-proposta por hash); aviso de legislação
 pré-emissão com trilha de ciência + `ultima_verificacao_em` nas 5 matrizes;
 aba Saúde (frescor 90d + pares interestaduais × curadoria de protocolos);
 radar semanal do índice de Protocolos CONFAZ (hash + webhook); reconferência
 semestral de alíquotas/FCP (ação REVALIDAR na fila — aprovar renova o
-carimbo, hash por ciclo). Paginação em todas as listas (15–50/página;
-componente Paginacao). Migrações até 0030.
-Suite: 176 passed, 4 skipped. Deploys de 04-05/08 AGUARDANDO o João
+carimbo, hash por ciclo); MVA de MG extraída do Anexo VII do RICMS/2023
+(SEFAZ-MG, 7 páginas HTML latin-1, âncora na célula CEST — validado com
+1.080 pares reais; mudança em linha auto vira NOVA_VIGENCIA no 1º do mês da
+detecção; PMPF extinto em MG pela Portaria SUTRI 1.518/2025). Paginação em
+todas as listas (15–50/página; componente Paginacao). Migrações até 0030.
+Suite: 181 passed, 4 skipped. Deploys de 04-05/08 AGUARDANDO o João
 (sem acesso ao servidor no momento) — um git pull + build + compose aplica
-tudo, migrações rodam sozinhas.
+tudo, migrações rodam sozinhas. Falta da proposta: Fase 6 (pauta/PMPF — com
+MG fora do PMPF, relevância caiu; avaliar por UF).
 
 ## Pendências e ofertas em aberto
 

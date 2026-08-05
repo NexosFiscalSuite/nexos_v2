@@ -17,8 +17,13 @@ from app.core.config import get_settings
 from app.core.worker_db import worker_global_session
 from app.modules.fiscal.crawlers.base import http_get
 from app.modules.fiscal.crawlers.confaz_cest import ConfazCestExtractor
-from app.modules.fiscal.crawlers.propor import propor_enquadramento, registrar_snapshot
+from app.modules.fiscal.crawlers.propor import (
+    propor_enquadramento,
+    propor_mva,
+    registrar_snapshot,
+)
 from app.modules.fiscal.crawlers.reconferencia import propor_reconferencia
+from app.modules.fiscal.crawlers.sefaz_mg_mva import SefazMgMvaExtractor
 from app.modules.fiscal.infrastructure.propostas_models import FonteSnapshot
 
 logger = logging.getLogger(__name__)
@@ -46,6 +51,45 @@ def sync_cest_confaz(self, ufs: str = ""):
     except Exception as exc:  # noqa: BLE001 — portal público instável: retry, não falha o beat
         logger.warning("sync_cest_confaz falhou (%s); reagendando.", exc)
         raise self.retry(exc=exc, countdown=60 * 30) from exc
+
+
+@celery_app.task(name="fiscal.sync_mva_mg", bind=True, max_retries=3)
+def sync_mva_mg(self):
+    """Fase 5: baixa o Anexo VII do RICMS/2023 (SEFAZ-MG, 7 páginas HTML),
+    registra o snapshot e gera PROPOSTAS de MVA para MG — INSERIR para chave
+    nova, NOVA_VIGENCIA quando a MVA de linha do próprio robô mudou. Nada
+    entra sem curadoria; curadoria manual nunca é tocada."""
+    try:
+        return asyncio.run(_sync_mva())
+    except Exception as exc:  # noqa: BLE001 — portal público instável: retry, não falha o beat
+        logger.warning("sync_mva_mg falhou (%s); reagendando.", exc)
+        raise self.retry(exc=exc, countdown=60 * 30) from exc
+
+
+async def _sync_mva() -> dict:
+    extrator = SefazMgMvaExtractor()
+    bruto = extrator.fetch()
+    registros = extrator.parse(bruto)
+    logger.info("MVA/SEFAZ-MG: %d registros de %s", len(registros), extrator.fonte)
+
+    async with worker_global_session() as s:
+        _mudou, snapshot_id = await registrar_snapshot(
+            s, fonte=extrator.fonte, url=extrator.url, conteudo=bruto,
+            resumo=f"{len(registros)} registros de MVA",
+        )
+
+    # Piso da vigência p/ chaves novas = config (competências auditadas);
+    # mudança de MVA detectada = vigência no 1º do mês corrente (aproximação
+    # documentada — o anexo não publica a data por item; o curador decide).
+    piso = date.fromisoformat(get_settings().crawler_vigencia_inicio)
+    mudanca = date.today().replace(day=1)
+    async with worker_global_session() as s:
+        resumo = await propor_mva(
+            s, registros, uf="MG", vigencia_inicio=piso, vigencia_mudanca=mudanca,
+            fonte=extrator.fonte, snapshot_id=snapshot_id,
+        )
+    logger.info("MVA/SEFAZ-MG propostas: %s", resumo)
+    return resumo
 
 
 @celery_app.task(name="fiscal.reconferir_aliquotas", bind=True, max_retries=2)

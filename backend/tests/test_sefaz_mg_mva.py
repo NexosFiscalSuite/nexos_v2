@@ -1,0 +1,136 @@
+"""MVA de MG (Fase 5): parser do Anexo VII (puro, sem rede) e o diff→proposta
+com as regras fail-closed — item sem margem fica fora, fonte ambígua fica
+fora, curadoria manual nunca é tocada, mudança vira NOVA_VIGENCIA."""
+from datetime import date
+from decimal import Decimal
+
+import pytest
+import pytest_asyncio
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from app.core.database import Base
+from app.modules.fiscal.application.propostas_service import PropostasService
+from app.modules.fiscal.crawlers.propor import BASE_LEGAL_AUTO_MVA, propor_mva
+from app.modules.fiscal.crawlers.sefaz_mg_mva import MvaRecord, SefazMgMvaExtractor
+from app.modules.fiscal.infrastructure.matrizes_models import MatrizMva
+from app.modules.fiscal.infrastructure.propostas_models import MatrizProposta
+
+# Amostra no formato real do Anexo VII (Parte 2): célula de layout vazia à
+# frente, cabeçalho, item com 2 NCM, item SEM margem ('-') e uma tabela sem a
+# célula de layout (larguras variam entre capítulos).
+_HTML = """
+<html><body>
+<table><tr><td>menu de layout</td></tr></table>
+<table>
+ <tr><td></td><td>ITEM</td><td>CEST</td><td>NBM/SH</td><td>DESCRIÇÃO</td><td>ÂMBITO DE APLICAÇÃO</td><td>MVA (%)</td></tr>
+ <tr><td></td><td>1.0</td><td>01.001.00</td><td>3815.12.10 3815.12.90</td><td>Catalisadores em colmeia cerâmica</td><td>1.1</td><td>71,78</td></tr>
+ <tr><td></td><td>2.0</td><td>01.002.00</td><td>3917</td><td>Tubos e seus acessórios</td><td>1.1</td><td>-</td></tr>
+</table>
+<table>
+ <tr><td>1.0</td><td>16.001.00</td><td>4011.10.00</td><td>Pneus novos de automóveis</td><td>16.1 (Exceção: Rondônia)</td><td>42</td></tr>
+</table>
+</body></html>
+"""
+
+
+def test_parse_ancora_no_cest_e_descarta_sem_margem():
+    # latin-1 (encoding real da SEFAZ-MG) e utf-8 dão o mesmo resultado.
+    for raw in (_HTML.encode("latin-1"), _HTML.encode("utf-8")):
+        regs = SefazMgMvaExtractor().parse(raw)
+        assert [(r.cest, r.ncm, str(r.mva)) for r in regs] == [
+            ("0100100", "38151210", "71.78"),
+            ("0100100", "38151290", "71.78"),
+            ("1600100", "40111000", "42"),
+        ]
+    regs = SefazMgMvaExtractor().parse(_HTML.encode("latin-1"))
+    assert regs[0].descricao.startswith("Catalisadores em colmeia cerâmica")
+    assert "Rondônia" in regs[2].ambito
+
+
+# ── Diff → propostas ─────────────────────────────────────────────────────────
+PISO = date(2026, 6, 1)
+MUDANCA = date(2026, 8, 1)
+
+
+@pytest_asyncio.fixture
+async def sessao():
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all, tables=[
+            MatrizMva.__table__, MatrizProposta.__table__,
+        ])
+    async with async_sessionmaker(engine, class_=AsyncSession)() as s:
+        yield s
+    await engine.dispose()
+
+
+async def _propor(s: AsyncSession, regs: list[MvaRecord]) -> dict:
+    return await propor_mva(
+        s, regs, uf="MG", vigencia_inicio=PISO, vigencia_mudanca=MUDANCA, fonte="teste",
+    )
+
+
+@pytest.mark.asyncio
+async def test_par_novo_vira_inserir_com_piso(sessao):
+    r = await _propor(sessao, [MvaRecord("1600100", "40111000", Decimal("42"))])
+    assert r["propostas"] == 1
+
+    p = (await sessao.execute(select(MatrizProposta))).scalars().one()
+    await PropostasService(sessao).aprovar(p.id, revisor="ana@sol.com")
+    linha = (await sessao.execute(select(MatrizMva))).scalars().one()
+    assert linha.mva_original == Decimal("42.00")
+    assert linha.data_inicio_vigencia == PISO
+    assert linha.base_legal == BASE_LEGAL_AUTO_MVA
+
+
+@pytest.mark.asyncio
+async def test_mudanca_em_linha_auto_vira_nova_vigencia(sessao):
+    sessao.add(MatrizMva(
+        ncm="40111000", cest="1600100", uf_destino="MG",
+        mva_original=Decimal("40.00"), base_legal=BASE_LEGAL_AUTO_MVA,
+        data_inicio_vigencia=PISO,
+    ))
+    await sessao.flush()
+    r = await _propor(sessao, [MvaRecord("1600100", "40111000", Decimal("42"))])
+    assert r["propostas"] == 1
+
+    p = (await sessao.execute(select(MatrizProposta))).scalars().one()
+    assert p.acao == "NOVA_VIGENCIA" and p.linha_atual["mva_original"] == "40.00"
+
+    await PropostasService(sessao).aprovar(p.id, revisor="ana@sol.com")
+    linhas = (await sessao.execute(
+        select(MatrizMva).order_by(MatrizMva.data_inicio_vigencia)
+    )).scalars().all()
+    # ADR-0002: a antiga encerra na véspera; a nova vale desde a detecção.
+    assert linhas[0].data_fim_vigencia == date(2026, 7, 31)
+    assert (linhas[1].mva_original, linhas[1].data_inicio_vigencia) == (Decimal("42.00"), MUDANCA)
+
+
+@pytest.mark.asyncio
+async def test_curadoria_manual_nunca_e_tocada(sessao):
+    """MVA 35% de tintas cadastrada na mão (regra 5 do CLAUDE.md): o robô vendo
+    outra margem na fonte NÃO propõe nada sobre linha manual."""
+    sessao.add(MatrizMva(
+        ncm="32081000", cest="2400100", uf_destino="MG",
+        mva_original=Decimal("35.00"), base_legal="Decisão do João (ago/2026)",
+        data_inicio_vigencia=PISO,
+    ))
+    await sessao.flush()
+    r = await _propor(sessao, [MvaRecord("2400100", "32081000", Decimal("48"))])
+    assert r["propostas"] == 0 and r["sem_mudanca"] == 1
+
+
+@pytest.mark.asyncio
+async def test_fonte_ambigua_fica_fora(sessao):
+    """Mesmo par com MVAs distintas na própria fonte: fail-closed, sem proposta."""
+    r = await _propor(sessao, [
+        MvaRecord("1600100", "40111000", Decimal("42"), ambito="16.1"),
+        MvaRecord("1600100", "40111000", Decimal("45"), ambito="16.3"),
+    ])
+    assert r["propostas"] == 0 and r["ambiguos"] == 1
+
+    # E a supressão por hash segue valendo para o que É proposto.
+    await _propor(sessao, [MvaRecord("0100100", "38151210", Decimal("71.78"))])
+    r3 = await _propor(sessao, [MvaRecord("0100100", "38151210", Decimal("71.78"))])
+    assert r3["propostas"] == 0 and r3["suprimidas"] == 1

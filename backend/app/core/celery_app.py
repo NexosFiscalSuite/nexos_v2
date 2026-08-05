@@ -30,6 +30,12 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(day_of_month=1, hour=4, minute=0),
         "args": (settings.crawler_uf_alvo,),
     },
+    # MVAs de MG (Fase 5): Anexo VII do RICMS/2023 vira propostas na fila,
+    # todo dia 2 04h30 UTC (um dia após o CEST, para a fila chegar ordenada).
+    "sync-mva-mg-mensal": {
+        "task": "fiscal.sync_mva_mg",
+        "schedule": crontab(day_of_month=2, hour=4, minute=30),
+    },
     # Radar de Protocolos ICMS (Fase 3): detecta mudança no índice do CONFAZ
     # e avisa a curadoria — toda segunda 05h UTC.
     "monitor-protocolos-confaz-semanal": {

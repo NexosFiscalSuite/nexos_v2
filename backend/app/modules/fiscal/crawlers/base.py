@@ -7,9 +7,13 @@ mexer no parsing nem na orquestração.
 """
 from __future__ import annotations
 
+import re
 import urllib.request
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from html.parser import HTMLParser
+
+from app.shared.domain.value_objects import only_digits
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +30,50 @@ class CestRecord:
 class ExtractResult:
     fonte: str
     registros: list[CestRecord] = field(default_factory=list)
+
+
+class TabelasHtml(HTMLParser):
+    """Coleta toda <table> de uma página como linhas de células em texto plano.
+    Serve a qualquer fonte oficial publicada em tabela HTML (CONFAZ, SEFAZ-MG)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.tabelas: list[list[list[str]]] = []
+        self._linha: list[str] | None = None
+        self._celula: list[str] | None = None
+
+    def handle_starttag(self, tag: str, attrs) -> None:  # noqa: ANN001 — assinatura da stdlib
+        if tag == "table":
+            self.tabelas.append([])
+        elif tag == "tr":
+            self._linha = []
+        elif tag in ("td", "th"):
+            self._celula = []
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in ("td", "th") and self._celula is not None and self._linha is not None:
+            self._linha.append(" ".join("".join(self._celula).split()))
+            self._celula = None
+        elif tag == "tr" and self._linha is not None:
+            if self.tabelas:
+                self.tabelas[-1].append(self._linha)
+            self._linha = None
+
+    def handle_data(self, data: str) -> None:
+        if self._celula is not None:
+            self._celula.append(data)
+
+
+def separar_ncms(celula: str) -> list[str]:
+    """Célula NCM/SH pode listar vários códigos ('3815.12.10, 3815.12.90').
+    Só 8/6/4 dígitos entram — é o que o fallback hierárquico da matriz lê;
+    capítulos de 2 dígitos nunca casariam na busca e ficam de fora."""
+    vistos: list[str] = []
+    for token in re.split(r"[,;\s]+", celula):
+        n = only_digits(token)
+        if len(n) in (4, 6, 8) and n not in vistos:
+            vistos.append(n)
+    return vistos
 
 
 def http_get(url: str, timeout: int = 30) -> bytes:

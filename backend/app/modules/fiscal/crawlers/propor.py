@@ -15,14 +15,19 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import date
+from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.fiscal.infrastructure.matrizes_models import MatrizEnquadramentoSt
+from app.modules.fiscal.infrastructure.matrizes_models import (
+    MatrizEnquadramentoSt,
+    MatrizMva,
+)
 from app.modules.fiscal.infrastructure.propostas_models import (
     ACAO_ATUALIZAR,
     ACAO_INSERIR,
+    ACAO_NOVA_VIGENCIA,
     STATUS_APROVADA,
     FonteSnapshot,
     MatrizProposta,
@@ -30,8 +35,10 @@ from app.modules.fiscal.infrastructure.propostas_models import (
 from app.modules.fiscal.infrastructure.vigencia import filtrar_vigencia
 
 from .base import CestRecord
+from .sefaz_mg_mva import MvaRecord
 
 BASE_LEGAL_AUTO = "Convênio ICMS 142/2018 (auto/CONFAZ)"
+BASE_LEGAL_AUTO_MVA = "RICMS/MG 2023, Anexo VII, Parte 2 (auto/SEFAZ-MG)"
 
 
 def hash_proposta(tipo: str, payload: dict) -> str:
@@ -147,4 +154,100 @@ async def propor_enquadramento(
     return {
         "uf": uf, "lidos": len(registros), "propostas": criadas,
         "suprimidas": suprimidas, "sem_mudanca": inalteradas,
+    }
+
+
+def _congelar_mva(linha: MatrizMva) -> dict:
+    return {
+        "mva_original": str(linha.mva_original),
+        "base_legal": linha.base_legal,
+        "data_inicio_vigencia": linha.data_inicio_vigencia.isoformat(),
+        "data_fim_vigencia": (
+            linha.data_fim_vigencia.isoformat() if linha.data_fim_vigencia else None
+        ),
+    }
+
+
+async def propor_mva(
+    session: AsyncSession, registros: list[MvaRecord], *,
+    uf: str, vigencia_inicio: date, vigencia_mudanca: date,
+    fonte: str, snapshot_id: int | None = None,
+) -> dict:
+    """Diff das MVAs do anexo contra a matriz vigente da UF → propostas.
+
+    Regras (espelham o enquadramento): chave (NCM, CEST) sem linha → INSERIR
+    com a vigência-piso; linha do PRÓPRIO robô com MVA diferente →
+    NOVA_VIGENCIA a partir de `vigencia_mudanca` (1º do mês da detecção — o
+    anexo não publica a data exata da mudança por item; o curador rejeita e
+    lança na mão se souber a data legal); curadoria manual NUNCA é tocada;
+    par com MVAs CONFLITANTES na própria fonte fica de fora (ambíguo,
+    fail-closed). Rejeição suprime re-proposta por hash."""
+    uf = uf.upper()
+
+    stmt = filtrar_vigencia(
+        select(MatrizMva).where(MatrizMva.uf_destino == uf), MatrizMva, date.today()
+    )
+    atuais = {(r.ncm, r.cest): r for r in (await session.execute(stmt)).scalars()}
+
+    vistos = set((await session.execute(
+        select(MatrizProposta.hash_proposta).where(
+            MatrizProposta.tipo_matriz == "mva",
+            MatrizProposta.status != STATUS_APROVADA,
+        )
+    )).scalars())
+
+    # Dedup da fonte com detecção de conflito: mesmo par com MVAs distintas
+    # (capítulos/âmbitos diferentes) é ambíguo — não vira proposta.
+    por_par: dict[tuple[str, str], set[Decimal]] = {}
+    exemplo: dict[tuple[str, str], MvaRecord] = {}
+    for r in registros:
+        chave = (r.ncm, r.cest)
+        por_par.setdefault(chave, set()).add(r.mva)
+        exemplo.setdefault(chave, r)
+
+    criadas = suprimidas = inalteradas = ambiguos = 0
+    for chave, mvas in por_par.items():
+        if len(mvas) > 1:
+            ambiguos += 1
+            continue
+        r = exemplo[chave]
+        atual = atuais.get(chave)
+        if atual is None:
+            payload = {
+                "ncm": r.ncm, "cest": r.cest, "uf_destino": uf,
+                "mva_original": str(r.mva), "base_legal": BASE_LEGAL_AUTO_MVA,
+                "data_inicio_vigencia": vigencia_inicio.isoformat(),
+                "data_fim_vigencia": None,
+            }
+            acao, linha_id, congelada = ACAO_INSERIR, None, None
+        elif atual.base_legal == BASE_LEGAL_AUTO_MVA and atual.mva_original != r.mva:
+            payload = {
+                "ncm": r.ncm, "cest": r.cest, "uf_destino": uf,
+                "mva_original": str(r.mva), "base_legal": BASE_LEGAL_AUTO_MVA,
+                "data_inicio_vigencia": vigencia_mudanca.isoformat(),
+                "data_fim_vigencia": None,
+            }
+            acao, linha_id, congelada = ACAO_NOVA_VIGENCIA, atual.id, _congelar_mva(atual)
+        else:
+            inalteradas += 1                     # igual, ou curadoria manual
+            continue
+
+        h = hash_proposta("mva", payload)
+        if h in vistos:
+            suprimidas += 1
+            continue
+        vistos.add(h)
+        session.add(MatrizProposta(
+            tipo_matriz="mva", acao=acao,
+            chave_resumo=f"{uf} · NCM {r.ncm} · CEST {r.cest}",
+            payload=payload, linha_atual_id=linha_id, linha_atual=congelada,
+            fonte=fonte, fonte_snapshot_id=snapshot_id, hash_proposta=h,
+        ))
+        criadas += 1
+
+    await session.flush()
+    return {
+        "uf": uf, "lidos": len(registros), "pares": len(por_par),
+        "propostas": criadas, "suprimidas": suprimidas,
+        "sem_mudanca": inalteradas, "ambiguos": ambiguos,
     }
