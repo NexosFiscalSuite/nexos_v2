@@ -161,8 +161,13 @@ const PASSOS = [
     + '<b>Início e fim</b> controlam a vigência histórica.<br/>'
     + '<b>Tributado ICMS marcado</b> = tributação normal · <b>desmarcado</b> = ICMS-ST.<br/>'
     + 'A <b>Lei ICMS</b> é opcional e guarda o fundamento da decisão. Durante o tour, salvar permanece bloqueado.'),
-  pratico('[data-tour="matrizes-excecao-fechar"]', 'Feche o cadastro ✖',
-    'No uso real, revise a empresa, o código e a vigência antes de salvar.'),
+  {
+    ...pratico('[data-tour="matrizes-excecao-fechar"]', 'Feche o cadastro ✖',
+      'No uso real, revise o código, o tratamento e a vigência antes de salvar.'),
+    // Se o modal já tiver sido fechado durante a explicação anterior, não
+    // deixa o tour preso num passo central sem elemento para clicar.
+    skipMissingElement: true,
+  },
   pratico('[data-tour="matrizes-tab-cobertura"]', 'Veja primeiro a Cobertura 🎯',
     'Ela cruza os XMLs reais da carteira com as regras existentes e mostra exatamente o que ainda impede cálculos.'),
   info('[data-tour="matrizes-painel-cobertura"]', 'Sua fila de prioridade fiscal 💰',
