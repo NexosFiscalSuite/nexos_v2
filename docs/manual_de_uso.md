@@ -109,6 +109,9 @@ Recursos comuns a todas: filtros combináveis (UF + NCM + CEST), paginação,
 — taxa mudou? **Encerre a vigência da linha antiga e crie uma nova**; nunca
 edite o valor por cima (o motor usa a regra vigente na data de cada nota).
 
+> Quer entender **como o motor usa cada matriz no cálculo**? Veja o
+> apêndice na seção 7 — o passo a passo completo, com exemplo numérico.
+
 ### 3.1 Aba Revisão — aprovar o que os robôs propõem
 
 Os robôs (CEST do CONFAZ, MVA de MG, reconferência semestral) **nunca gravam
@@ -167,3 +170,157 @@ esperam.
   regra manualmente pela aba da matriz;
 - **Nota antiga não audita** — Confira se existe matriz **vigente na data de
   emissão** da nota (a aba Cobertura ajuda a ver o que falta).
+
+---
+
+## 7. Apêndice — o cálculo do ST por dentro (passo a passo detalhado)
+
+O motor segue sempre a mesma trilha, item a item, nota a nota. A regra de
+ouro é **fail-closed**: em qualquer passo, se falta informação para calcular
+com certeza, o item **não é calculado por palpite** — ele vira "não
+auditável" com um código que diz exatamente o que falta. Todo número que o
+motor produz fica gravado na **memória de cálculo** (o botão "Abrir memória
+de cálculo" do item), com a base legal das regras usadas.
+
+### Passo 0 — O que o motor lê da nota
+
+Do XML de cada item: **NCM**, **CEST**, CFOP, **CST/CSOSN**, valores
+(produto, frete, seguro, IPI, desconto), o grupo de ST declarado (base e
+valor retidos), as **UFs** de origem e destino, o regime do emitente (CRT) e
+o **modBCST** (como o emitente disse que calculou a base). Dos CT-e
+vinculados: o frete "por fora" que precisa entrar na base.
+
+### Passo 1 — Portão de enquadramento (matriz Enquadramento)
+
+Pergunta: **este produto é de Substituição Tributária na UF de destino?**
+
+- O motor busca NCM×CEST×UF na matriz de Enquadramento, do mais específico
+  ao mais geral: NCM com **8 dígitos → 6 → 4** (a regra de capítulo cobre o
+  que não tem regra própria);
+- XML **sem CEST**? O motor tenta pelo NCM. Se todos os CEST daquele NCM têm
+  o mesmo regime, segue; se houver regimes diferentes, o portão abre por
+  segurança (ST) e a divergência aparece para o analista decidir;
+- Resultado: **ST** (segue o cálculo), **TN** (tributação normal — item sai
+  do motor), **ST_ENTRADA** (antecipação) — ou, sem linha na matriz, o item
+  trava como não auditável ("sem enquadramento").
+
+### Passo 2 — Portão do acordo entre UFs (matriz Protocolos)
+
+Só para operação **interestadual**. Pergunta: **existe protocolo/convênio
+que obrigue o emitente a reter o ST para a UF de destino?**
+
+A resposta tem **três estados** — e isso importa:
+
+| Situação na matriz | O que o motor faz |
+|---|---|
+| Acordo **ATIVO** para o par (e o NCM, se o acordo for por produto) | O emitente devia reter → o motor cobra a retenção |
+| **SEM_ACORDO** registrado | Ninguém obriga o emitente → vira **antecipação do destinatário** (obrigação do cliente, não do fornecedor) |
+| **Nenhuma linha** para o par | O motor **não adivinha**: trava com "protocolo não avaliado" até a curadoria registrar uma coisa ou outra |
+
+Registrar "não há acordo" é tão importante quanto registrar o acordo — os
+dois destravam o motor, com efeitos diferentes.
+
+### Passo 3 — Base do ICMS próprio (e o gate do frete)
+
+Base = **valor do produto + frete + seguro + outras despesas + IPI −
+desconto**. Detalhe que muda tudo: se o frete foi por **CT-e separado** e o
+cliente é o tomador, esse frete PRECISA entrar na base. Por isso o gate: se
+a nota indica frete por conta do destinatário e **não há CT-e vinculado nem
+confirmação de que não existe**, o motor trava o item ("frete pendente de
+CT-e") em vez de calcular uma base menor em silêncio. Importar o CT-e (ou
+confirmar a ausência, que fica registrada) destrava e reaudita sozinho.
+
+### Passo 4 — MVA: original ou ajustada? (matrizes MVA e Alíquotas)
+
+A MVA cadastrada na matriz é a **original** (operação interna). Em operação
+**interestadual**, a lei manda **ajustar** a margem para equalizar a carga —
+porque o ICMS próprio veio menor (alíquota interestadual de 12% ou 4%) do
+que viria numa compra interna:
+
+```
+MVA ajustada = [ (1 + MVA original) × (1 − alíquota inter) ÷ (1 − alíquota interna efetiva) ] − 1
+```
+
+A "alíquota interna efetiva" sai da matriz de **Alíquotas** (modal + FCP
+integrado, quando houver). O **modBCST** do XML diz como o emitente
+calculou; quando ele está ausente, a matriz decide a estratégia (margem ×
+valor da operação) — e usar MVA ajustada quando não devia é exatamente o
+erro "MVA ajustada indevida" que o motor aponta.
+
+### Passo 5 — O ST devido (e o FCP)
+
+```
+Base ST   = Base própria × (1 + MVA aplicável)
+ICMS-ST   = Base ST × alíquota interna − ICMS próprio destacado
+FCP-ST    = Base ST × alíquota de FCP (matriz FCP, por UF/NCM)
+```
+
+A dedução do ICMS próprio é **estrita**: deduz o que foi DESTACADO no XML —
+se o emitente zerou o próprio, isso aparece como divergência própria ("ICMS
+próprio zerado"), não é compensado em silêncio.
+
+### Passo 6 — Confronto com o XML
+
+O motor compara o que **calculou** com o que o emitente **declarou** (base e
+valor do ST, FCP), com tolerância de centavos (arredondamento não vira
+cobrança). Diferença relevante → item **DIVERGENTE** com o código do
+catálogo: valor do ST divergente, base divergente, dedução incorreta, FCP
+omitido, ST indevido em revenda (CST 60 — já retido antes), antecipação do
+destinatário… Cada código carrega a **ação sugerida** que aparece no balão.
+
+### Exemplo numérico completo (caso real do laboratório)
+
+Autopeça, **SP → MG**, CST 10, item de R$ 731,35 com frete por CT-e
+separado de R$ 136,10 rateado entre 2 itens (R$ 68,05 cada). O emitente
+declarou o grupo de ST mas **zerou** base e valor:
+
+| Passo | Conta | Resultado |
+|---|---|---|
+| Enquadramento | NCM 8708.29.19 + CEST 01.075.00 em MG | ST ✔ |
+| Protocolo | SP→MG com acordo ATIVO (autopeças) | retenção devida ✔ |
+| Base própria | 731,35 + frete CT-e 68,05 | **R$ 799,40** |
+| MVA ajustada | (1+0,7178) × (1−0,12) ÷ (1−0,18) − 1 | **84,35 %** |
+| Base do ST | 799,40 × 1,8435 | **R$ 1.473,69** |
+| ICMS-ST | 1.473,69 × 18 % − ICMS próprio 87,76 | **R$ 177,50** |
+| Confronto | XML declarou R$ 0,00 | **DIVERGENTE — R$ 177,50 a recolher** |
+
+É esse R$ 177,50 (por item) que aparece no card "ST a recolher", no ranking
+do fornecedor e na carta — com a memória de cálculo inteira anexada.
+
+### As matrizes, uma a uma
+
+**Enquadramento (NCM×CEST×UF)** — o portão de entrada. Alimentada pelo robô
+do CONFAZ (Convênio ICMS 142/2018 — o "universo" nacional do CEST) e
+refinada pela curadoria: a **adesão de cada UF é decisão do analista** (o
+robô nunca sobrepõe uma linha manual — se você marcou TN de propósito, fica
+TN). Sem linha → "sem enquadramento".
+
+**Protocolos (UF origem → UF destino)** — o portão interestadual, tri-state
+(ATIVO / SEM_ACORDO / sem linha). O acordo pode valer para o **par inteiro**
+(NCM vazio) ou **por produto** (uma linha por NCM — é assim que o robô
+cadastra a partir da legenda de âmbito do Anexo VII de MG, com a base legal
+no formato "Protocolo ICMS 103/12 — Anexo VII, âmbito 2.1"). Situações
+DENUNCIADO/INATIVO encerram o efeito do acordo.
+
+**MVA (NCM×CEST×UF)** — a margem **original**; a ajustada é sempre
+calculada, nunca cadastrada. Alimentada pelo robô do Anexo VII do RICMS/MG
+(1.080 pares) e pela curadoria nas demais UFs. Regra da casa: **margem
+específica do escritório prevalece** — linha manual nunca é alterada pelo
+robô; mudança detectada na fonte vira proposta de **nova vigência** na aba
+Revisão.
+
+**Alíquotas (por UF)** — a alíquota modal interna (débito do ST) e o **FCP
+integrado** (que só entra no denominador do ajuste de MVA). É a matriz que
+resolve casos como AL 19 % → 20,5 % em 01/04/2026: duas linhas, cada uma com
+sua vigência — a nota de março usa 19, a de maio usa 20,5.
+
+**FCP (por UF e NCM)** — o adicional do Fundo de Combate à Pobreza somado ao
+ST. `GERAL` vale para a UF inteira (caso do RJ, 2 %); NCM específico vale só
+para o produto (casos de PR/SP/RS/GO/DF/MG, que têm FCP por lista de
+produtos — curadoria conforme a demanda das notas).
+
+**Vigência em todas elas (a regra de ouro)** — o motor usa a regra **vigente
+na data de emissão de cada nota**, nunca "a atual". Por isso taxa que muda
+vira **linha nova** (encerra a antiga, abre outra): a MVA da cerveja pode
+ser 40 % para a nota de 2025 e 55 % para a de 2026, e as duas auditorias
+ficam defensáveis para sempre.
