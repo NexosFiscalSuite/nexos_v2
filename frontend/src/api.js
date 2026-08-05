@@ -177,6 +177,14 @@ export const api = {
   editarMatrizEnquadramento: (id, data) => request('PATCH', `/matrizes/enquadramento/${id}`, data),
   removerMatrizEnquadramento: (id) => request('DELETE', `/matrizes/enquadramento/${id}`),
 
+  excecoesItem: (params = {}) => {
+    const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v != null && v !== '')).toString()
+    return request('GET', '/matrizes/excecoes-produto' + (q ? `?${q}` : ''))
+  },
+  criarExcecaoItem: (data) => request('POST', '/matrizes/excecoes-produto', data),
+  editarExcecaoItem: (id, data) => request('PATCH', `/matrizes/excecoes-produto/${id}`, data),
+  removerExcecaoItem: (id) => request('DELETE', `/matrizes/excecoes-produto/${id}`),
+
   matrizesFcp: (params = {}) => {
     const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
     return request('GET', '/matrizes/fcp' + (q ? `?${q}` : ''))

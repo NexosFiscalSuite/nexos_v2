@@ -48,6 +48,36 @@ def test_regime_conflito_entre_cests_abre_o_portao():
     assert snap.regime(NCM, "", "MG", UF, DATA) == Regime.ST
 
 
+def test_excecao_do_item_tem_precedencia_sobre_ncm_e_cest():
+    tributado = _EnquadramentoSnapshot(
+        {(NCM, CEST, UF): Regime.ST}, excecoes={"PROD-1": Regime.TN}
+    )
+    assert (
+        tributado.regime(
+            NCM, CEST, "MG", UF, DATA, codigo_produto=" prod-1 "
+        )
+        == Regime.TN
+    )
+
+    st = _EnquadramentoSnapshot(
+        {(NCM, CEST, UF): Regime.TN}, excecoes={"PROD-2": Regime.ST}
+    )
+    assert st.regime(NCM, CEST, "MG", UF, DATA, codigo_produto="PROD-2") == Regime.ST
+
+
+def test_excecao_tributado_aparece_na_rastreabilidade_do_motor():
+    eng = _engine_snapshots(
+        _EnquadramentoSnapshot({}, excecoes={"PROD-1": Regime.TN}),
+        _MvaSnapshot({}),
+    )
+    op = Operacao(uf_emit="MG", uf_dest="MG", crt=Crt.NORMAL, data=DATA)
+    r = eng.auditar_item(_item_sem_cest(codigo_produto="PROD-1", cst="20"), op)
+
+    assert r.status == StatusAuditoria.NAO_AUDITAVEL
+    assert r.codigos_erro == []
+    assert "Exceção do Item" in (r.observacao or "")
+
+
 def test_explicar_tn_distingue_os_tres_casos():
     # 1) TN explícito por cadastro → None (fora do motor POR DECISÃO)
     snap = _snap_enq({(NCM, CEST, UF): Regime.TN})

@@ -61,7 +61,8 @@ class EnquadramentoRepository(Protocol):
     """MATRIZ_NCM_Enquadramento_ST — portão ST / TN / ST_ENTRADA / DIFAL."""
 
     def regime(
-        self, ncm: str, cest: str, uf_orig: str, uf_dest: str, data: date
+        self, ncm: str, cest: str, uf_orig: str, uf_dest: str, data: date,
+        codigo_produto: str = "", cnpj_emitente: str = "",
     ) -> Regime: ...
 
 

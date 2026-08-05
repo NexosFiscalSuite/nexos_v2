@@ -8,7 +8,7 @@ e-mail. Um factory registra os 4 verbos por matriz para não repetir o mesmo
 CRUD cinco vezes.
 """
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Generic, TypeVar
 from uuid import UUID
 
@@ -22,8 +22,12 @@ from app.core.exceptions import ConflictError, NotFoundError
 from app.core.rls import tenant_session
 from app.core.security import TokenClaims, get_current_claims
 from app.modules.audit.application.service import AuditService
+from app.modules.companies.infrastructure.models import Empresa
 from app.modules.fiscal.api.curadoria import require_curador
 from app.modules.fiscal.api.matrizes_schemas import (
+    ExcecaoProdutoCreate,
+    ExcecaoProdutoResponse,
+    ExcecaoProdutoUpdate,
     MatrizAliquotaCreate,
     MatrizAliquotaResponse,
     MatrizAliquotaUpdate,
@@ -43,6 +47,7 @@ from app.modules.fiscal.api.matrizes_schemas import (
 from app.modules.fiscal.application.cobertura_service import CoberturaService
 from app.modules.fiscal.application.matrizes_saude import saude_matrizes
 from app.modules.fiscal.application.pares_interestaduais import pares_interestaduais
+from app.modules.fiscal.application.reprocess_service import ReprocessService
 from app.modules.fiscal.infrastructure.matrizes_models import (
     MatrizAliquota,
     MatrizEnquadramentoSt,
@@ -50,6 +55,7 @@ from app.modules.fiscal.infrastructure.matrizes_models import (
     MatrizMva,
     MatrizProtocoloSt,
 )
+from app.modules.fiscal.infrastructure.models import ExcecaoEnquadramentoStProduto
 from app.modules.fiscal.infrastructure.vigencia import sobreposicao_existente
 from app.shared.domain.value_objects import only_digits
 
@@ -67,6 +73,157 @@ class Pagina(BaseModel, Generic[T]):
     total: int
     page: int
     page_size: int
+
+
+async def _empresa_do_tenant(session: AsyncSession, empresa_id: UUID) -> Empresa:
+    empresa = await session.get(Empresa, empresa_id)
+    if empresa is None:
+        raise NotFoundError("Empresa não encontrada.")
+    return empresa
+
+
+@router.get("/excecoes-produto", response_model=Pagina[ExcecaoProdutoResponse])
+async def listar_excecoes_produto(
+    empresa_id: UUID | None = Query(default=None),
+    codigo: str | None = Query(default=None),
+    ncm: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=100),
+    claims: TokenClaims = Depends(get_current_claims),
+    session: AsyncSession = Depends(tenant_session),
+):
+    stmt = select(ExcecaoEnquadramentoStProduto)
+    if empresa_id:
+        stmt = stmt.where(ExcecaoEnquadramentoStProduto.empresa_id == empresa_id)
+    if codigo:
+        stmt = stmt.where(
+            ExcecaoEnquadramentoStProduto.codigo_produto.ilike(f"%{codigo.strip()}%")
+        )
+    if ncm:
+        stmt = stmt.where(ExcecaoEnquadramentoStProduto.ncm.like(f"{only_digits(ncm)}%"))
+    total = await session.scalar(
+        select(func.count()).select_from(stmt.order_by(None).subquery())
+    ) or 0
+    rows = (await session.execute(
+        stmt.order_by(
+            ExcecaoEnquadramentoStProduto.empresa_id,
+            ExcecaoEnquadramentoStProduto.codigo_produto,
+        ).offset((page - 1) * page_size).limit(page_size)
+    )).scalars().all()
+    return Pagina(items=list(rows), total=total, page=page, page_size=page_size)
+
+
+async def _garantir_excecao_unica(
+    session: AsyncSession, dados: dict, excluir_id: UUID | None = None,
+) -> None:
+    if not dados["ativo"]:
+        return
+    fim = dados["data_fim_vigencia"] or date.max
+    stmt = select(ExcecaoEnquadramentoStProduto.id).where(
+        ExcecaoEnquadramentoStProduto.empresa_id == dados["empresa_id"],
+        ExcecaoEnquadramentoStProduto.codigo_produto == dados["codigo_produto"],
+        ExcecaoEnquadramentoStProduto.ativo.is_(True),
+        ExcecaoEnquadramentoStProduto.data_inicio_vigencia <= fim,
+        (
+            ExcecaoEnquadramentoStProduto.data_fim_vigencia.is_(None)
+            | (ExcecaoEnquadramentoStProduto.data_fim_vigencia >= dados["data_inicio_vigencia"])
+        ),
+    )
+    if excluir_id:
+        stmt = stmt.where(ExcecaoEnquadramentoStProduto.id != excluir_id)
+    if await session.scalar(stmt):
+        raise ConflictError(
+            "Já existe uma exceção ativa para esta empresa e código de produto "
+            "com vigência sobreposta."
+        )
+
+
+@router.post(
+    "/excecoes-produto", response_model=ExcecaoProdutoResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def criar_excecao_produto(
+    body: ExcecaoProdutoCreate,
+    claims: TokenClaims = Depends(require_curador),
+    session: AsyncSession = Depends(tenant_session),
+):
+    dados = body.normalizado()
+    await _empresa_do_tenant(session, dados["empresa_id"])
+    await _garantir_excecao_unica(session, dados)
+    linha = ExcecaoEnquadramentoStProduto(
+        **dados, tenant_id=claims.tid, definido_por=str(claims.sub)
+    )
+    session.add(linha)
+    await session.flush()
+    reprocesso = await ReprocessService(session).reprocessar_produto(
+        linha.empresa_id, linha.codigo_produto
+    )
+    await AuditService(session).registrar(
+        tenant_id=claims.tid, user_id=claims.sub, acao="excecao_st_produto.criar",
+        entidade="excecao_st_produto", entidade_id=str(linha.id),
+        detalhe={"empresa_id": str(linha.empresa_id), "codigo": linha.codigo_produto,
+                 "tributado_icms": linha.tributado_icms, **reprocesso},
+    )
+    return linha
+
+
+@router.patch("/excecoes-produto/{linha_id}", response_model=ExcecaoProdutoResponse)
+async def editar_excecao_produto(
+    linha_id: UUID, body: ExcecaoProdutoUpdate,
+    claims: TokenClaims = Depends(require_curador),
+    session: AsyncSession = Depends(tenant_session),
+):
+    linha = await session.get(ExcecaoEnquadramentoStProduto, linha_id)
+    if linha is None:
+        raise NotFoundError("Exceção não encontrada.")
+    empresa_anterior = linha.empresa_id
+    codigo_anterior = linha.codigo_produto
+    dados = body.normalizado()
+    await _empresa_do_tenant(session, dados["empresa_id"])
+    await _garantir_excecao_unica(session, dados, linha_id)
+    for campo, valor in dados.items():
+        setattr(linha, campo, valor)
+    linha.definido_por = str(claims.sub)
+    linha.updated_at = datetime.now(UTC)
+    await session.flush()
+    reprocesso = await ReprocessService(session).reprocessar_produto(
+        linha.empresa_id, linha.codigo_produto
+    )
+    if (empresa_anterior, codigo_anterior) != (linha.empresa_id, linha.codigo_produto):
+        anterior = await ReprocessService(session).reprocessar_produto(
+            empresa_anterior, codigo_anterior
+        )
+        reprocesso["notas_reprocessadas_anterior"] = anterior["notas_reprocessadas"]
+    await AuditService(session).registrar(
+        tenant_id=claims.tid, user_id=claims.sub, acao="excecao_st_produto.editar",
+        entidade="excecao_st_produto", entidade_id=str(linha.id),
+        detalhe={"empresa_id": str(linha.empresa_id), "codigo": linha.codigo_produto,
+                 "tributado_icms": linha.tributado_icms, **reprocesso},
+    )
+    return linha
+
+
+@router.delete("/excecoes-produto/{linha_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remover_excecao_produto(
+    linha_id: UUID,
+    claims: TokenClaims = Depends(require_curador),
+    session: AsyncSession = Depends(tenant_session),
+):
+    linha = await session.get(ExcecaoEnquadramentoStProduto, linha_id)
+    if linha is None:
+        raise NotFoundError("Exceção não encontrada.")
+    empresa_id = linha.empresa_id
+    codigo_produto = linha.codigo_produto
+    await session.delete(linha)
+    await session.flush()
+    reprocesso = await ReprocessService(session).reprocessar_produto(
+        empresa_id, codigo_produto
+    )
+    await AuditService(session).registrar(
+        tenant_id=claims.tid, user_id=claims.sub, acao="excecao_st_produto.remover",
+        entidade="excecao_st_produto", entidade_id=str(linha_id),
+        detalhe={"empresa_id": str(empresa_id), "codigo": codigo_produto, **reprocesso},
+    )
 
 
 async def _garantir_sem_sobreposicao(session, modelo, dados: dict, excluir_id=None):

@@ -4,6 +4,7 @@ de frete -> rateio -> motor -> auditoria salva. Prova a autopeça (R$ 177,50).
 SQLite async (aiosqlite); FKs não são checadas no SQLite, então criamos só as
 tabelas envolvidas. É o ciclo completo da Fase 3 sem precisar de Postgres.
 """
+from datetime import date
 from decimal import Decimal
 from uuid import uuid4
 
@@ -25,6 +26,7 @@ from app.modules.fiscal.infrastructure.matrizes_models import (
 from app.modules.fiscal.infrastructure.models import (
     AuditoriaIcmsSt,
     DivergenciaTriagem,
+    ExcecaoEnquadramentoStProduto,
     NfeCteVinculo,
     Nota,
     NotaItem,
@@ -38,6 +40,7 @@ _TABELAS = [
     MatrizProtocoloSt.__table__, MatrizAliquota.__table__, Nota.__table__,
     NotaItem.__table__, NfeCteVinculo.__table__, AuditoriaIcmsSt.__table__,
     DivergenciaTriagem.__table__,   # a listagem faz outerjoin da triagem
+    ExcecaoEnquadramentoStProduto.__table__,
 ]
 
 _CHAVE_NFE = "1" * 44
@@ -175,6 +178,35 @@ async def test_e2e_autopeca_frete_agregado_ate_auditoria(sessao):
 
     # Persistiu de fato (não só retornou).
     assert await sessao.scalar(select(func.count()).select_from(AuditoriaIcmsSt)) == 2
+
+
+async def test_excecao_do_item_e_isolada_por_empresa_e_prevalece_no_motor(sessao):
+    tenant_id, empresa_id = uuid4(), uuid4()
+    nota = await _injetar(sessao, tenant_id, empresa_id)
+
+    # A mesma chave de produto em outra empresa não pode interferir.
+    sessao.add(ExcecaoEnquadramentoStProduto(
+        tenant_id=tenant_id, empresa_id=uuid4(), codigo_produto="A1",
+        data_inicio_vigencia=date(2026, 1, 1), tributado_icms=True,
+    ))
+    await sessao.flush()
+    registros = await StAuditService(sessao).auditar_nota(empresa_id, nota.id)
+    assert all(r.status == "DIVERGENTE" for r in registros)
+
+    # Na empresa correta, A1 deixa de seguir o ST geral do NCM; A2 não muda.
+    sessao.add(ExcecaoEnquadramentoStProduto(
+        tenant_id=tenant_id, empresa_id=empresa_id, codigo_produto="A1",
+        data_inicio_vigencia=date(2026, 1, 1), tributado_icms=True,
+        lei_icms="Regra específica do produto",
+    ))
+    await sessao.flush()
+    registros = await StAuditService(sessao).auditar_nota(empresa_id, nota.id)
+    por_item = {r.numero_item: r for r in registros}
+
+    assert por_item[1].status == "NAO_AUDITAVEL"
+    assert por_item[1].codigo_erro is None
+    assert "Exceção do Item" in por_item[1].observacao
+    assert por_item[2].status == "DIVERGENTE"
 
 
 async def test_query_divergencias_e_idempotencia(sessao):

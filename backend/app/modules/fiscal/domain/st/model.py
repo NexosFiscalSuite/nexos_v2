@@ -50,6 +50,9 @@ class ItemFiscal:
     cest: str
     cfop: str
     orig: str                      # 0-8 (tag <orig>)
+    codigo_produto: str = ""       # cProd — identidade do produto na empresa/fornecedor
+    descricao_produto: str = ""    # xProd — referência humana da exceção
+    cnpj_emitente: str = ""         # torna o cProd seguro entre fornecedores
     cst: str | None = None         # regime normal
     csosn: str | None = None       # simples nacional
     mod_bc_st: int | None = None

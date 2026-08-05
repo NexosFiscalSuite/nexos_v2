@@ -1,5 +1,5 @@
 """Modelos fiscais: Nota, NotaItem, NotaEvento. Todos tenant-scoped (RLS)."""
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
@@ -8,6 +8,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
@@ -158,6 +159,47 @@ class NotaItem(Base):
     p_aliq_efet_ibs_mun: Mapped[Decimal | None] = mapped_column(_PCT, nullable=True)
     p_red_aliq_cbs: Mapped[Decimal | None] = mapped_column(_PCT, nullable=True)
     p_aliq_efet_cbs: Mapped[Decimal | None] = mapped_column(_PCT, nullable=True)
+
+
+class ExcecaoEnquadramentoStProduto(Base):
+    """Decisão específica da empresa para um produto do seu cadastro.
+
+    A matriz NCM+CEST continua global; esta tabela resolve a exceção comercial
+    em que produtos diferentes compartilham o mesmo NCM. Marcado como
+    `tributado_icms` = tributação normal; desmarcado = sujeito a ICMS-ST.
+    """
+
+    __tablename__ = "excecao_enquadramento_st_produto"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id", "empresa_id", "codigo_produto", "data_inicio_vigencia",
+            name="uq_excecao_st_empresa_produto_inicio",
+        ),
+        Index("ix_excecao_st_busca", "empresa_id", "codigo_produto"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), index=True
+    )
+    empresa_id: Mapped[UUID] = mapped_column(
+        ForeignKey("empresas.id", ondelete="CASCADE"), index=True
+    )
+    codigo_produto: Mapped[str] = mapped_column(String(60))
+    descricao_produto: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    ncm: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    data_inicio_vigencia: Mapped[date] = mapped_column(nullable=False)
+    data_fim_vigencia: Mapped[date | None] = mapped_column(nullable=True)
+    tributado_icms: Mapped[bool] = mapped_column(Boolean, default=True)
+    lei_icms: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    ativo: Mapped[bool] = mapped_column(Boolean, default=True)
+    definido_por: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class NfeCteVinculo(Base):
