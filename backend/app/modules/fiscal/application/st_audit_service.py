@@ -41,6 +41,7 @@ def _item_fiscal(it: NotaItem, frete_rateado: Decimal) -> ItemFiscal:
     return ItemFiscal(
         numero_item=it.numero_item, ncm=it.ncm or "", cest=it.cest or "",
         cfop=it.cfop or "", orig=it.orig or "0", cst=it.cst, csosn=it.csosn,
+        codigo_produto=it.codigo or "", descricao_produto=it.descricao or "",
         mod_bc_st=it.mod_bc_st,
         v_prod=it.valor_produto, q_com=it.quantidade,
         v_frete=(it.valor_frete or ZERO) + frete_rateado,
@@ -116,9 +117,15 @@ class StAuditService:
             saida=(nota.fluxo == "saida"),   # bifurcação tpNF no motor
         )
         itens_fiscais = [_item_fiscal(it, rateio[it.numero_item]) for it in itens_db]
+        itens_fiscais = [
+            dataclasses.replace(it, cnpj_emitente=nota.cnpj_emit or "")
+            for it in itens_fiscais
+        ]
 
         # Carrega-então-calcula: hidrata os repos sync e roda o motor puro.
-        matrizes = await self.loader.hidratar(itens_fiscais, operacao)
+        matrizes = await self.loader.hidratar(
+            itens_fiscais, operacao, empresa_id=empresa_id
+        )
         engine = StAuditEngine(
             mva_repo=matrizes.mva,
             enquadramento_repo=matrizes.enquadramento,

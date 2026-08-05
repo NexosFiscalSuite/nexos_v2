@@ -1,10 +1,57 @@
 """Schemas do CRUD de Matrizes Fiscais (V1: MVA Original)."""
 from datetime import date, datetime
 from decimal import Decimal
+from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
 from app.shared.domain.value_objects import only_digits
+
+
+# ── Exceção por produto da empresa ──────────────────────────────────────────
+class _ExcecaoProdutoCampos(BaseModel):
+    empresa_id: UUID
+    codigo_produto: str = Field(..., min_length=1, max_length=60)
+    descricao_produto: str | None = Field(default=None, max_length=500)
+    ncm: str | None = Field(default=None, max_length=10)
+    data_inicio_vigencia: date
+    data_fim_vigencia: date | None = None
+    tributado_icms: bool = True
+    lei_icms: str | None = Field(default=None, max_length=2000)
+    ativo: bool = True
+
+    @field_validator("data_fim_vigencia")
+    @classmethod
+    def _periodo_valido(cls, v: date | None, info):
+        inicio = info.data.get("data_inicio_vigencia")
+        if v is not None and inicio is not None and v < inicio:
+            raise ValueError("data final não pode ser anterior à inicial")
+        return v
+
+    def normalizado(self) -> dict:
+        d = self.model_dump()
+        d["codigo_produto"] = self.codigo_produto.strip().upper()
+        d["ncm"] = only_digits(self.ncm or "") or None
+        d["descricao_produto"] = (self.descricao_produto or "").strip() or None
+        d["lei_icms"] = (self.lei_icms or "").strip() or None
+        return d
+
+
+class ExcecaoProdutoCreate(_ExcecaoProdutoCampos):
+    pass
+
+
+class ExcecaoProdutoUpdate(_ExcecaoProdutoCampos):
+    pass
+
+
+class ExcecaoProdutoResponse(_ExcecaoProdutoCampos):
+    id: UUID
+    definido_por: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
 
 
 class _MatrizMvaCampos(BaseModel):

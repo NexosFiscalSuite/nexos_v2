@@ -76,7 +76,8 @@ class StAuditEngine:
     def auditar_item(self, item: ItemFiscal, operacao: Operacao) -> ResultadoAuditoria:
         # 1. Portão de enquadramento — só auditamos itens que SÃO ST.
         regime = self.enquadramento_repo.regime(
-            item.ncm, item.cest, operacao.uf_emit, operacao.uf_dest, operacao.data
+            item.ncm, item.cest, operacao.uf_emit, operacao.uf_dest, operacao.data,
+            codigo_produto=item.codigo_produto, cnpj_emitente=item.cnpj_emitente,
         )
         if regime != Regime.ST:
             # TN sem cadastro (ou CEST que não casa) não é "fora do motor por
@@ -87,10 +88,21 @@ class StAuditEngine:
             if regime == Regime.TN:
                 explicar = getattr(self.enquadramento_repo, "explicar_tn", None)
                 if explicar is not None:
-                    detalhe = explicar(item.ncm, item.cest, operacao.uf_dest)
+                    detalhe = explicar(
+                        item.ncm, item.cest, operacao.uf_dest,
+                        codigo_produto=item.codigo_produto,
+                        cnpj_emitente=item.cnpj_emitente,
+                    )
                     if detalhe:
                         return self._nao_auditavel(
                             item, ErroST.ENQUADRAMENTO_NAO_CADASTRADO, observacao=detalhe
+                        )
+                    fonte = getattr(self.enquadramento_repo, "fonte_regime", None)
+                    if fonte is not None and fonte(item.codigo_produto) == "EXCECAO_ITEM":
+                        return self._nao_auditavel(
+                            item,
+                            "Tributado ICMS pela Exceção do Item da empresa "
+                            "(fora do motor de ST)",
                         )
                     return self._nao_auditavel(
                         item, "regime TN por cadastro nas matrizes (fora do motor de ST)"

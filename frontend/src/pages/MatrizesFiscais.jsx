@@ -170,6 +170,10 @@ const ABAS = [
     ],
   },
   {
+    id: 'excecoes', label: 'Exceção do Item', icon: 'ti-adjustments-exclamation', custom: true,
+    descricao: 'Decisão por empresa e código do item — tributação normal ou ICMS-ST, com vigência e base legal',
+  },
+  {
     id: 'revisao', label: 'Revisão', icon: 'ti-inbox', custom: true,
     descricao: 'Propostas dos robôs de auto-alimentação — nada entra nas matrizes sem aprovação da curadoria',
   },
@@ -728,6 +732,169 @@ function RevisaoPanel({ onMudou }) {
   )
 }
 
+const FORM_EXCECAO_VAZIO = {
+  empresa_id: '', codigo_produto: '', descricao_produto: '',
+  data_inicio_vigencia: '', data_fim_vigencia: '',
+  tributado_icms: true, lei_icms: '', ativo: true,
+}
+
+function ExcecoesItemPanel() {
+  const { toasts, toast } = useToast()
+  const [empresas, setEmpresas] = useState([])
+  const [lista, setLista] = useState([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [filtros, setFiltros] = useState({ empresa_id: '', codigo: '' })
+  const [loading, setLoading] = useState(true)
+  const [erro, setErro] = useState(null)
+  const [modal, setModal] = useState(false)
+  const [editId, setEditId] = useState(null)
+  const [form, setForm] = useState(FORM_EXCECAO_VAZIO)
+  const [saving, setSaving] = useState(false)
+
+  const carregar = useCallback(async () => {
+    setLoading(true); setErro(null)
+    try {
+      const [r, es] = await Promise.all([
+        api.excecoesItem({ ...filtros, page, page_size: PAGE_SIZE }),
+        empresas.length ? Promise.resolve(empresas) : api.empresas(),
+      ])
+      setLista(r?.items || []); setTotal(r?.total || 0)
+      if (!empresas.length) setEmpresas(es || [])
+    } catch (e) { setErro(e.message) }
+    finally { setLoading(false) }
+  }, [filtros, page, empresas])
+
+  useEffect(() => { carregar() }, [carregar])
+  const totalPaginas = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const nomes = Object.fromEntries(empresas.map(e => [e.id, e.nome_fantasia || e.razao_social]))
+  const opcoesEmpresas = empresas.map(e => ({
+    value: e.id, label: e.nome_fantasia || e.razao_social,
+  }))
+
+  function nova() {
+    setEditId(null)
+    setForm({ ...FORM_EXCECAO_VAZIO, empresa_id: filtros.empresa_id || '' })
+    setModal(true)
+  }
+  function editar(m) {
+    setEditId(m.id)
+    setForm({
+      empresa_id: m.empresa_id, codigo_produto: m.codigo_produto,
+      descricao_produto: m.descricao_produto || '',
+      data_inicio_vigencia: m.data_inicio_vigencia,
+      data_fim_vigencia: m.data_fim_vigencia || '',
+      tributado_icms: Boolean(m.tributado_icms), lei_icms: m.lei_icms || '',
+      ativo: Boolean(m.ativo),
+    })
+    setModal(true)
+  }
+  const setCampo = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  async function salvar(e) {
+    e.preventDefault(); setSaving(true)
+    try {
+      const payload = {
+        ...form, data_fim_vigencia: form.data_fim_vigencia || null,
+        descricao_produto: form.descricao_produto || null,
+        lei_icms: form.lei_icms || null, ncm: null,
+      }
+      if (editId) await api.editarExcecaoItem(editId, payload)
+      else await api.criarExcecaoItem(payload)
+      toast(`Exceção ${editId ? 'atualizada' : 'cadastrada'}.`, 'ok')
+      setModal(false); setEditId(null); await carregar()
+    } catch (e2) { toast(e2.message, 'error') }
+    finally { setSaving(false) }
+  }
+
+  async function remover(m) {
+    if (!confirm(`Remover a exceção do item ${m.codigo_produto}?`)) return
+    try { await api.removerExcecaoItem(m.id); toast('Exceção removida.', 'ok'); await carregar() }
+    catch (e) { toast(e.message, 'error') }
+  }
+
+  return (
+    <div>
+      <ToastContainer toasts={toasts} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ width: 280 }}>
+            <Dropdown value={filtros.empresa_id} options={opcoesEmpresas}
+              placeholder="Todas as empresas" onChange={v => { setFiltros(f => ({ ...f, empresa_id: v })); setPage(1) }} />
+          </div>
+          <input value={filtros.codigo} placeholder="Pesquisar código do item…"
+            onChange={e => { setFiltros(f => ({ ...f, codigo: e.target.value })); setPage(1) }}
+            style={{ width: 250 }} />
+          {total > 0 && <span className="tnum" style={{ alignSelf: 'center', color: 'var(--text-3)', fontSize: 13 }}>{total.toLocaleString('pt-BR')} exceção(ões)</span>}
+        </div>
+        <button className="btn btn-primary" onClick={nova}><i className="ti ti-plus" /> Nova exceção do item</button>
+      </div>
+
+      {loading ? <div className="center-loader"><div className="spinner" /></div>
+        : erro ? <ErroCarga mensagem={erro} onRetry={carregar} />
+          : lista.length === 0 ? (
+            <div className="empty-state">
+              <i className="ti ti-adjustments-exclamation" />
+              <p className="empty-title">Nenhuma exceção do item</p>
+              <p className="empty-subtitle">Cadastre somente os produtos que precisam contrariar o enquadramento geral por NCM/CEST.</p>
+            </div>
+          ) : (
+            <div className="card" style={{ padding: 0 }}><div className="tbl-wrap"><table className="tbl">
+              <thead><tr><th>Empresa</th><th>Código Item</th><th>Início</th><th>Fim</th><th>Tributado ICMS</th><th>Lei ICMS</th><th>Ativo</th><th></th></tr></thead>
+              <tbody>{lista.map(m => <tr key={m.id} onClick={() => editar(m)} style={{ cursor: 'pointer' }}>
+                <td>{nomes[m.empresa_id] || '—'}</td>
+                <td className="mono" style={{ fontWeight: 600 }}>{m.codigo_produto}</td>
+                <td>{dataBr(m.data_inicio_vigencia)}</td><td>{dataBr(m.data_fim_vigencia)}</td>
+                <td>{badge(m.tributado_icms ? 'Sim' : 'Não — ST', m.tributado_icms ? 'info' : 'warn')}</td>
+                <td style={{ color: 'var(--text-3)', maxWidth: 320 }}>{m.lei_icms || '—'}</td>
+                <td>{badge(m.ativo ? 'Sim' : 'Não', m.ativo ? 'ok' : 'err')}</td>
+                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  <button className="btn btn-icon" title="Editar" onClick={e => { e.stopPropagation(); editar(m) }}><i className="ti ti-pencil" /></button>
+                  <button className="btn btn-icon" title="Remover" onClick={e => { e.stopPropagation(); remover(m) }}><i className="ti ti-trash" style={{ color: 'var(--err-text)' }} /></button>
+                </td>
+              </tr>)}</tbody>
+            </table></div>
+            {totalPaginas > 1 && <div style={{ display: 'flex', justifyContent: 'center', gap: 6, padding: 12, borderTop: '1px solid var(--border-2)' }}>
+              <button className="btn btn-sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>←</button>
+              <span className="tnum" style={{ alignSelf: 'center' }}>{page} de {totalPaginas}</span>
+              <button className="btn btn-sm" disabled={page === totalPaginas} onClick={() => setPage(p => p + 1)}>→</button>
+            </div>}
+            </div>
+          )}
+
+      {modal && <div className="modal-overlay" onClick={() => setModal(false)}>
+        <div className="modal" onClick={e => e.stopPropagation()}>
+          <div className="modal-header"><h2>{editId ? 'Editar' : 'Cadastro'} · Exceção do Item</h2>
+            <button className="btn btn-icon" onClick={() => setModal(false)}><i className="ti ti-x" /></button></div>
+          <form onSubmit={salvar}>
+            <div className="modal-body"><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div className="field" style={{ gridColumn: '1 / -1' }}><label>Empresa</label>
+                <Dropdown value={form.empresa_id} options={opcoesEmpresas} placeholder="Selecione a empresa…" onChange={v => setCampo('empresa_id', v)} /></div>
+              <div className="field" style={{ gridColumn: '1 / -1' }}><label>Código do item</label>
+                <input required maxLength={60} value={form.codigo_produto} placeholder="Código do item"
+                  onChange={e => setCampo('codigo_produto', e.target.value)} /></div>
+              <div className="field"><label>Data início</label><input required type="date" value={form.data_inicio_vigencia} onChange={e => setCampo('data_inicio_vigencia', e.target.value)} /></div>
+              <div className="field"><label>Data fim</label><input type="date" value={form.data_fim_vigencia} onChange={e => setCampo('data_fim_vigencia', e.target.value)} /></div>
+              <div className="field" style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--border-2)', paddingTop: 14 }}>
+                <div><label style={{ margin: 0 }}>Tributado ICMS</label><div style={{ fontSize: 12, color: 'var(--text-4)', marginTop: 3 }}>Marcado = tributação normal; desmarcado = ICMS-ST</div></div>
+                <input type="checkbox" checked={form.tributado_icms} onChange={e => setCampo('tributado_icms', e.target.checked)} style={{ width: 20, height: 20 }} />
+              </div>
+              <div className="field" style={{ gridColumn: '1 / -1' }}><label>Lei ICMS (opcional)</label>
+                <textarea maxLength={2000} rows={4} value={form.lei_icms} placeholder="Fundamento legal ou justificativa da exceção"
+                  onChange={e => setCampo('lei_icms', e.target.value)} /></div>
+              <div className="field" style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <label style={{ margin: 0 }}>Ativo</label><input type="checkbox" checked={form.ativo} onChange={e => setCampo('ativo', e.target.checked)} style={{ width: 20, height: 20 }} />
+              </div>
+            </div></div>
+            <div className="modal-footer"><button type="button" className="btn btn-ghost" onClick={() => setModal(false)}>Fechar</button>
+              <button type="submit" className="btn btn-primary" disabled={saving || !form.empresa_id}>{saving ? 'Salvando…' : 'Salvar'}</button></div>
+          </form>
+        </div>
+      </div>}
+    </div>
+  )
+}
+
 function vazioDe(campos) {
   return Object.fromEntries(campos.map(c => [c.key, c.type === 'select' ? (c.options[0]?.value || '') : '']))
 }
@@ -1059,6 +1226,8 @@ export default function MatrizesFiscais() {
       <div data-tour={`matrizes-painel-${aba.id}`}>
         {aba.id === 'revisao'
           ? <RevisaoPanel key={`${tab}:${bulkVersion}`} onMudou={atualizarPendencias} />
+          : aba.id === 'excecoes'
+            ? <ExcecoesItemPanel key={`${tab}:${bulkVersion}`} />
           : aba.id === 'saude'
             ? <SaudePanel key={`${tab}:${bulkVersion}`} onCadastrarPar={cadastrarPar} />
             : aba.custom

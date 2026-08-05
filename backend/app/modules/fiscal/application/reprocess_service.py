@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from uuid import UUID
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.cfop_rules.infrastructure.repositories import CfopRegraRepository
@@ -89,6 +89,32 @@ class ReprocessService:
             "cfop_reclassificados": cfop_reclassificados,
             "notas_destravadas": destravadas,
         }
+
+    async def reprocessar_produto(self, empresa_id: UUID, codigo_produto: str) -> dict:
+        """Reaudita todas as notas ativas que contenham o código do produto.
+
+        Diferentemente do reprocessamento de pendências, este fluxo também
+        alcança itens que já estavam OK ou DIVERGENTES: uma Exceção do Item
+        altera deliberadamente a decisão fiscal anterior.
+        """
+        codigo = (codigo_produto or "").strip().upper()
+        if not codigo:
+            return {"notas_reprocessadas": 0}
+
+        stmt = (
+            select(Nota.id)
+            .join(NotaItem, NotaItem.nota_id == Nota.id)
+            .where(
+                Nota.empresa_id == empresa_id,
+                Nota.status == "ativa",
+                func.upper(func.trim(NotaItem.codigo)) == codigo,
+            )
+            .distinct()
+        )
+        nota_ids = list((await self.session.scalars(stmt)).all())
+        for nota_id in nota_ids:
+            await self.audit.auditar_nota(empresa_id, nota_id)
+        return {"notas_reprocessadas": len(nota_ids)}
 
     async def _tem_nao_auditavel(self, nota_id: UUID) -> bool:
         return bool(

@@ -6,10 +6,11 @@ O domínio (`StAuditEngine`) permanece puro, síncrono e cego ao banco.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 from typing import ClassVar
+from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +25,7 @@ from app.modules.fiscal.infrastructure.matrizes_models import (
     MatrizMva,
     MatrizProtocoloSt,
 )
+from app.modules.fiscal.infrastructure.models import ExcecaoEnquadramentoStProduto
 from app.modules.fiscal.infrastructure.vigencia import filtrar_vigencia
 from app.shared.domain.value_objects import only_digits
 
@@ -73,8 +75,24 @@ class _MvaSnapshot:
 @dataclass(frozen=True, slots=True)
 class _EnquadramentoSnapshot:
     dados: dict[tuple[str, str, str], Regime]    # (ncm, cest, uf) -> regime
+    excecoes: dict[str, Regime] = field(default_factory=dict)  # cProd -> regime
 
-    def regime(self, ncm: str, cest: str, uf_orig: str, uf_dest: str, data: date) -> Regime:
+    def _excecao(self, codigo_produto: str) -> Regime | None:
+        codigo = (codigo_produto or "").strip().upper()
+        if not codigo:
+            return None
+        return self.excecoes.get(codigo)
+
+    def fonte_regime(self, codigo_produto: str) -> str:
+        return "EXCECAO_ITEM" if self._excecao(codigo_produto) is not None else "MATRIZ"
+
+    def regime(
+        self, ncm: str, cest: str, uf_orig: str, uf_dest: str, data: date,
+        codigo_produto: str = "", cnpj_emitente: str = "",
+    ) -> Regime:
+        excecao = self._excecao(codigo_produto)
+        if excecao is not None:
+            return excecao
         cest_l, uf = only_digits(cest), uf_dest.upper()
         for c in _candidatos_ncm(ncm):
             reg = self.dados.get((c, cest_l, uf))
@@ -90,10 +108,15 @@ class _EnquadramentoSnapshot:
                     return regimes.pop() if len(regimes) == 1 else Regime.ST
         return Regime.TN   # não enquadrado = tributação normal
 
-    def explicar_tn(self, ncm: str, cest: str, uf_dest: str) -> str | None:
+    def explicar_tn(
+        self, ncm: str, cest: str, uf_dest: str,
+        codigo_produto: str = "", cnpj_emitente: str = "",
+    ) -> str | None:
         """Por que o item caiu em TN? None = TN explícito por cadastro (legítimo,
         fora do motor por decisão). String = falta/conflito de cadastro — vira
         NAO_AUDITAVEL acionável (com código de erro, reprocessável)."""
+        if self._excecao(codigo_produto) == Regime.TN:
+            return None
         cest_l, uf = only_digits(cest), uf_dest.upper()
         candidatos = _candidatos_ncm(ncm)
         for c in candidatos:
@@ -177,7 +200,10 @@ class MatrizesLoader:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def hidratar(self, itens: list[ItemFiscal], operacao: Operacao) -> MatrizesHidratadas:
+    async def hidratar(
+        self, itens: list[ItemFiscal], operacao: Operacao,
+        empresa_id: UUID | None = None,
+    ) -> MatrizesHidratadas:
         uf, data = operacao.uf_dest.upper(), operacao.data
         ncms: set[str] = set()
         cests: set[str] = set()
@@ -187,7 +213,9 @@ class MatrizesLoader:
 
         return MatrizesHidratadas(
             mva=await self._mva(uf, ncms, cests, data),
-            enquadramento=await self._enquadramento(uf, ncms, cests, data),
+            enquadramento=await self._enquadramento(
+                uf, ncms, cests, data, empresa_id, itens
+            ),
             fcp=await self._fcp(uf, ncms, data),
             protocolo=await self._protocolo(operacao.uf_emit.upper(), uf, data),
             aliquota=await self._aliquota(uf, data),
@@ -210,7 +238,11 @@ class MatrizesLoader:
             for r in rows
         })
 
-    async def _enquadramento(self, uf, ncms, cests, data) -> _EnquadramentoSnapshot:
+    async def _enquadramento(
+        self, uf, ncms, cests, data,
+        empresa_id: UUID | None = None,
+        itens: list[ItemFiscal] | None = None,
+    ) -> _EnquadramentoSnapshot:
         # Sem filtro por CEST (mesma razão do _mva): o cadastro NCM×CEST precisa
         # ser visível mesmo quando a nota veio sem a tag CEST.
         stmt = filtrar_vigencia(
@@ -222,8 +254,30 @@ class MatrizesLoader:
             data,
         )
         rows = (await self.session.execute(stmt)).scalars().all()
+        excecoes: dict[str, Regime] = {}
+        codigos = {
+            (it.codigo_produto or "").strip().upper()
+            for it in (itens or []) if (it.codigo_produto or "").strip()
+        }
+        if empresa_id is not None and codigos:
+            stmt_exc = select(ExcecaoEnquadramentoStProduto).where(
+                ExcecaoEnquadramentoStProduto.empresa_id == empresa_id,
+                ExcecaoEnquadramentoStProduto.codigo_produto.in_(codigos),
+                ExcecaoEnquadramentoStProduto.ativo.is_(True),
+                ExcecaoEnquadramentoStProduto.data_inicio_vigencia <= data,
+                (
+                    ExcecaoEnquadramentoStProduto.data_fim_vigencia.is_(None)
+                    | (ExcecaoEnquadramentoStProduto.data_fim_vigencia >= data)
+                ),
+            )
+            exc_rows = (await self.session.execute(stmt_exc)).scalars().all()
+            excecoes = {
+                r.codigo_produto: (Regime.TN if r.tributado_icms else Regime.ST)
+                for r in exc_rows
+            }
         return _EnquadramentoSnapshot(
-            {(r.ncm, r.cest, r.uf_destino): Regime(r.regime) for r in rows}
+            {(r.ncm, r.cest, r.uf_destino): Regime(r.regime) for r in rows},
+            excecoes,
         )
 
     async def _fcp(self, uf, ncms, data) -> _FcpSnapshot:

@@ -57,7 +57,8 @@ class EnquadramentoEmMemoria:
         self._padrao = padrao
 
     def regime(
-        self, ncm: str, cest: str, uf_orig: str, uf_dest: str, data: date
+        self, ncm: str, cest: str, uf_orig: str, uf_dest: str, data: date,
+        codigo_produto: str = "", cnpj_emitente: str = "",
     ) -> Regime:
         if (_limpar(ncm), _limpar(cest), uf_dest.upper()) in self._tn:
             return Regime.TN
