@@ -55,6 +55,18 @@ def test_pdf_valido_com_totais():
     assert "-R$ 92,24" in t or "R$ -92,24" in t.replace("R$ ", "R$ ")  # total diferença
 
 
+def test_aviso_de_legislacao_com_data_da_base():
+    """Fase 2: a carta avisa que a norma pode ter mudado e carimba a data da
+    última verificação da base de matrizes (quando informada)."""
+    t = _texto(_gerar(verificacao_matrizes="04/08/2026"))
+    assert "confirme se houve" in t and "legisla" in t
+    assert "04/08/2026" in t
+
+    sem_data = _texto(_gerar())      # base vazia: aviso sai, carimbo não
+    assert "confirme se houve" in sem_data
+    assert "verificada pela última vez" not in sem_data
+
+
 def test_situacao_traduzida_e_fluxos():
     t = _texto(_gerar())
     assert "Valor do ST" in t         # rótulo da situação (quebra de linha na célula)

@@ -50,6 +50,7 @@ def gerar_carta_st(
     competencia: str,
     itens: list[dict],
     cliente_nome: str | None = None,
+    verificacao_matrizes: str | None = None,   # "DD/MM/AAAA" da base de matrizes
 ) -> bytes:
     """Monta o PDF com os itens DIVERGENTES (sem ERRO_111) do emitente."""
     pdf = nova_carta()
@@ -177,7 +178,23 @@ def gerar_carta_st(
     pdf.ln(5)
     pdf.set_font("helvetica", "", 10)
     pdf.multi_cell(0, 5.4, _t(pedido))
-    pdf.ln(8)
+
+    # Aviso de legislação vigente (Fase 2): quem for recolher/providenciar
+    # precisa conferir se a norma mudou desde a última verificação da base.
+    pdf.ln(4)
+    pdf.set_font("helvetica", "I", 8)
+    pdf.set_text_color(*CINZA)
+    aviso = (
+        "Valores apurados com base nas matrizes fiscais vigentes na data de emissão "
+        "de cada nota"
+        + (f" (base de matrizes verificada pela última vez em {verificacao_matrizes})"
+           if verificacao_matrizes else "")
+        + ". Antes de qualquer recolhimento ou providência, confirme se houve "
+        "alteração na legislação aplicável (MVA, alíquotas, protocolos e convênios)."
+    )
+    pdf.multi_cell(0, 4.4, _t(aviso))
+
+    pdf.ln(6)
     pdf.set_font("helvetica", "B", 10.5)
     pdf.set_text_color(*NAVY)
     pdf.cell(0, 6, _t("Sol Contabilidade e Consultoria"), new_x="LMARGIN", new_y="NEXT")

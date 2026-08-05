@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import NotFoundError
 from app.core.rls import tenant_session
 from app.core.security import TokenClaims, get_current_claims
+from app.modules.audit.application.service import AuditService
 from app.modules.companies.infrastructure.repositories import EmpresaRepository
 from app.modules.fiscal.api.auditoria_schemas import DivergenciasStResponse
 from app.modules.fiscal.application.auditoria_query import (
@@ -16,6 +17,7 @@ from app.modules.fiscal.application.auditoria_query import (
     exportar_divergencias,
     listar_divergencias,
 )
+from app.modules.fiscal.application.matrizes_saude import ultima_atualizacao_matrizes
 from app.modules.fiscal.application.reprocess_service import ReprocessService
 from app.modules.fiscal.application.st_audit_service import StAuditService
 from app.modules.fiscal.application.st_carta import gerar_carta_st
@@ -100,6 +102,25 @@ async def diagnostico(
     )
 
 
+@router.post("/ciencia-legislacao")
+async def ciencia_legislacao(
+    empresa_id: UUID = Query(..., description="Empresa do documento a emitir"),
+    destino: str = Query(..., description="carta | export | diagnostico"),
+    competencia: str | None = Query(default=None, description="MM/AAAA do filtro"),
+    claims: TokenClaims = Depends(get_current_claims),
+    session: AsyncSession = Depends(tenant_session),
+):
+    """Trilha do aviso de legislação (Fase 2): registra QUEM confirmou ter
+    verificado a norma vigente antes de emitir o documento — mesmo padrão da
+    confirmação de nota sem CT-e (quem/quando ficam na auditoria)."""
+    await AuditService(session).registrar(
+        tenant_id=claims.tid, user_id=claims.sub, acao="st.ciencia_legislacao",
+        entidade="empresa", entidade_id=str(empresa_id),
+        detalhe={"destino": destino, "competencia": competencia},
+    )
+    return {"ok": True, "registrado_em": datetime.now(UTC).isoformat()}
+
+
 @router.get("/carta")
 async def carta_st(
     empresa_id: UUID = Query(..., description="Empresa (cliente) auditada"),
@@ -130,6 +151,9 @@ async def carta_st(
         else "período completo"
     )
     alvo = only_digits(cnpj_emit)
+    # Carimbo do aviso de legislação: quando a base de matrizes foi verificada
+    # por um humano pela última vez (Fase 2 da automação).
+    verificacao = await ultima_atualizacao_matrizes(session)
     pdf = gerar_carta_st(
         destinatario_nome=itens[0].get("fornecedor") or "Emitente",
         destinatario_cnpj=alvo,
@@ -137,6 +161,7 @@ async def carta_st(
         competencia=competencia,
         itens=itens,
         cliente_nome=empresa.razao_social if empresa else None,
+        verificacao_matrizes=verificacao.strftime("%d/%m/%Y") if verificacao else None,
     )
     return Response(
         content=pdf,

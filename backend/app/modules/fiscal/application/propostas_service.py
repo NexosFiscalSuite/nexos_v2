@@ -117,6 +117,7 @@ class PropostasService:
         if p.acao == ACAO_ATUALIZAR:
             for campo, valor in dados.items():
                 setattr(linha, campo, valor)
+            self._tocar(linha)
         elif p.acao == ACAO_NOVA_VIGENCIA:
             fim_original = linha.data_fim_vigencia
             linha.data_fim_vigencia = dados["data_inicio_vigencia"] - timedelta(days=1)
@@ -133,5 +134,12 @@ class PropostasService:
             linha.data_fim_vigencia = dados.get("data_fim_vigencia") or datetime.now(
                 UTC
             ).date()
+            self._tocar(linha)
         else:
             raise ConflictError(f"Ação desconhecida: {p.acao}.")
+
+    @staticmethod
+    def _tocar(linha) -> None:
+        """Aprovar uma proposta sobre a linha = reconferir (carimbo da Fase 2)."""
+        if hasattr(linha, "ultima_verificacao_em"):
+            linha.ultima_verificacao_em = datetime.now(UTC)

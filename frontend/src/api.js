@@ -349,6 +349,13 @@ export const api = {
     ).toString()
     return downloadBlob(`/auditoria/st/carta?${q}`, { fallback: 'carta-st.pdf' })
   },
+  // Ciência do aviso de legislação (Fase 2): registra na trilha antes de emitir
+  stCienciaLegislacao: (empresaId, destino, competencia) => {
+    const q = new URLSearchParams({
+      empresa_id: empresaId, destino, ...(competencia ? { competencia } : {}),
+    }).toString()
+    return request('POST', `/auditoria/st/ciencia-legislacao?${q}`)
+  },
   // Diagnóstico executivo em PDF (todo o período auditado da empresa)
   stDiagnostico: (empresaId) =>
     downloadBlob(`/auditoria/st/diagnostico?empresa_id=${empresaId}`, { fallback: 'diagnostico-st.pdf' }),

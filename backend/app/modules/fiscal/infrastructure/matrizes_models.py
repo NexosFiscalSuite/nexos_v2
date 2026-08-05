@@ -31,7 +31,18 @@ class CriadoEm:
     )
 
 
-class MatrizMva(Base, VigenciaTemporal, CriadoEm):
+class UltimaVerificacao:
+    """Quando um humano confirmou a linha pela última vez (cadastro, edição ou
+    aprovação de proposta) — o 'frescor' que o aviso de legislação e o radar
+    de saúde das matrizes leem. Difere do created_at: reconferir uma regra
+    antiga renova este carimbo sem criar vigência nova."""
+
+    ultima_verificacao_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class MatrizMva(Base, VigenciaTemporal, CriadoEm, UltimaVerificacao):
     """MVA Original por NCM+CEST+UF destino (alimenta o MvaRepository)."""
 
     __tablename__ = "matriz_mva"
@@ -52,7 +63,7 @@ class MatrizMva(Base, VigenciaTemporal, CriadoEm):
     base_legal: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
 
-class MatrizEnquadramentoSt(Base, VigenciaTemporal, CriadoEm):
+class MatrizEnquadramentoSt(Base, VigenciaTemporal, CriadoEm, UltimaVerificacao):
     """Regime do item (ST | TN | ST_ENTRADA) por NCM+CEST+UF destino."""
 
     __tablename__ = "matriz_enquadramento_st"
@@ -73,7 +84,7 @@ class MatrizEnquadramentoSt(Base, VigenciaTemporal, CriadoEm):
     base_legal: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
 
-class MatrizProtocoloSt(Base, VigenciaTemporal, CriadoEm):
+class MatrizProtocoloSt(Base, VigenciaTemporal, CriadoEm, UltimaVerificacao):
     """Protocolos/Convênios que ativam a ST interestadual (par UF origem→destino)."""
 
     __tablename__ = "matriz_protocolo_st"
@@ -92,7 +103,7 @@ class MatrizProtocoloSt(Base, VigenciaTemporal, CriadoEm):
     situacao: Mapped[str] = mapped_column(String(10), default="ATIVO")
 
 
-class MatrizAliquota(Base, VigenciaTemporal, CriadoEm):
+class MatrizAliquota(Base, VigenciaTemporal, CriadoEm, UltimaVerificacao):
     """Alíquota modal do ICMS por UF de destino (alimenta o AliquotaRepository).
 
     `aliq_modal` é o débito do ST (sem FCP); `aliq_fcp_integrado` só compõe a
@@ -115,7 +126,7 @@ class MatrizAliquota(Base, VigenciaTemporal, CriadoEm):
     base_legal: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
 
-class MatrizFcp(Base, VigenciaTemporal, CriadoEm):
+class MatrizFcp(Base, VigenciaTemporal, CriadoEm, UltimaVerificacao):
     """Alíquota de FCP por UF+NCM (alimenta o FcpRepository). NCM pode ser 'GERAL'."""
 
     __tablename__ = "matriz_fcp"

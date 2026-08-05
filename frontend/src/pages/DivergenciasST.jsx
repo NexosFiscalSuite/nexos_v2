@@ -296,6 +296,19 @@ export default function DivergenciasST() {
     finally { setExpBusy(false) }
   }
 
+  // Aviso de legislação vigente (Fase 2): antes de emitir carta/planilha, o
+  // usuário confirma que conferiu a norma — e a confirmação fica na trilha de
+  // auditoria (quem/quando), no padrão da confirmação de nota sem CT-e.
+  const [ciencia, setCiencia] = useState(null)   // { destino: 'carta'|'export', cnpj? }
+  async function confirmarCiencia() {
+    const alvo = ciencia
+    setCiencia(null)
+    try { await api.stCienciaLegislacao(selectedEmpresa.id, alvo.destino, `${mes}/${ano}`) }
+    catch { /* a trilha não bloqueia a emissão */ }
+    if (alvo.destino === 'carta') await gerarCarta(alvo.cnpj)
+    else await exportarExcel()
+  }
+
   const [filtroCard, setFiltroCard] = useState(null)
   useEffect(() => { carregar() }, [carregar])
   useEffect(() => { setExpandido(new Set()); setFiltroCard(null) }, [selectedEmpresa, ano, mes, tab, q, fStatus, fCodigo])
@@ -336,7 +349,7 @@ export default function DivergenciasST() {
             title="Relatório executivo em PDF de TODO o período auditado desta empresa: conformidade e dinheiro em jogo por competência + top fornecedores">
             <i className="ti ti-report-analytics" /> {diagBusy ? 'Gerando…' : 'Diagnóstico (PDF)'}
           </button>
-          <button className="btn btn-secondary" disabled={expBusy || data.total === 0} onClick={exportarExcel}
+          <button className="btn btn-secondary" disabled={expBusy || data.total === 0} onClick={() => setCiencia({ destino: 'export' })}
             title="Planilha Excel do filtro atual (todas as páginas): itens + consolidação por fornecedor">
             <i className="ti ti-file-spreadsheet" /> {expBusy ? 'Exportando…' : 'Exportar Excel'}
           </button>
@@ -447,7 +460,7 @@ export default function DivergenciasST() {
                         <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                           <button className="btn btn-secondary btn-sm" disabled={cartaBusy === f.cnpj}
                             title="Gera a carta timbrada (PDF) de cobrança/correção do ST deste emitente"
-                            onClick={() => gerarCarta(f.cnpj)}>
+                            onClick={() => setCiencia({ destino: 'carta', cnpj: f.cnpj })}>
                             <i className={`ti ${cartaBusy === f.cnpj ? 'ti-loader-2' : 'ti-file-type-pdf'}`} />
                             {cartaBusy === f.cnpj ? ' Gerando…' : ' Carta PDF'}
                           </button>
@@ -511,6 +524,36 @@ export default function DivergenciasST() {
       )}
 
       {detalhe && <MemoriaModal d={detalhe} onClose={() => setDetalhe(null)} />}
+
+      {/* Ciência do aviso de legislação antes de emitir (com trilha) */}
+      {ciencia && (
+        <div className="modal-overlay" onClick={() => setCiencia(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            <div className="modal-header">
+              <h2><i className="ti ti-scale" style={{ marginRight: 8 }} />Confira a legislação vigente</h2>
+              <button className="btn btn-icon" onClick={() => setCiencia(null)}><i className="ti ti-x" /></button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: 13.5, lineHeight: 1.6, margin: 0 }}>
+                Os valores {ciencia.destino === 'carta' ? 'da carta' : 'da planilha'} saem das
+                regras cadastradas nas Matrizes Fiscais (MVA, alíquotas, protocolos e convênios).
+                Legislação muda: antes de emitir, confirme que não houve alteração recente
+                que afete estes cálculos.
+              </p>
+              <p style={{ fontSize: 12.5, color: 'var(--text-3)', lineHeight: 1.55, marginTop: 10, marginBottom: 0 }}>
+                A sua confirmação fica registrada na trilha de auditoria (quem confirmou e quando),
+                e o documento sai com a data da última verificação da base.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-ghost" onClick={() => setCiencia(null)}>Cancelar</button>
+              <button className="btn btn-primary" onClick={confirmarCiencia}>
+                <i className="ti ti-checks" /> Estou ciente — gerar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

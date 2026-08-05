@@ -12,7 +12,7 @@ import io
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import UTC, date, datetime
 
 from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
@@ -129,6 +129,9 @@ async def _upsert(
             for c in nao_chave:
                 if c in d:
                     setattr(atual, c, d[c])
+            # Reimportar a linha = reconferir (só nas tabelas com o carimbo).
+            if hasattr(atual, "ultima_verificacao_em"):
+                atual.ultima_verificacao_em = datetime.now(UTC)
             atualizados += 1
         else:
             # O dict vem do `normalizar` do spec (confiável): pode carregar

@@ -8,6 +8,7 @@ e-mail. Um factory registra os 4 verbos por matriz para não repetir o mesmo
 CRUD cinco vezes.
 """
 from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import Generic, TypeVar
 from uuid import UUID
 
@@ -147,6 +148,8 @@ def _registrar_crud(
         await _garantir_sem_sobreposicao(session, modelo, dados, excluir_id=linha_id)
         for campo, valor in dados.items():
             setattr(linha, campo, valor)
+        # Editar = reconferir: renova o carimbo de verificação (Fase 2).
+        linha.ultima_verificacao_em = datetime.now(UTC)
         await session.flush()
         await AuditService(session).registrar(
             tenant_id=claims.tid, user_id=claims.sub, acao=f"{entidade}.editar",

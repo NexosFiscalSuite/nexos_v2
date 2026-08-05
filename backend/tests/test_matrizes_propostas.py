@@ -106,9 +106,12 @@ async def test_curadoria_manual_nunca_e_tocada(sessao):
 
 @pytest.mark.asyncio
 async def test_linha_auto_com_segmento_novo_vira_atualizar(sessao):
+    from datetime import datetime
+
     sessao.add(MatrizEnquadramentoSt(
         uf_destino="MG", ncm="40111000", cest="0100500", regime="ST",
         segmento="Antigo", base_legal=BASE_LEGAL_AUTO, data_inicio_vigencia=VIG,
+        ultima_verificacao_em=datetime(2026, 1, 1),
     ))
     await sessao.flush()
     r = await _propor(sessao, regs=[REGS[0]])
@@ -120,6 +123,9 @@ async def test_linha_auto_com_segmento_novo_vira_atualizar(sessao):
     await PropostasService(sessao).aprovar(p.id, revisor="ana@sol.com")
     linha = (await sessao.execute(select(MatrizEnquadramentoSt))).scalars().one()
     assert linha.segmento == "Autopeças"
+    # Aprovar = reconferir: o carimbo de verificação renova (Fase 2).
+    assert linha.ultima_verificacao_em.year >= 2026
+    assert linha.ultima_verificacao_em != datetime(2026, 1, 1)
 
 
 @pytest.mark.asyncio
