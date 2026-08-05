@@ -42,6 +42,7 @@ from app.modules.fiscal.api.matrizes_schemas import (
 )
 from app.modules.fiscal.application.cobertura_service import CoberturaService
 from app.modules.fiscal.application.matrizes_saude import saude_matrizes
+from app.modules.fiscal.application.pares_interestaduais import pares_interestaduais
 from app.modules.fiscal.infrastructure.matrizes_models import (
     MatrizAliquota,
     MatrizEnquadramentoSt,
@@ -251,6 +252,18 @@ async def saude_matrizes_endpoint(
     nos últimos 90 dias, a verificação mais antiga por matriz e as propostas
     aguardando revisão — o que está envelhecendo aparece antes de virar erro."""
     return await saude_matrizes(session)
+
+
+@router.get("/pares-interestaduais")
+async def pares_interestaduais_endpoint(
+    limite: int = Query(default=50, ge=1, le=100),
+    claims: TokenClaims = Depends(get_current_claims),
+    session: AsyncSession = Depends(tenant_session),
+):
+    """Fila de pares UF→UF (Fase 3): o que a carteira movimenta entre estados
+    × a curadoria de Protocolos. Par não avaliado trava o motor interestadual
+    (ERRO_PROTOCOLO_NAO_AVALIADO) — ordenado por dinheiro em jogo."""
+    return await pares_interestaduais(session, limite=limite)
 
 
 @router.get("/cobertura")

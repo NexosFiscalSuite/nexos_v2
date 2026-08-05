@@ -183,17 +183,22 @@ const ABAS = [
   },
 ]
 
-// ── Saúde: radar de frescor da base (Fase 2 da automação) ──
-function SaudePanel() {
+// ── Saúde: radar de frescor da base (Fase 2) + pares interestaduais (Fase 3) ──
+function SaudePanel({ onCadastrarPar }) {
   const { toasts } = useToast()
   const [dados, setDados] = useState(null)
+  const [pares, setPares] = useState(null)
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState(null)
 
   const carregar = useCallback(async () => {
     setLoading(true)
     setErro(null)
-    try { setDados(await api.saudeMatrizes()) }
+    try {
+      const [saude, prs] = await Promise.all([api.saudeMatrizes(), api.paresInterestaduais()])
+      setDados(saude)
+      setPares(prs)
+    }
     catch (e) { setErro(e.message) }
     finally { setLoading(false) }
   }, [])
@@ -267,6 +272,65 @@ function SaudePanel() {
           Regra envelhecida não é regra errada — é regra que ninguém confere há tempo.
         </div>
       </div>
+
+      {/* Pares interestaduais (Fase 3): movimento real × curadoria de protocolos */}
+      {(pares?.pares || []).length > 0 && (
+        <div className="card" style={{ padding: 0, marginTop: 18 }}>
+          <div style={{ padding: '12px 16px', fontWeight: 600, borderBottom: '1px solid var(--border-2)', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span>Pares interestaduais da carteira</span>
+            {pares.nao_avaliados > 0 && badge(`${pares.nao_avaliados} travando o motor`, 'err')}
+            <span style={{ fontWeight: 400, color: 'var(--text-4)', fontSize: 12 }}>
+              — par sem curadoria de protocolo deixa as notas interestaduais sem auditar
+            </span>
+          </div>
+          <div className="tbl-wrap">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Par (origem → destino)</th>
+                  <th style={{ textAlign: 'right' }}>Notas</th>
+                  <th style={{ textAlign: 'right' }}>Valor movimentado</th>
+                  <th>Situação</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {pares.pares.map(p => (
+                  <tr key={`${p.uf_origem}-${p.uf_destino}`}>
+                    <td>
+                      {badge(p.uf_origem, 'warn')}
+                      <i className="ti ti-arrow-right" style={{ margin: '0 6px', color: 'var(--text-4)', fontSize: 13 }} />
+                      {badge(p.uf_destino)}
+                    </td>
+                    <td className="tnum" style={{ textAlign: 'right' }}>{Number(p.notas).toLocaleString('pt-BR')}</td>
+                    <td className="tnum" style={{ textAlign: 'right', fontWeight: 600 }}>{brl(p.valor)}</td>
+                    <td>
+                      {!p.curado
+                        ? badge('Não avaliado — trava o motor', 'err')
+                        : p.acordos_ativos > 0
+                          ? badge(`Curado · ${p.acordos_ativos} acordo(s) ativo(s)`, 'ok')
+                          : badge('Curado — sem acordo (antecipação)', 'info')}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      {!p.curado && (
+                        <button className="btn btn-secondary btn-sm"
+                          title="Abre o cadastro de protocolo já preenchido com o par"
+                          onClick={() => onCadastrarPar?.(p)}>
+                          <i className="ti ti-plus" /> Cadastrar protocolo
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ padding: '10px 16px', fontSize: 12, color: 'var(--text-4)', borderTop: '1px solid var(--border-2)' }}>
+            Não há acordo no par? Cadastre com situação “SEM ACORDO” — o registro explícito também
+            é curadoria e libera o motor (vira antecipação do destinatário).
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -852,6 +916,14 @@ export default function MatrizesFiscais() {
   const fileRef = useRef(null)
   const aba = ABAS.find(a => a.id === tab)
 
+  // Fase 3: "Cadastrar protocolo" da aba Saúde abre o CRUD de Protocolos com
+  // o par origem→destino já preenchido (mesmo mecanismo do deep-link).
+  const [prefillPar, setPrefillPar] = useState(null)
+  const cadastrarPar = useCallback((p) => {
+    setPrefillPar({ uf_origem: p.uf_origem, uf_destino: p.uf_destino })
+    setTab('protocolos')
+  }, [])
+
   // Contador de propostas pendentes (chip da aba Revisão).
   const [pendencias, setPendencias] = useState(0)
   const atualizarPendencias = useCallback(async () => {
@@ -911,7 +983,7 @@ export default function MatrizesFiscais() {
       {/* Abas: as fontes que o motor de ICMS-ST consome */}
       <div style={{ display: 'inline-flex', background: 'var(--surface-2)', borderRadius: 'var(--radius)', padding: 3, marginBottom: 18 }}>
         {ABAS.map(a => (
-          <button key={a.id} onClick={() => setTab(a.id)} className="btn btn-sm"
+          <button key={a.id} onClick={() => { setPrefillPar(null); setTab(a.id) }} className="btn btn-sm"
             style={{ border: 'none', background: tab === a.id ? 'var(--surface)' : 'transparent', color: tab === a.id ? 'var(--text-1)' : 'var(--text-3)', boxShadow: tab === a.id ? 'var(--shadow-sm)' : 'none' }}>
             <i className={`ti ${a.icon}`} /> {a.label}
             {a.id === 'revisao' && pendencias > 0 && (
@@ -927,11 +999,12 @@ export default function MatrizesFiscais() {
       {aba.id === 'revisao'
         ? <RevisaoPanel key={`${tab}:${bulkVersion}`} onMudou={atualizarPendencias} />
         : aba.id === 'saude'
-          ? <SaudePanel key={`${tab}:${bulkVersion}`} />
+          ? <SaudePanel key={`${tab}:${bulkVersion}`} onCadastrarPar={cadastrarPar} />
           : aba.custom
             ? <CoberturaPanel key={`${tab}:${bulkVersion}`} />
             : <CrudMatriz key={`${tab}:${bulkVersion}`} aba={aba}
-                prefill={deepLink?.aba === tab ? deepLink.prefill : null} />}
+                prefill={(tab === 'protocolos' && prefillPar)
+                  || (deepLink?.aba === tab ? deepLink.prefill : null)} />}
       {resultado && <ResumoImportModal r={resultado} onClose={() => setResultado(null)} />}
     </div>
   )

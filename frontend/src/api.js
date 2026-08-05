@@ -221,6 +221,8 @@ export const api = {
 
   // Saúde das matrizes: frescor da base (Fase 2 — radar de verificação)
   saudeMatrizes: () => request('GET', '/matrizes/saude'),
+  // Pares interestaduais (Fase 3): movimento real × curadoria de protocolos
+  paresInterestaduais: () => request('GET', '/matrizes/pares-interestaduais'),
 
   // Cobertura: o que a carteira movimenta × o que as matrizes cobrem (fila de curadoria)
   coberturaMatrizes: (params = {}) => {

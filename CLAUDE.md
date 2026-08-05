@@ -110,14 +110,19 @@ os comandos de deploy.
 6. Curadoria de matrizes: usuário normal pode criar/editar;
    `NEXOS_MATRIZ_CURADORES` é freio OPCIONAL (env limpa = todos liberados).
 
-## Estado atual (04/08/2026)
+## Estado atual (05/08/2026)
 
-Últimos commits (tudo deployado ou aguardando deploy do João):
-`cd66717` tpNF desempata fluxo · `3900112` cadastro CEI · `b025eb7`
-cadastro CPF produtor rural · `3720b18` supervisor só vê grupos ·
-`a4b5f45` seletores de grupo filtrados · `65564d5` atualização de cadastro
-pela Receita (individual + lote com job) · `8f86e7e`/`6671d34` busca,
-paginação e UF por extenso em Empresas. Suite: 160 passed, 4 skipped.
+Automação das matrizes (proposta em docs/proposta_automacao_matrizes_st.md):
+Fases 1–3 entregues — crawler CONFAZ NCM×CEST (7 UFs: MG,PR,SP,DF,RS,RJ,GO;
+vigência-piso 2026-06-01) propõe na FILA de revisão (aba Revisão, nada entra
+sem curadoria; rejeição suprime re-proposta por hash); aviso de legislação
+pré-emissão com trilha de ciência + `ultima_verificacao_em` nas 5 matrizes;
+aba Saúde (frescor 90d + pares interestaduais × curadoria de protocolos);
+radar semanal do índice de Protocolos CONFAZ (hash + webhook). Paginação em
+todas as listas (15–50/página; componente Paginacao). Migrações até 0030.
+Suite: 173 passed, 4 skipped. Deploys de 04-05/08 AGUARDANDO o João
+(sem acesso ao servidor no momento) — um git pull + build + compose aplica
+tudo, migrações rodam sozinhas.
 
 ## Pendências e ofertas em aberto
 

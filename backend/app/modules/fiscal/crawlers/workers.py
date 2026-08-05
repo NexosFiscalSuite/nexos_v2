@@ -9,11 +9,16 @@ import asyncio
 import logging
 from datetime import date
 
+from sqlalchemy import func, select
+
+from app.core.alerts import notificar
 from app.core.celery_app import celery_app
 from app.core.config import get_settings
 from app.core.worker_db import worker_global_session
+from app.modules.fiscal.crawlers.base import http_get
 from app.modules.fiscal.crawlers.confaz_cest import ConfazCestExtractor
 from app.modules.fiscal.crawlers.propor import propor_enquadramento, registrar_snapshot
+from app.modules.fiscal.infrastructure.propostas_models import FonteSnapshot
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +45,54 @@ def sync_cest_confaz(self, ufs: str = ""):
     except Exception as exc:  # noqa: BLE001 — portal público instável: retry, não falha o beat
         logger.warning("sync_cest_confaz falhou (%s); reagendando.", exc)
         raise self.retry(exc=exc, countdown=60 * 30) from exc
+
+
+# Radar de Protocolos ICMS (Fase 3): o índice oficial por ano. Não extrai
+# dado — DETECTA mudança e avisa; quem decide e cadastra é o curador.
+URL_PROTOCOLOS = "https://www.confaz.fazenda.gov.br/legislacao/protocolos/{ano}"
+
+
+@celery_app.task(name="fiscal.monitor_protocolos_confaz", bind=True, max_retries=2)
+def monitor_protocolos_confaz(self):
+    """Radar semanal: baixa o índice de Protocolos ICMS do CONFAZ (ano corrente
+    e anterior), compara por hash (FonteSnapshot) e NOTIFICA quando a página
+    muda — protocolo novo, adesão ou denúncia vira aviso, nunca dado calado."""
+    try:
+        return asyncio.run(_monitorar_protocolos())
+    except Exception as exc:  # noqa: BLE001 — portal público instável: retry, não falha o beat
+        logger.warning("monitor_protocolos_confaz falhou (%s); reagendando.", exc)
+        raise self.retry(exc=exc, countdown=60 * 30) from exc
+
+
+async def _monitorar_protocolos() -> dict:
+    resultado: dict[str, dict] = {}
+    ano_atual = date.today().year
+    for ano in (ano_atual, ano_atual - 1):
+        url = URL_PROTOCOLOS.format(ano=ano)
+        fonte = f"CONFAZ — Protocolos ICMS {ano}"
+        bruto = http_get(url)
+        async with worker_global_session() as s:
+            ja_tinha = await s.scalar(
+                select(func.count()).select_from(FonteSnapshot)
+                .where(FonteSnapshot.fonte == fonte)
+            )
+            mudou, snap_id = await registrar_snapshot(
+                s, fonte=fonte, url=url, conteudo=bruto,
+                resumo=f"índice {ano} ({len(bruto)} bytes)",
+            )
+        resultado[str(ano)] = {"mudou": mudou, "snapshot_id": snap_id}
+        if mudou and ja_tinha:
+            notificar(
+                f"Nexos: índice de Protocolos ICMS {ano} mudou no CONFAZ",
+                "A página oficial foi alterada — pode haver protocolo novo, adesão ou "
+                "denúncia afetando os pares interestaduais. Confira e atualize a "
+                "matriz de Protocolos (a aba Saúde mostra os pares em jogo).",
+                {"url": url},
+            )
+            logger.warning("Radar CONFAZ: índice %s mudou (snapshot %s).", ano, snap_id)
+        elif mudou:
+            logger.info("Radar CONFAZ: primeira captura do índice %s registrada.", ano)
+    return resultado
 
 
 async def _sync(ufs: list[str]) -> dict:

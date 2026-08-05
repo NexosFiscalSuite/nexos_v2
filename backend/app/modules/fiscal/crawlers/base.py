@@ -28,6 +28,14 @@ class ExtractResult:
     registros: list[CestRecord] = field(default_factory=list)
 
 
+def http_get(url: str, timeout: int = 30) -> bytes:
+    """Download com User-Agent e timeout (boa cidadania com portais públicos).
+    Módulo-nível para tasks que só monitoram (sem parse) usarem também."""
+    req = urllib.request.Request(url, headers={"User-Agent": "NexosFiscalBot/1.0"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 (URL fixa de portal oficial)
+        return resp.read()
+
+
 class Extractor(ABC):
     """Extrator de uma fonte oficial. Subclasses implementam fetch()+parse()."""
 
@@ -47,7 +55,4 @@ class Extractor(ABC):
         return ExtractResult(fonte=self.fonte, registros=self.parse(self.fetch()))
 
     def _http_get(self, url: str) -> bytes:
-        """Download com User-Agent e timeout (boa cidadania com portais públicos)."""
-        req = urllib.request.Request(url, headers={"User-Agent": "NexosFiscalBot/1.0"})
-        with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310 (URL fixa de portal oficial)
-            return resp.read()
+        return http_get(url, timeout=self.timeout)

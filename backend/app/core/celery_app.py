@@ -30,6 +30,12 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(day_of_month=1, hour=4, minute=0),
         "args": (settings.crawler_uf_alvo,),
     },
+    # Radar de Protocolos ICMS (Fase 3): detecta mudança no índice do CONFAZ
+    # e avisa a curadoria — toda segunda 05h UTC.
+    "monitor-protocolos-confaz-semanal": {
+        "task": "fiscal.monitor_protocolos_confaz",
+        "schedule": crontab(day_of_week=1, hour=5, minute=0),
+    },
 }
 
 celery_app.conf.update(
