@@ -20,6 +20,9 @@ const info = (element, title, description) => ({
 const pratico = (element, title, description) => ({
   element,
   pratico: true,
+  // Só passos práticos liberam o elemento destacado para receber o clique.
+  // Nos passos informativos a tela permanece totalmente bloqueada.
+  disableActiveInteraction: false,
   popover: {
     title,
     description: `${description}<br/><br/>👉 <b>Clique no item destacado para continuar.</b>`,
@@ -158,7 +161,15 @@ export function iniciarTour({ aoEncerrar } = {}) {
   const d = driver({
     steps: PASSOS,
     showProgress: true,
+    // Mantém o X disponível, mas nenhum clique fora do popover encerra o tour.
     allowClose: true,
+    overlayClickBehavior: () => {},
+    // Escape e setas não podem encerrar/pular etapas: a navegação acontece
+    // somente pelos controles visíveis e pelas ações solicitadas no passo.
+    allowKeyboardControl: false,
+    // Por padrão nem o elemento destacado recebe cliques. `pratico()` libera
+    // exclusivamente o alvo necessário para cumprir cada etapa interativa.
+    disableActiveInteraction: true,
     overlayOpacity: 0.65,
     stagePadding: 6,
     popoverClass: 'sol-tour',   // visual do app (styles.css) por cima do default
