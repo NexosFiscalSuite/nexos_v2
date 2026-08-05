@@ -168,6 +168,8 @@ const PASSOS = [
     // deixa o tour preso num passo central sem elemento para clicar.
     skipMissingElement: true,
   },
+  pratico('[data-tour="nav-matrizes-fiscais"]', 'Volte às Matrizes Fiscais ↩️',
+    'A Exceção do Item é um módulo separado. Agora retorne à central de matrizes para continuar pela fila de cobertura.'),
   pratico('[data-tour="matrizes-tab-cobertura"]', 'Veja primeiro a Cobertura 🎯',
     'Ela cruza os XMLs reais da carteira com as regras existentes e mostra exatamente o que ainda impede cálculos.'),
   info('[data-tour="matrizes-painel-cobertura"]', 'Sua fila de prioridade fiscal 💰',
