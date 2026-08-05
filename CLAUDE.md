@@ -123,7 +123,12 @@ semestral de alíquotas/FCP (ação REVALIDAR na fila — aprovar renova o
 carimbo, hash por ciclo); MVA de MG extraída do Anexo VII do RICMS/2023
 (SEFAZ-MG, 7 páginas HTML latin-1, âncora na célula CEST — validado com
 1.080 pares reais; mudança em linha auto vira NOVA_VIGENCIA no 1º do mês da
-detecção; PMPF extinto em MG pela Portaria SUTRI 1.518/2025). Paginação em
+detecção; PMPF extinto em MG pela Portaria SUTRI 1.518/2025); Protocolos
+extraídos da LEGENDA de âmbito do mesmo anexo (código → UF + acordo; 2.817
+propostas UF→MG escopadas por NCM nos dados reais, base legal no estilo
+"Protocolo ICMS 103/12 — Anexo VII, âmbito 2.1"; CHAVE_VIGENCIA do
+protocolo agora inclui ncm — vários escopos por acordo; FCP de MG segue
+manual, fonte própria Lei 6.763/75 art. 12-A). Paginação em
 todas as listas (15–50/página; componente Paginacao). Migrações até 0030.
 Suite: 181 passed, 4 skipped. Deploys de 04-05/08 AGUARDANDO o João
 (sem acesso ao servidor no momento) — um git pull + build + compose aplica

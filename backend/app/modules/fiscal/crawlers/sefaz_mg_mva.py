@@ -19,6 +19,38 @@ from .base import Extractor, TabelasHtml, separar_ncms
 
 _NUMERO = re.compile(r"\d+(?:[.,]\d+)?")
 _CEST = re.compile(r"\d{2}\.\d{3}\.\d{2}")
+_COD_AMBITO = re.compile(r"\d{1,2}\.\d{1,2}")
+# "Alagoas (Protocolo ICMS 103/12)" / "São Paulo (Convênio ICMS 52/17)"
+_UF_ACORDO = re.compile(
+    r"([A-Za-zÀ-ÿ ]+?)\s*\((Protocolo|Conv[êe]nio)\s+ICMS\s+n?º?\s*([\d.]+/\d{2,4})\)",
+    re.IGNORECASE,
+)
+_EXCECAO = re.compile(r"Exce[çc]\w*:?\s*([^)]*)", re.IGNORECASE)
+
+# Nome por extenso → sigla (como o Anexo VII escreve as UFs).
+UF_SIGLAS = {
+    "Acre": "AC", "Alagoas": "AL", "Amapá": "AP", "Amazonas": "AM",
+    "Bahia": "BA", "Ceará": "CE", "Distrito Federal": "DF",
+    "Espírito Santo": "ES", "Goiás": "GO", "Maranhão": "MA",
+    "Mato Grosso": "MT", "Mato Grosso do Sul": "MS", "Minas Gerais": "MG",
+    "Pará": "PA", "Paraíba": "PB", "Paraná": "PR", "Pernambuco": "PE",
+    "Piauí": "PI", "Rio de Janeiro": "RJ", "Rio Grande do Norte": "RN",
+    "Rio Grande do Sul": "RS", "Rondônia": "RO", "Roraima": "RR",
+    "Santa Catarina": "SC", "São Paulo": "SP", "Sergipe": "SE",
+    "Tocantins": "TO",
+}
+
+
+def _ufs_no_texto(trecho: str) -> list[str]:
+    """Siglas das UFs citadas por extenso num trecho (mais longas primeiro,
+    para 'Mato Grosso do Sul' não casar como 'Mato Grosso')."""
+    achadas: list[str] = []
+    resto = trecho
+    for nome in sorted(UF_SIGLAS, key=len, reverse=True):
+        if nome in resto:
+            achadas.append(UF_SIGLAS[nome])
+            resto = resto.replace(nome, " ")
+    return achadas
 
 
 def _decodificar(raw: bytes) -> str:
@@ -37,7 +69,9 @@ class MvaRecord:
     ncm: str
     mva: Decimal
     descricao: str = ""
-    ambito: str = ""
+    ambito: str = ""                      # célula bruta (ex.: "16.1 (Exceção: Rondônia)")
+    ambitos: tuple[str, ...] = ()         # códigos citados (ex.: ("2.1", "2.2"))
+    excecoes: tuple[str, ...] = ()        # siglas de UF excluídas do item
 
 
 def _mva_da_celula(celula: str) -> Decimal | None:
@@ -89,9 +123,58 @@ class SefazMgMvaExtractor(Extractor):
                 if mva is None:
                     continue                     # item sem margem publicada
                 cest = only_digits(linha[idx])
+                celula_ambito = linha[idx + 3]
+                m_exc = _EXCECAO.search(celula_ambito)
+                excecoes = tuple(_ufs_no_texto(m_exc.group(1))) if m_exc else ()
                 for ncm in separar_ncms(linha[idx + 1]):
                     registros.append(MvaRecord(
                         cest=cest, ncm=ncm, mva=mva,
-                        descricao=linha[idx + 2], ambito=linha[idx + 3],
+                        descricao=linha[idx + 2], ambito=celula_ambito,
+                        ambitos=tuple(_COD_AMBITO.findall(celula_ambito)),
+                        excecoes=excecoes,
                     ))
         return registros
+
+    def parse_ambitos(self, raw: bytes) -> dict[str, list[tuple[str, str]]]:
+        """Legenda oficial do 'Âmbito de Aplicação': código → [(UF, acordo)].
+
+        O próprio anexo define cada código, ex.: '2.1 Interno e nas seguintes
+        unidades da Federação: Alagoas (Protocolo ICMS 103/12), …'. É a fonte
+        da matriz de Protocolos com a base legal item a item. Códigos só
+        internos ('Interno.') ou de inaplicabilidade viram lista vazia.
+        Limitação documentada: notas de rodapé por item ('* Relativamente ao
+        item…') não são interpretadas — a proposta carrega o código do âmbito
+        e o curador confere na fonte."""
+        texto = re.sub(r"<[^>]+>", "|", _decodificar(raw))
+        texto = re.sub(r"\s+", " ", texto)
+
+        # Início de cada definição: código seguido de Interno/Inaplicabilidade.
+        inicios = [
+            (m.start(), m.group(1))
+            for m in re.finditer(r"(\d{1,2}\.\d{1,2})\s+(?:Interno|Inaplicabilidade)", texto)
+        ]
+        ambitos: dict[str, list[tuple[str, str]]] = {}
+        for i, (pos, codigo) in enumerate(inicios):
+            fim = inicios[i + 1][0] if i + 1 < len(inicios) else pos + 1500
+            trecho = texto[pos:fim]
+            pares: list[tuple[str, str]] = []
+            for m in _UF_ACORDO.finditer(trecho):
+                nome = m.group(1).strip(" ,;e|")
+                # O nome da UF é o fim do trecho capturado (ex.: "e São Paulo").
+                sigla = next(
+                    (UF_SIGLAS[n] for n in sorted(UF_SIGLAS, key=len, reverse=True)
+                     if nome.endswith(n)),
+                    None,
+                )
+                if sigla is None:
+                    continue
+                tipo = "Protocolo" if m.group(2).lower().startswith("prot") else "Convênio"
+                par = (sigla, f"{tipo} ICMS {m.group(3)}")
+                if par not in pares:
+                    pares.append(par)
+            # Mesmo código pode reaparecer (páginas concatenadas): une sem duplicar.
+            destino = ambitos.setdefault(codigo, [])
+            for par in pares:
+                if par not in destino:
+                    destino.append(par)
+        return ambitos

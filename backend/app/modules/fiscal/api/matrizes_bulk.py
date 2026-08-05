@@ -42,7 +42,7 @@ MATRIZES: dict[str, BulkSpec] = {
     "fcp": BulkSpec(MatrizFcp, MatrizFcpCreate,
                     ("uf_destino", "ncm", "data_inicio_vigencia"), _NORM),
     "protocolos": BulkSpec(MatrizProtocoloSt, MatrizProtocoloCreate,
-                           ("uf_origem", "uf_destino", "numero_acordo", "data_inicio_vigencia"), _NORM),
+                           ("uf_origem", "uf_destino", "numero_acordo", "ncm", "data_inicio_vigencia"), _NORM),
     "aliquotas": BulkSpec(MatrizAliquota, MatrizAliquotaCreate,
                           ("uf_destino", "data_inicio_vigencia"), _NORM),
 }

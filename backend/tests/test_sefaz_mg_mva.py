@@ -11,9 +11,16 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.database import Base
 from app.modules.fiscal.application.propostas_service import PropostasService
-from app.modules.fiscal.crawlers.propor import BASE_LEGAL_AUTO_MVA, propor_mva
+from app.modules.fiscal.crawlers.propor import (
+    BASE_LEGAL_AUTO_MVA,
+    propor_mva,
+    propor_protocolos_mg,
+)
 from app.modules.fiscal.crawlers.sefaz_mg_mva import MvaRecord, SefazMgMvaExtractor
-from app.modules.fiscal.infrastructure.matrizes_models import MatrizMva
+from app.modules.fiscal.infrastructure.matrizes_models import (
+    MatrizMva,
+    MatrizProtocoloSt,
+)
 from app.modules.fiscal.infrastructure.propostas_models import MatrizProposta
 
 # Amostra no formato real do Anexo VII (Parte 2): célula de layout vazia à
@@ -22,6 +29,10 @@ from app.modules.fiscal.infrastructure.propostas_models import MatrizProposta
 _HTML = """
 <html><body>
 <table><tr><td>menu de layout</td></tr></table>
+<p>Âmbito de Aplicação da Substituição Tributária:</p>
+<p>16.1 Interno e nas seguintes unidades da Federação: São Paulo
+ (Protocolo ICMS 32/09) e Rondônia (Protocolo ICMS 32/09).</p>
+<p>16.2 Interno.</p>
 <table>
  <tr><td></td><td>ITEM</td><td>CEST</td><td>NBM/SH</td><td>DESCRIÇÃO</td><td>ÂMBITO DE APLICAÇÃO</td><td>MVA (%)</td></tr>
  <tr><td></td><td>1.0</td><td>01.001.00</td><td>3815.12.10 3815.12.90</td><td>Catalisadores em colmeia cerâmica</td><td>1.1</td><td>71,78</td></tr>
@@ -46,6 +57,16 @@ def test_parse_ancora_no_cest_e_descarta_sem_margem():
     regs = SefazMgMvaExtractor().parse(_HTML.encode("latin-1"))
     assert regs[0].descricao.startswith("Catalisadores em colmeia cerâmica")
     assert "Rondônia" in regs[2].ambito
+    # Código do âmbito e exceções por item, parseados da célula.
+    assert regs[2].ambitos == ("16.1",) and regs[2].excecoes == ("RO",)
+
+
+def test_parse_ambitos_legenda_oficial():
+    """A legenda 'Âmbito de Aplicação' vira código → [(UF, acordo)] — a fonte
+    da matriz de Protocolos com a base legal item a item."""
+    amb = SefazMgMvaExtractor().parse_ambitos(_HTML.encode("latin-1"))
+    assert amb["16.1"] == [("SP", "Protocolo ICMS 32/09"), ("RO", "Protocolo ICMS 32/09")]
+    assert amb["16.2"] == []            # só interno: nenhum par interestadual
 
 
 # ── Diff → propostas ─────────────────────────────────────────────────────────
@@ -58,7 +79,7 @@ async def sessao():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all, tables=[
-            MatrizMva.__table__, MatrizProposta.__table__,
+            MatrizMva.__table__, MatrizProtocoloSt.__table__, MatrizProposta.__table__,
         ])
     async with async_sessionmaker(engine, class_=AsyncSession)() as s:
         yield s
@@ -81,7 +102,7 @@ async def test_par_novo_vira_inserir_com_piso(sessao):
     linha = (await sessao.execute(select(MatrizMva))).scalars().one()
     assert linha.mva_original == Decimal("42.00")
     assert linha.data_inicio_vigencia == PISO
-    assert linha.base_legal == BASE_LEGAL_AUTO_MVA
+    assert linha.base_legal.startswith(BASE_LEGAL_AUTO_MVA)
 
 
 @pytest.mark.asyncio
@@ -119,6 +140,48 @@ async def test_curadoria_manual_nunca_e_tocada(sessao):
     await sessao.flush()
     r = await _propor(sessao, [MvaRecord("2400100", "32081000", Decimal("48"))])
     assert r["propostas"] == 0 and r["sem_mudanca"] == 1
+
+
+@pytest.mark.asyncio
+async def test_protocolos_do_ambito_viram_propostas_escopadas(sessao):
+    """A legenda do âmbito vira acordo UF→MG POR NCM (nunca par inteiro);
+    a exceção do item exclui a UF; aprovar dois escopos de NCM do MESMO
+    acordo não conflita (chave de vigência inclui o NCM)."""
+    ambitos = {"16.1": [("SP", "Protocolo ICMS 32/09"), ("RO", "Protocolo ICMS 32/09")]}
+    regs = [
+        MvaRecord("1600100", "40111000", Decimal("42"),
+                  ambitos=("16.1",), excecoes=("RO",)),
+        MvaRecord("1600200", "40112000", Decimal("45"), ambitos=("16.1",)),
+    ]
+    r = await propor_protocolos_mg(
+        sessao, regs, ambitos, vigencia_inicio=PISO, fonte="teste",
+    )
+    # Item 1: só SP (RO é exceção). Item 2: SP e RO → 3 alvos no total.
+    assert r["alvos"] == 3 and r["propostas"] == 3
+
+    svc = PropostasService(sessao)
+    pendentes = (await sessao.execute(
+        select(MatrizProposta).where(MatrizProposta.tipo_matriz == "protocolos")
+        .order_by(MatrizProposta.id)
+    )).scalars().all()
+    assert all("Protocolo ICMS 32/09" in p.payload["base_legal"] for p in pendentes)
+    assert all("âmbito 16.1" in p.payload["base_legal"] for p in pendentes)
+
+    # Dois escopos de NCM do MESMO acordo SP→MG aprovam sem conflito.
+    for p in pendentes:
+        await svc.aprovar(p.id, revisor="ana@sol.com")
+    linhas = (await sessao.execute(select(MatrizProtocoloSt))).scalars().all()
+    assert len(linhas) == 3
+    assert {(x.uf_origem, x.ncm) for x in linhas} == {
+        ("SP", "40111000"), ("SP", "40112000"), ("RO", "40112000"),
+    }
+    assert all(x.situacao == "ATIVO" and x.uf_destino == "MG" for x in linhas)
+
+    # Re-propor: tudo já curado — nada novo na fila.
+    r2 = await propor_protocolos_mg(
+        sessao, regs, ambitos, vigencia_inicio=PISO, fonte="teste",
+    )
+    assert r2["propostas"] == 0 and r2["ja_curados"] == 3
 
 
 @pytest.mark.asyncio

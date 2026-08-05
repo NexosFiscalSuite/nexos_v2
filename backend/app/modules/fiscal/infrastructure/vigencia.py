@@ -48,8 +48,15 @@ async def sobreposicao_existente(
     (ADR-0002, regra 4): mudança de taxa = encerrar a antiga e INSERIR a nova.
     A chave de identidade vem de `modelo.CHAVE_VIGENCIA`.
     """
+    # Campo None na chave (ex.: protocolo de par inteiro, sem NCM) compara com
+    # IS NULL — `== None` viraria `= NULL` e nunca acusaria o conflito.
+    condicoes = [
+        getattr(modelo, campo).is_(None) if dados.get(campo) is None
+        else getattr(modelo, campo) == dados[campo]
+        for campo in modelo.CHAVE_VIGENCIA
+    ]
     stmt = select(modelo).where(
-        *[getattr(modelo, campo) == dados[campo] for campo in modelo.CHAVE_VIGENCIA],
+        *condicoes,
         modelo.data_inicio_vigencia <= (dados.get("data_fim_vigencia") or date.max),
         or_(
             modelo.data_fim_vigencia.is_(None),

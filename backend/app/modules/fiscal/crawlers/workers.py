@@ -20,6 +20,7 @@ from app.modules.fiscal.crawlers.confaz_cest import ConfazCestExtractor
 from app.modules.fiscal.crawlers.propor import (
     propor_enquadramento,
     propor_mva,
+    propor_protocolos_mg,
     registrar_snapshot,
 )
 from app.modules.fiscal.crawlers.reconferencia import propor_reconferencia
@@ -89,7 +90,17 @@ async def _sync_mva() -> dict:
             fonte=extrator.fonte, snapshot_id=snapshot_id,
         )
     logger.info("MVA/SEFAZ-MG propostas: %s", resumo)
-    return resumo
+
+    # Protocolos da legenda de âmbito (mesma fonte, mesma rodada): cada UF do
+    # âmbito vira acordo UF→MG escopado pelo NCM do item.
+    ambitos = extrator.parse_ambitos(bruto)
+    async with worker_global_session() as s:
+        resumo_prt = await propor_protocolos_mg(
+            s, registros, ambitos, vigencia_inicio=piso,
+            fonte=extrator.fonte, snapshot_id=snapshot_id,
+        )
+    logger.info("Protocolos/Anexo VII propostas: %s", resumo_prt)
+    return {"mva": resumo, "protocolos": resumo_prt}
 
 
 @celery_app.task(name="fiscal.reconferir_aliquotas", bind=True, max_retries=2)

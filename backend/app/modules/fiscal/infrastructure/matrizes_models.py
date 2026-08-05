@@ -89,9 +89,11 @@ class MatrizProtocoloSt(Base, VigenciaTemporal, CriadoEm, UltimaVerificacao):
 
     __tablename__ = "matriz_protocolo_st"
     __table_args__ = (Index("ix_protocolo_busca", "uf_origem", "uf_destino", "ncm"),)
-    # Mesmo acordo não pode ter vigências sobrepostas; acordos distintos no
-    # mesmo par UF→UF podem coexistir.
-    CHAVE_VIGENCIA: ClassVar[tuple[str, ...]] = ("uf_origem", "uf_destino", "numero_acordo")
+    # Mesmo acordo NO MESMO ESCOPO de NCM não pode ter vigências sobrepostas;
+    # acordos distintos (ou escopos de NCM distintos do mesmo acordo) podem
+    # coexistir no par — é como o Anexo VII de MG publica: um acordo cobre
+    # vários NCM, uma linha por escopo.
+    CHAVE_VIGENCIA: ClassVar[tuple[str, ...]] = ("uf_origem", "uf_destino", "numero_acordo", "ncm")
 
     id: Mapped[int] = mapped_column(primary_key=True)
     uf_origem: Mapped[str] = mapped_column(String(2))

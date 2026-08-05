@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.fiscal.infrastructure.matrizes_models import (
     MatrizEnquadramentoSt,
     MatrizMva,
+    MatrizProtocoloSt,
 )
 from app.modules.fiscal.infrastructure.propostas_models import (
     ACAO_ATUALIZAR,
@@ -38,7 +39,14 @@ from .base import CestRecord
 from .sefaz_mg_mva import MvaRecord
 
 BASE_LEGAL_AUTO = "Convênio ICMS 142/2018 (auto/CONFAZ)"
-BASE_LEGAL_AUTO_MVA = "RICMS/MG 2023, Anexo VII, Parte 2 (auto/SEFAZ-MG)"
+# Prefixo: a base legal por linha ganha o âmbito/acordo (estilo dos portais
+# de consulta) — o prefixo identifica "linha do robô" (startswith).
+BASE_LEGAL_AUTO_MVA = "RICMS/MG 2023, Anexo VII"
+
+
+def _base_legal_mva(r: MvaRecord) -> str:
+    sufixo = f", âmbito {r.ambitos[0]}" if r.ambitos else ", Parte 2"
+    return f"{BASE_LEGAL_AUTO_MVA}{sufixo} (auto/SEFAZ-MG)"[:120]
 
 
 def hash_proposta(tipo: str, payload: dict) -> str:
@@ -212,18 +220,19 @@ async def propor_mva(
             continue
         r = exemplo[chave]
         atual = atuais.get(chave)
+        eh_auto = bool(atual is not None and (atual.base_legal or "").startswith(BASE_LEGAL_AUTO_MVA))
         if atual is None:
             payload = {
                 "ncm": r.ncm, "cest": r.cest, "uf_destino": uf,
-                "mva_original": str(r.mva), "base_legal": BASE_LEGAL_AUTO_MVA,
+                "mva_original": str(r.mva), "base_legal": _base_legal_mva(r),
                 "data_inicio_vigencia": vigencia_inicio.isoformat(),
                 "data_fim_vigencia": None,
             }
             acao, linha_id, congelada = ACAO_INSERIR, None, None
-        elif atual.base_legal == BASE_LEGAL_AUTO_MVA and atual.mva_original != r.mva:
+        elif eh_auto and atual.mva_original != r.mva:
             payload = {
                 "ncm": r.ncm, "cest": r.cest, "uf_destino": uf,
-                "mva_original": str(r.mva), "base_legal": BASE_LEGAL_AUTO_MVA,
+                "mva_original": str(r.mva), "base_legal": _base_legal_mva(r),
                 "data_inicio_vigencia": vigencia_mudanca.isoformat(),
                 "data_fim_vigencia": None,
             }
@@ -250,4 +259,76 @@ async def propor_mva(
         "uf": uf, "lidos": len(registros), "pares": len(por_par),
         "propostas": criadas, "suprimidas": suprimidas,
         "sem_mudanca": inalteradas, "ambiguos": ambiguos,
+    }
+
+
+async def propor_protocolos_mg(
+    session: AsyncSession, registros: list[MvaRecord],
+    ambitos: dict[str, list[tuple[str, str]]], *,
+    vigencia_inicio: date, fonte: str, snapshot_id: int | None = None,
+) -> dict:
+    """Protocolos/Convênios extraídos da legenda de 'Âmbito de Aplicação' do
+    Anexo VII (MG): para cada item, cada UF do âmbito vira proposta de acordo
+    UF→MG **escopado pelo NCM do item** — nunca par inteiro (fail-closed: o
+    acordo vale para aquele produto, não para tudo). A base legal por linha
+    sai no estilo dos portais: acordo + âmbito. Exceções do item (ex.:
+    'Exceção: Rondônia') excluem a UF. Linha já existente na matriz para
+    (par, acordo, NCM) — de qualquer origem — não é re-proposta."""
+    uf_destino = "MG"
+
+    # (uf_origem, acordo, ncm) já vigentes hoje para o destino (uma query).
+    stmt = filtrar_vigencia(
+        select(MatrizProtocoloSt).where(MatrizProtocoloSt.uf_destino == uf_destino),
+        MatrizProtocoloSt, date.today(),
+    )
+    existentes = {
+        (r.uf_origem, r.numero_acordo, r.ncm)
+        for r in (await session.execute(stmt)).scalars()
+    }
+
+    vistos = set((await session.execute(
+        select(MatrizProposta.hash_proposta).where(
+            MatrizProposta.tipo_matriz == "protocolos",
+            MatrizProposta.status != STATUS_APROVADA,
+        )
+    )).scalars())
+
+    # Alvos únicos: cada (UF origem, acordo, NCM) com o âmbito de referência.
+    alvos: dict[tuple[str, str, str], str] = {}
+    for r in registros:
+        for codigo in r.ambitos:
+            for uf_origem, acordo in ambitos.get(codigo, []):
+                if uf_origem in r.excecoes or uf_origem == uf_destino:
+                    continue
+                alvos.setdefault((uf_origem, acordo, r.ncm), codigo)
+
+    criadas = suprimidas = ja_curados = 0
+    for (uf_origem, acordo, ncm), codigo in alvos.items():
+        if (uf_origem, acordo, ncm) in existentes:
+            ja_curados += 1
+            continue
+        payload = {
+            "uf_origem": uf_origem, "uf_destino": uf_destino, "ncm": ncm,
+            "numero_acordo": acordo, "situacao": "ATIVO",
+            "base_legal": f"{acordo} — RICMS/MG 2023, Anexo VII, âmbito {codigo} (auto)"[:120],
+            "data_inicio_vigencia": vigencia_inicio.isoformat(),
+            "data_fim_vigencia": None,
+        }
+        h = hash_proposta("protocolos", payload)
+        if h in vistos:
+            suprimidas += 1
+            continue
+        vistos.add(h)
+        session.add(MatrizProposta(
+            tipo_matriz="protocolos", acao=ACAO_INSERIR,
+            chave_resumo=f"{uf_origem} · {uf_destino} · {acordo} · NCM {ncm}",
+            payload=payload, fonte=fonte, fonte_snapshot_id=snapshot_id,
+            hash_proposta=h,
+        ))
+        criadas += 1
+
+    await session.flush()
+    return {
+        "alvos": len(alvos), "propostas": criadas,
+        "suprimidas": suprimidas, "ja_curados": ja_curados,
     }
