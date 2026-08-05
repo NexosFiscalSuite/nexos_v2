@@ -132,12 +132,11 @@ MG fora do PMPF, relevância caiu; avaliar por UF).
 
 ## Pendências e ofertas em aberto
 
-- **Roadmap grande do motor de ST** (em andamento): triagem de divergências
-  ENTREGUE em 05/08 (tabela `divergencia_triagem`, filtro na tela, carta
-  marca COBRADA automaticamente; falta o selo por item no FragmentoNota +
-  ação manual de triagem na UI — o endpoint POST /auditoria/st/triagem já
-  existe). Restam: fundação entrada→saída (ressarcimento CST 60, PGDAS-D,
-  fluxo MG EFD), alíquota por NCM, DIFAL, pauta/PMPF (MG saiu do PMPF).
+- **Roadmap grande do motor de ST**: triagem de divergências COMPLETA em
+  05/08 (tabela `divergencia_triagem`, filtro, carta marca COBRADA, selo por
+  item + modal de triagem manual na tela). Restam os blocos maiores:
+  fundação entrada→saída (ressarcimento CST 60, PGDAS-D, fluxo MG EFD),
+  alíquota por NCM, DIFAL, pauta/PMPF (MG saiu do PMPF em 11/2025).
 - Ofertas feitas e não aprovadas: aceitar .xlsx direto no import de
   empresas; script de reclassificação de notas antigas (fluxo tpNF) com
   reauditoria; backfill de `mod_frete` para notas antigas; estender o

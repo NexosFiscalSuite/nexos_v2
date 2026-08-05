@@ -162,6 +162,63 @@ function agruparPorNota(itens) {
   return [...mapa.values()]
 }
 
+// ── Triagem: o que o escritório decidiu sobre o item divergente ──
+const TRIAGEM_BADGE = {
+  COBRADA: { label: 'Cobrada', cls: 'badge-primary', icon: 'ti-mail-forward' },
+  JUSTIFICADA: { label: 'Justificada', cls: 'badge-ok', icon: 'ti-scale' },
+  ACEITA: { label: 'Aceita', cls: 'badge-warn', icon: 'ti-cash' },
+}
+const TRIAGEM_OPTS = [
+  { value: 'EM_ABERTO', label: 'Em aberto — sem decisão' },
+  { value: 'COBRADA', label: 'Cobrada — carta/contato com o fornecedor' },
+  { value: 'JUSTIFICADA', label: 'Justificada — base normativa aceita (baixa)' },
+  { value: 'ACEITA', label: 'Aceita — o cliente assume e recolhe' },
+]
+
+function TriagemModal({ item, onClose, onSalvar }) {
+  const [status, setStatus] = useState(item.triagem?.status || 'EM_ABERTO')
+  const [obs, setObs] = useState(item.triagem?.observacao || '')
+  const [busy, setBusy] = useState(false)
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
+        <div className="modal-header">
+          <h2><i className="ti ti-tag" style={{ marginRight: 8 }} />Triagem do item</h2>
+          <button className="btn btn-icon" onClick={onClose}><i className="ti ti-x" /></button>
+        </div>
+        <div className="modal-body">
+          <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 2px' }}>{item.descricao || `Item ${item.numero_item}`}</p>
+          <p style={{ fontSize: 12, color: 'var(--text-4)', margin: '0 0 14px' }}>
+            NF-e {item.numero_nota || '—'} · item {item.numero_item} · {item.fornecedor || ''}
+          </p>
+          <div className="field">
+            <label>O que foi decidido?</label>
+            <Dropdown value={status} onChange={setStatus} options={TRIAGEM_OPTS} />
+          </div>
+          <div className="field">
+            <label>Observação (opcional)</label>
+            <input value={obs} onChange={e => setObs(e.target.value)} maxLength={300}
+              placeholder="ex.: fornecedor apresentou regime especial nº…" />
+          </div>
+          {item.triagem && (
+            <p style={{ fontSize: 12, color: 'var(--text-4)', margin: 0 }}>
+              Registro atual: {TRIAGEM_BADGE[item.triagem.status]?.label || item.triagem.status} por {item.triagem.por || '—'}
+              {item.triagem.em ? ` em ${new Date(item.triagem.em).toLocaleDateString('pt-BR')}` : ''}
+            </p>
+          )}
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-primary" disabled={busy}
+            onClick={async () => { setBusy(true); try { await onSalvar(item, status, obs) } finally { setBusy(false) } }}>
+            {busy ? 'Salvando…' : 'Salvar triagem'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function DivergenciasST() {
   const { selectedEmpresa } = useEmpresa()
   const { ano, mes } = useCompetencia()
@@ -247,6 +304,23 @@ export default function DivergenciasST() {
       })
       toast(`Registrado: sem acordo ${it.uf_origem}→${it.uf_destino}. Reprocessando…`, 'ok')
       await reprocessar()
+    } catch (e) { toast(e.message, 'error') }
+  }
+
+  // Triagem manual por item (o endpoint é o mesmo da marcação automática da carta).
+  const [triagemAlvo, setTriagemAlvo] = useState(null)
+  async function salvarTriagem(item, status, observacao) {
+    try {
+      await api.stDefinirTriagem(
+        selectedEmpresa.id,
+        [{ nota_id: item.nota_id, numero_item: item.numero_item }],
+        status, observacao,
+      )
+      toast(status === 'EM_ABERTO'
+        ? 'Triagem desfeita — item de volta ao “em aberto”.'
+        : 'Triagem registrada — fica na trilha quem decidiu e quando.', 'ok')
+      setTriagemAlvo(null)
+      carregar()
     } catch (e) { toast(e.message, 'error') }
   }
 
@@ -513,6 +587,7 @@ export default function DivergenciasST() {
                       key={nota.chave} nota={nota} aberto={aberto} catalogo={catalogo}
                       onToggle={() => toggle(nota.chave)} onMemoria={setDetalhe}
                       onSemAcordo={registrarSemAcordo} onSemCte={confirmarSemCte}
+                      onTriagem={setTriagemAlvo}
                     />
                   )
                 })}
@@ -535,6 +610,10 @@ export default function DivergenciasST() {
       )}
 
       {detalhe && <MemoriaModal d={detalhe} onClose={() => setDetalhe(null)} />}
+
+      {triagemAlvo && (
+        <TriagemModal item={triagemAlvo} onClose={() => setTriagemAlvo(null)} onSalvar={salvarTriagem} />
+      )}
 
       {/* Ciência do aviso de legislação antes de emitir (com trilha) */}
       {ciencia && (
@@ -694,7 +773,7 @@ function AcaoSugerida({ acao, destinoMatriz, onIrMatriz, onSemAcordo, verificar,
 }
 
 // ── Linha-mestre (Nota) + linhas-filhas (itens) quando expandida ──
-function FragmentoNota({ nota, aberto, onToggle, onMemoria, catalogo, onSemAcordo, onSemCte }) {
+function FragmentoNota({ nota, aberto, onToggle, onMemoria, catalogo, onSemAcordo, onSemCte, onTriagem }) {
   const navigate = useNavigate()
   const temCte = nota.ctes.length > 0
   // Primeira ação sugerida do catálogo do motor para os códigos do item.
@@ -758,6 +837,19 @@ function FragmentoNota({ nota, aberto, onToggle, onMemoria, catalogo, onSemAcord
                 <span className={`badge ${selo.cls}`} style={{ fontSize: 10 }}>
                   <i className={`ti ${selo.icon}`} style={{ marginRight: 3 }} />{selo.txt}
                 </span>
+              )}
+              {it.triagem && TRIAGEM_BADGE[it.triagem.status] && (
+                <span className={`badge ${TRIAGEM_BADGE[it.triagem.status].cls}`} style={{ fontSize: 10 }}
+                  title={`${TRIAGEM_BADGE[it.triagem.status].label} por ${it.triagem.por || '—'}${it.triagem.em ? ` em ${new Date(it.triagem.em).toLocaleDateString('pt-BR')}` : ''}${it.triagem.observacao ? ` — ${it.triagem.observacao}` : ''}`}>
+                  <i className={`ti ${TRIAGEM_BADGE[it.triagem.status].icon}`} style={{ marginRight: 3 }} />
+                  {TRIAGEM_BADGE[it.triagem.status].label}
+                </span>
+              )}
+              {it.status === 'DIVERGENTE' && onTriagem && (
+                <button className="btn btn-icon" title="Triagem do item — registrar cobrada, justificada ou aceita"
+                  style={{ padding: 3 }} onClick={(e) => { e.stopPropagation(); onTriagem(it) }}>
+                  <i className="ti ti-tag" style={{ fontSize: 14, color: 'var(--text-3)' }} />
+                </button>
               )}
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 2 }}>

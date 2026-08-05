@@ -361,6 +361,11 @@ export const api = {
     }).toString()
     return request('POST', `/auditoria/st/ciencia-legislacao?${q}`)
   },
+  // Triagem das divergências: o que o escritório decidiu sobre cada item
+  stDefinirTriagem: (empresaId, itens, status, observacao) =>
+    request('POST', `/auditoria/st/triagem?empresa_id=${empresaId}`, {
+      itens, status, observacao: observacao || null,
+    }),
   // Diagnóstico executivo em PDF (todo o período auditado da empresa)
   stDiagnostico: (empresaId) =>
     downloadBlob(`/auditoria/st/diagnostico?empresa_id=${empresaId}`, { fallback: 'diagnostico-st.pdf' }),
