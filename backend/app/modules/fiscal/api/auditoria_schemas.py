@@ -43,6 +43,9 @@ class DivergenciaStItem(BaseModel):
     observacao: str | None = None
     memoria: dict | None = None
     ctes_vinculados: list[str] = []
+    # Triagem do item (o que o escritório decidiu): sem declarar aqui, o
+    # response_model tipado REMOVIA o campo da resposta e a tela ficava cega.
+    triagem: dict | None = None
 
 
 class ResumoSt(BaseModel):
@@ -53,6 +56,7 @@ class ResumoSt(BaseModel):
     antecipacao: float   # ERRO_111: guia própria do cliente (não é cobrança de fornecedor)
     divergentes: int
     nao_auditaveis: int
+    triagem: dict[str, int] = {}   # contagem dos DIVERGENTES por status de triagem
 
 
 class FornecedorRanking(BaseModel):

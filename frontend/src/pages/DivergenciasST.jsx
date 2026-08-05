@@ -429,7 +429,7 @@ export default function DivergenciasST() {
             title="Planilha Excel do filtro atual (todas as páginas): itens + consolidação por fornecedor">
             <i className="ti ti-file-spreadsheet" /> {expBusy ? 'Exportando…' : 'Exportar Excel'}
           </button>
-          <button className="btn btn-secondary" disabled={reproBusy} onClick={reprocessar}
+          <button className="btn btn-secondary" data-tour="st-reprocessar" disabled={reproBusy} onClick={reprocessar}
             title="Re-aplica De/Para CFOP e re-audita as notas travadas por matriz faltante">
             <i className={`ti ti-refresh ${reproBusy ? 'spin' : ''}`} /> {reproBusy ? 'Reprocessando…' : 'Reprocessar Pendentes'}
           </button>
@@ -588,7 +588,7 @@ export default function DivergenciasST() {
                       onToggle={() => toggle(nota.chave)} onMemoria={setDetalhe}
                       onSemAcordo={registrarSemAcordo} onSemCte={confirmarSemCte}
                       onTriagem={setTriagemAlvo}
-                      dataTour={i === 0 ? 'st-nota-demo' : undefined}
+                      dataTour={['st-nota-demo', 'st-nota-demo2', 'st-nota-demo3'][i]}
                     />
                   )
                 })}
@@ -657,7 +657,7 @@ const RotuloSt = ({ children }) => (
 // A conduta do analista como selo destacado; o ⓘ abre o balão com a
 // explicação técnica do motor (padrão do balão da classificação — clique
 // abre, clique fora fecha). Nada de tooltip escondido no hover.
-function AcaoSugerida({ acao, destinoMatriz, onIrMatriz, onSemAcordo, verificar, diagnostico, onVerMemoria, ressalva, onImportarCte, onSemCte }) {
+function AcaoSugerida({ acao, destinoMatriz, onIrMatriz, onSemAcordo, verificar, diagnostico, onVerMemoria, ressalva, onImportarCte, onSemCte, seloTour }) {
   const [aberto, setAberto] = useState(false)
   const [pos, setPos] = useState(null)
   const ref = useRef(null)
@@ -684,7 +684,7 @@ function AcaoSugerida({ acao, destinoMatriz, onIrMatriz, onSemAcordo, verificar,
   return (
     <div style={{ marginTop: 5, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
       <span className="balao-classif" style={{ position: 'relative', display: 'inline-flex', maxWidth: '100%' }}>
-        <button ref={ref} onClick={alternar} title="Clique para ver a explicação do motor"
+        <button ref={ref} onClick={alternar} data-tour={seloTour} title="Clique para ver a explicação do motor"
           style={{ display: 'inline-flex', alignItems: 'flex-start', gap: 6, maxWidth: '100%',
                    background: 'var(--accent-lt)', color: 'var(--accent-text)', border: 'none',
                    borderRadius: 8, padding: '5px 10px', fontSize: 11.5, fontWeight: 600,
@@ -732,7 +732,7 @@ function AcaoSugerida({ acao, destinoMatriz, onIrMatriz, onSemAcordo, verificar,
 
             <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
               {onVerMemoria && (
-                <button className="btn btn-secondary btn-sm" style={{ padding: '3px 10px', fontSize: 11.5 }}
+                <button className="btn btn-secondary btn-sm" data-tour="st-abrir-memoria" style={{ padding: '3px 10px', fontSize: 11.5 }}
                   onClick={(e) => { e.stopPropagation(); setAberto(false); onVerMemoria() }}>
                   <i className="ti ti-calculator" /> Abrir memória de cálculo
                 </button>
@@ -749,7 +749,7 @@ function AcaoSugerida({ acao, destinoMatriz, onIrMatriz, onSemAcordo, verificar,
         </button>
       )}
       {onSemAcordo && (
-        <button className="btn btn-secondary btn-sm" style={{ padding: '3px 10px', fontSize: 11.5 }}
+        <button className="btn btn-secondary btn-sm" data-tour="st-sem-acordo" style={{ padding: '3px 10px', fontSize: 11.5 }}
           title="Registra na matriz de protocolos que NÃO há acordo entre as UFs (antecipação do destinatário) e reaudita"
           onClick={(e) => { e.stopPropagation(); onSemAcordo() }}>
           <i className="ti ti-ban" /> Não há acordo
@@ -763,7 +763,7 @@ function AcaoSugerida({ acao, destinoMatriz, onIrMatriz, onSemAcordo, verificar,
         </button>
       )}
       {onSemCte && (
-        <button className="btn btn-secondary btn-sm" style={{ padding: '3px 10px', fontSize: 11.5 }}
+        <button className="btn btn-secondary btn-sm" data-tour="st-sem-cte" style={{ padding: '3px 10px', fontSize: 11.5 }}
           title="Confirma que NÃO há CT-e para esta nota (fica registrado quem confirmou e quando) e reaudita na hora"
           onClick={(e) => { e.stopPropagation(); onSemCte() }}>
           <i className="ti ti-truck-off" /> Não há CT-e
@@ -862,6 +862,7 @@ function FragmentoNota({ nota, aberto, onToggle, onMemoria, catalogo, onSemAcord
             )}
             {acao && (
               <AcaoSugerida acao={acao} destinoMatriz={destinoMatriz}
+                seloTour={dataTour ? `${dataTour}-selo` : undefined}
                 onIrMatriz={() => navigate(destinoMatriz)}
                 onSemAcordo={(it.codigo_erro || '').includes('ERRO_PROTOCOLO_NAO_AVALIADO')
                   ? () => onSemAcordo(it) : null}
@@ -941,10 +942,10 @@ function MemoriaModal({ d, onClose }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()} style={{ width: 920, maxWidth: '96%' }}>
+      <div className="modal" data-tour="st-memoria" onClick={e => e.stopPropagation()} style={{ width: 920, maxWidth: '96%' }}>
         <div className="modal-header">
           <h2><i className="ti ti-calculator" style={{ marginRight: 8 }} />Como chegamos ao valor devido</h2>
-          <button className="btn btn-icon" onClick={onClose}><i className="ti ti-x" /></button>
+          <button className="btn btn-icon" data-tour="st-memoria-fechar" onClick={onClose}><i className="ti ti-x" /></button>
         </div>
         <div className="modal-body">
           {/* Topo em largura total: os 3 números + a conclusão em uma frase. */}

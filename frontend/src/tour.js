@@ -36,9 +36,19 @@ const aula = (title, description) => ({
 const PASSOS = [
   info('[data-tour="nav-dashboard"]', 'Bem-vindo ao Sol Contabilidade! ☀️',
     'Este é o <b>Dashboard</b>: a visão geral do escritório. Neste tour você vai trabalhar numa '
-    + '<b>empresa de exemplo com dados fictícios</b> — nada do que acontecer aqui é salvo, e os envios ficam desativados.'),
-  info('[data-tour="topbar-competencia"]', 'Competência global 📅',
-    'Este seletor define o <b>mês/ano</b> de tudo o que você vê. Trocou aqui, todas as telas obedecem.'),
+    + '<b>empresa de exemplo com dados fictícios</b>, corrigir pendências de verdade e ver o cálculo por dentro — '
+    + 'nada do que acontecer aqui é salvo.'),
+  info('[data-tour="topbar-competencia"]', 'Competência — a vigência do trabalho 📅',
+    'Este seletor define o <b>mês/ano</b> em que você vai trabalhar: todas as telas obedecem a ele, '
+    + 'e o motor usa as regras <b>vigentes na data de emissão</b> de cada nota.'),
+
+  // ── A empresa de exemplo: seleção OBRIGATÓRIA (antes de tudo) ──
+  pratico('[data-tour="topbar-empresa"]', 'Escolha com quem trabalhar 🏢',
+    'As telas de análise trabalham sobre <b>uma empresa por vez</b>. Para este tour, preparamos uma '
+    + '<b>Empresa Exemplo</b> com movimentação fictícia. Abra o seletor.'),
+  pratico('[data-tour="empresa-demo"]', 'Selecione a Empresa Exemplo ☀️',
+    'Os dados dela existem <b>só no seu navegador</b>: nada é salvo, ninguém mais vê, e cada tour recomeça do zero.'),
+
   pratico('[data-tour="nav-upload"]', 'Upload de XMLs',
     'Tudo começa aqui: é por onde os XMLs (NF-e, NFC-e, CT-e, NFS-e) entram no sistema.'),
   info('[data-tour="upload-area"]', 'A área de importação 📥',
@@ -47,50 +57,72 @@ const PASSOS = [
   info('[data-tour="nav-documentos"]', 'Documentos Fiscais 🗂️',
     'Aqui dentro vivem as <b>Notas</b> importadas (com edição em lote, DANFE, XML), os <b>Relatórios</b> em Excel e o <b>De/Para de CFOP</b>.'),
 
-  // ── A empresa de exemplo: seleção OBRIGATÓRIA ──
-  pratico('[data-tour="topbar-empresa"]', 'Vamos praticar de verdade 🏢',
-    'As telas de análise trabalham sobre <b>uma empresa por vez</b>. Para este tour, preparamos uma '
-    + '<b>Empresa Exemplo</b> com movimentação fictícia. Abra o seletor.'),
-  pratico('[data-tour="empresa-demo"]', 'Selecione a Empresa Exemplo ☀️',
-    'Os dados dela existem <b>só no seu navegador</b>: nada é salvo, ninguém mais vê, e cada tour recomeça do zero.'),
-
   // ── Divergências com dados de verdade na tela ──
   pratico('[data-tour="nav-divergencias-st"]', 'Divergências de ICMS-ST',
-    'O coração fiscal do sistema. Com a Empresa Exemplo selecionada, a tela vai abrir <b>com dados</b> — '
-    + 'uma nota de fornecedor com o ST errado, para você ver o motor em ação.'),
+    'O coração fiscal do sistema. A Empresa Exemplo tem <b>1 divergência apontada e 2 pendências</b> — '
+    + 'você vai entender e <b>corrigir cada uma</b> agora.'),
   info('[data-tour="st-cards"]', 'O dinheiro em jogo 💰',
-    'Os cards somam o período da empresa: aqui o exemplo mostra <b>R$ 177,50 de ST a recolher</b> '
-    + '(o fornecedor zerou a retenção) e <b>1 item não auditável</b> (uma pendência que você já vai entender). '
-    + 'Clique num card para filtrar a lista; no ranking abaixo, a <b>Carta PDF</b> cobra o fornecedor.'),
-  pratico('[data-tour="st-nota-demo"]', 'Abra a nota de exemplo 📄',
-    'Cada linha é uma nota; os totais mostram o ICMS-ST e a diferença. Clique na linha para <b>expandir os itens</b>.'),
-  info('[data-tour="st-nota-demo"]', 'Os itens e seus selos 🏷️',
-    'O <b>item 1</b> está <b>divergente</b>: a nota destacou R$ 0,00 e o devido é R$ 177,50. O <b>selo colorido</b> '
-    + 'abre o balão com a explicação e a ação sugerida, e <b>“Abrir memória de cálculo”</b> mostra a conta inteira '
-    + '(explore depois do tour — é tudo fictício). O <b>item 2</b> é a pendência: falta o <b>CT-e do frete</b>.'),
-
-  // ── As aulas do cálculo, com os números da tela ──
-  aula('Como o motor chegou nos R$ 177,50 — os portões 🚪',
-    'Antes da conta, o item passou por dois portões:<br/><br/>'
-    + '<b>1º — Enquadramento:</b> pneu (NCM 4011 + CEST 16.001.00) é ST em MG? A matriz diz que sim. '
+    'Os cards somam o período: <b>R$ 177,50 de ST a recolher</b> já apontado e <b>2 itens não auditáveis</b> '
+    + '(as pendências). Clique num card para filtrar a lista; no ranking, a <b>Carta PDF</b> cobra o fornecedor.'),
+  aula('Antes da conta: os dois portões 🚪',
+    'Todo item passa por dois portões antes do cálculo:<br/><br/>'
+    + '<b>1º — Enquadramento:</b> o produto (NCM + CEST) é ST na UF de destino? '
     + 'A busca vai do específico ao geral: NCM com <b>8 → 6 → 4 dígitos</b>.<br/><br/>'
-    + '<b>2º — Protocolo:</b> vindo de SP para MG, há acordo obrigando o fornecedor a reter? '
-    + '<b>ATIVO</b> → cobra retenção · <b>SEM ACORDO</b> → vira antecipação do cliente · '
-    + '<b>sem registro</b> → o motor trava e pede curadoria. <b>Ele nunca adivinha.</b>'),
-  aula('A conta do exemplo, linha a linha 🧮',
-    '<b>Base própria</b> = produto R$ 731,35 + frete do CT-e R$ 68,05 = <b>R$ 799,40</b> '
-    + '(por isso o CT-e importa tanto!).<br/><br/>'
-    + '<b>MVA:</b> a matriz guarda a original de <b>71,78%</b>; como a compra veio de fora (alíquota 12%), '
-    + 'o motor ajusta para <b>84,35%</b> — o ajuste equaliza a carga de comprar dentro × fora do estado.<br/><br/>'
-    + '<b>Base do ST</b> = 799,40 × 1,8435 = <b>R$ 1.473,69</b><br/>'
-    + '<b>ST devido</b> = 1.473,69 × 18% − ICMS próprio R$ 87,76 = <b>R$ 177,50</b><br/><br/>'
-    + 'A nota destacou R$ 0,00 → divergência de <b>R$ 177,50 a recolher</b>. '
-    + 'É exatamente essa conta que a memória de cálculo mostra, com as bases legais.'),
-  aula('A pendência do item 2 — o CT-e 🚚',
-    'O frete era por conta do destinatário e <b>não há CT-e vinculado</b>: o motor NÃO calcula uma base menor '
-    + 'em silêncio — trava o item e explica. No dia a dia, dois caminhos no balão do selo: '
-    + '<b>Importar CT-e</b> (e a auditoria destrava sozinha) ou <b>“Não há CT-e”</b> (a confirmação fica '
-    + 'registrada no seu usuário). Aqui no tour o envio está bloqueado — é só para conhecer o caminho.'),
+    + '<b>2º — Protocolo (entre estados):</b> há acordo obrigando o fornecedor a reter? '
+    + '<b>ATIVO</b> → cobra retenção · <b>SEM ACORDO</b> → antecipação do cliente · '
+    + '<b>sem registro</b> → o motor trava e pede curadoria. <b>Ele nunca adivinha</b> — '
+    + 'as 2 pendências que você vai corrigir são exatamente portões sem resposta.'),
+
+  // ── Nota 1: a divergência com CT-e + memória de cálculo ──
+  pratico('[data-tour="st-nota-demo"]', 'Abra a 1ª nota — NF-e 101 📄',
+    'Cada linha é uma nota. Repare no <b>caminhão 🚚</b>: há um <b>CT-e vinculado</b> — o frete dele entra na conta. '
+    + 'Clique na linha para expandir o item.'),
+  pratico('[data-tour="st-nota-demo-selo"]', 'Clique no SELO do item 🏷️',
+    'O fornecedor destacou <b>R$ 0,00</b> de ST e o devido é <b>R$ 177,50</b>. '
+    + 'O selo abre o balão com a explicação do motor e as ações.'),
+  pratico('[data-tour="st-abrir-memoria"]', 'Abra a memória de cálculo 🧮',
+    'É a <b>calculadora</b> do item: a conta completa que chegou nos R$ 177,50 — o que você usa para defender o número.'),
+  info('[data-tour="st-memoria"]', 'A conta, passo a passo — leia junto 👇',
+    '<b>Passo 1:</b> alíquotas e de onde vêm (interna 18% de MG; interestadual 12% de SP).<br/>'
+    + '<b>Passo 2:</b> MVA original <b>71,78%</b> → <b>ajustada 84,35%</b> (equaliza comprar dentro × fora do estado).<br/>'
+    + '<b>Passo 3:</b> base = produto R$ 731,35 <b>+ frete do CT-e R$ 68,05</b> = R$ 799,40 → × 1,8435 = <b>R$ 1.473,69</b>.<br/>'
+    + '<b>Passo 4-6:</b> × 18% − ICMS próprio R$ 87,76 = <b>R$ 177,50</b>, confrontado com o XML (tolerância de centavos).<br/><br/>'
+    + 'Tudo com a <b>base legal</b> de cada regra — pronto para auditoria.'),
+  pratico('[data-tour="st-memoria-fechar"]', 'Feche a memória ✖',
+    'No dia a dia ela está a um clique em qualquer item calculado.'),
+
+  // ── Pendência 1: o CT-e ──
+  pratico('[data-tour="st-nota-demo2"]', 'Abra a 2ª nota — NF-e 102 🚚',
+    'Esta nota tem a <b>1ª pendência</b>: frete por conta do cliente e <b>nenhum CT-e vinculado</b>. '
+    + 'O motor não calcula base menor em silêncio — ele trava e explica.'),
+  pratico('[data-tour="st-nota-demo2-selo"]', 'Clique no selo da pendência 🏷️',
+    'O balão mostra os dois caminhos: <b>Importar CT-e</b> (a auditoria destrava sozinha) '
+    + 'ou <b>“Não há CT-e”</b> (a confirmação fica registrada no seu usuário).'),
+  pratico('[data-tour="st-sem-cte"]', 'CORRIJA: “Não há CT-e” ✅',
+    'Clique e <b>aceite a confirmação</b> do navegador. Aqui é simulação — no dia a dia fica registrado quem confirmou e quando. '
+    + '<i>(Se cancelar sem querer, volte um passo e repita.)</i>'),
+  info('[data-tour="st-cards"]', 'A pendência virou valor 💡',
+    'Reaudita na hora: o card subiu para <b>R$ 332,42 a recolher</b> (+R$ 154,92 da nota destravada — '
+    + 'sem o frete na base, a conta fecha menor que a da 1ª nota). <b>Destravar pendência revela dinheiro.</b>'),
+
+  // ── Pendência 2: o protocolo ──
+  pratico('[data-tour="st-nota-demo3"]', 'Abra a 3ª nota — NF-e 103, GO→MG 🗺️',
+    'A <b>2ª pendência</b>: ninguém disse ao motor se existe acordo de ST entre <b>GO e MG</b> para este produto.'),
+  pratico('[data-tour="st-nota-demo3-selo"]', 'Clique no selo da pendência 🏷️',
+    'O balão explica: registre o acordo na matriz de Protocolos — ou registre que <b>não há acordo</b>. '
+    + 'Os dois destravam, com efeitos diferentes.'),
+  pratico('[data-tour="st-sem-acordo"]', 'CORRIJA: “Não há acordo” ✅',
+    'Clique e <b>aceite a confirmação</b>. O registro explícito também é curadoria: sem acordo, o fornecedor '
+    + 'não era obrigado a reter. <i>(Cancelou? Volte um passo e repita.)</i>'),
+  info('[data-tour="st-cards"]', 'Virou antecipação 📌',
+    'O item saiu de “não auditável” para <b>Antecipações: R$ 89,30</b> — obrigação do PRÓPRIO cliente (guia local), '
+    + 'por isso <b>não entra na carta</b> ao fornecedor. Todas as pendências foram tratadas! 🎉'),
+  info('[data-tour="st-reprocessar"]', 'Reprocessar Pendentes 🔄',
+    'No dia a dia: corrigiu matrizes, De/Para ou CT-e reais? Este botão <b>reaudita as notas travadas</b> de uma vez.'),
+  aula('E quando a pendência é de MATRIZ? ⛽',
+    'Faltou <b>enquadramento, MVA ou alíquota</b>, o balão do selo traz o botão <b>“Cadastrar matriz”</b> — '
+    + 'abre o cadastro já preenchido com NCM/CEST/UF do item. E a aba <b>Cobertura</b> das Matrizes lista '
+    + 'tudo o que falta cadastrar, ordenado pelo valor que está travado.'),
 
   // ── Matrizes ──
   info('[data-tour="nav-cadastros-grp"]', 'Cadastros e Matrizes 📚',
