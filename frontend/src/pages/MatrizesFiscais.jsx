@@ -827,7 +827,7 @@ function ExcecoesItemPanel() {
             style={{ width: 250 }} />
           {total > 0 && <span className="tnum" style={{ alignSelf: 'center', color: 'var(--text-3)', fontSize: 13 }}>{total.toLocaleString('pt-BR')} exceção(ões)</span>}
         </div>
-        <button className="btn btn-primary" onClick={nova}><i className="ti ti-plus" /> Nova exceção do item</button>
+        <button className="btn btn-primary" data-tour="matrizes-excecao-nova" onClick={nova}><i className="ti ti-plus" /> Nova exceção do item</button>
       </div>
 
       {loading ? <div className="center-loader"><div className="spinner" /></div>
@@ -863,9 +863,9 @@ function ExcecoesItemPanel() {
           )}
 
       {modal && <div className="modal-overlay" onClick={() => setModal(false)}>
-        <div className="modal" onClick={e => e.stopPropagation()}>
+        <div className="modal" data-tour="matrizes-excecao-modal" onClick={e => e.stopPropagation()}>
           <div className="modal-header"><h2>{editId ? 'Editar' : 'Cadastro'} · Exceção do Item</h2>
-            <button className="btn btn-icon" onClick={() => setModal(false)}><i className="ti ti-x" /></button></div>
+            <button className="btn btn-icon" data-tour="matrizes-excecao-fechar" onClick={() => setModal(false)}><i className="ti ti-x" /></button></div>
           <form onSubmit={salvar}>
             <div className="modal-body"><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               <div className="field" style={{ gridColumn: '1 / -1' }}><label>Empresa</label>

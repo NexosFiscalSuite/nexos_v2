@@ -172,6 +172,25 @@ export function responderDemo(method, path) {
     ))
   }
 
+  // Cadastros apresentados durante o tour também são 100% fictícios: evita
+  // que a aula de Exceção do Item exponha empresas ou regras reais do tenant.
+  if (path === '/empresas' || path.startsWith('/empresas?')) {
+    return Promise.resolve(clonar([DEMO_EMPRESA]))
+  }
+  if (path.startsWith('/matrizes/excecoes-produto')) {
+    return Promise.resolve(clonar({
+      items: [{
+        id: 'tour-demo-excecao-1', empresa_id: DEMO_EMPRESA.id,
+        codigo_produto: 'EX-1', descricao_produto: 'Produto exemplo', ncm: '40111000',
+        data_inicio_vigencia: '2026-01-01', data_fim_vigencia: null,
+        tributado_icms: true,
+        lei_icms: 'Fundamento legal da tributação normal (dado de exemplo)',
+        ativo: true,
+      }],
+      total: 1, page: 1, page_size: 50,
+    }))
+  }
+
   if (!path.includes('tour-demo')) return null   // leitura de dados reais: passa
 
   if (path.startsWith('/auditoria/st/divergencias')) {

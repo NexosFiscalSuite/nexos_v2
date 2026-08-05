@@ -144,7 +144,24 @@ const PASSOS = [
   info('[data-tour="matrizes-abas"]', 'O mapa das Matrizes Fiscais 🗺️',
     'As cinco primeiras abas são as <b>fontes do cálculo</b>: MVA, Enquadramento, FCP, Alíquotas e Protocolos. '
     + 'Cada regra tem <b>vigência</b>: o motor escolhe a linha válida na data da nota e preserva o histórico. '
-    + 'As três últimas abas cuidam da operação: <b>Revisão</b>, <b>Saúde</b> e <b>Cobertura</b>.'),
+    + 'A <b>Exceção do Item</b> resolve produtos específicos que contrariam o NCM geral. As três últimas abas cuidam '
+    + 'da operação: <b>Revisão</b>, <b>Saúde</b> e <b>Cobertura</b>.'),
+  pratico('[data-tour="matrizes-tab-excecoes"]', 'Abra a Exceção do Item 🧩',
+    'Use esta regra quando <b>dois produtos compartilham o mesmo NCM</b>, mas somente um deles é ST. '
+    + 'A decisão é feita pelo <b>código do item dentro de cada empresa</b> e prevalece sobre o enquadramento geral.'),
+  info('[data-tour="matrizes-painel-excecoes"]', 'Uma decisão específica e rastreável 🔎',
+    'O exemplo mostra o item <b>EX-1</b> como Tributado ICMS. A exceção vale somente para a Empresa Exemplo e durante '
+    + 'a vigência cadastrada — produtos iguais de outras empresas continuam seguindo suas próprias regras. '
+    + 'Ao criar, editar ou remover, as notas existentes daquele código são <b>reauditadas automaticamente</b>.'),
+  pratico('[data-tour="matrizes-excecao-nova"]', 'Conheça o cadastro da exceção ➕',
+    'Abra o formulário para ver quais informações definem a decisão fiscal do produto.'),
+  info('[data-tour="matrizes-excecao-modal"]', 'Como preencher a Exceção do Item 📝',
+    '<b>Empresa + código do item</b> identificam o produto sem depender apenas do NCM.<br/>'
+    + '<b>Início e fim</b> controlam a vigência histórica.<br/>'
+    + '<b>Tributado ICMS marcado</b> = tributação normal · <b>desmarcado</b> = ICMS-ST.<br/>'
+    + 'A <b>Lei ICMS</b> é opcional e guarda o fundamento da decisão. Durante o tour, salvar permanece bloqueado.'),
+  pratico('[data-tour="matrizes-excecao-fechar"]', 'Feche o cadastro ✖',
+    'No uso real, revise a empresa, o código e a vigência antes de salvar.'),
   pratico('[data-tour="matrizes-tab-cobertura"]', 'Veja primeiro a Cobertura 🎯',
     'Ela cruza os XMLs reais da carteira com as regras existentes e mostra exatamente o que ainda impede cálculos.'),
   info('[data-tour="matrizes-painel-cobertura"]', 'Sua fila de prioridade fiscal 💰',
