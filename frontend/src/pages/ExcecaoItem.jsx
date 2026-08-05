@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import ErroCarga from '../components/ErroCarga'
+import DatePicker from '../components/DatePicker'
 import { useEmpresa } from '../context/EmpresaContext'
 import { useToast, ToastContainer } from '../hooks/useToast'
 import { api } from '../api'
@@ -185,7 +186,7 @@ export default function ExcecaoItem() {
 
       {modal && <div className="modal-overlay" onClick={() => setModal(false)}>
         <div className="modal" data-tour="matrizes-excecao-modal"
-          style={{ width: 620, maxWidth: 'calc(100vw - 32px)' }} onClick={e => e.stopPropagation()}>
+          style={{ width: 620, maxWidth: 'calc(100vw - 32px)', overflow: 'visible' }} onClick={e => e.stopPropagation()}>
           <div className="modal-header">
             <div><h2>{editId ? 'Editar' : 'Nova'} Exceção do Item</h2>
               <p style={{ margin: '4px 0 0', color: 'var(--text-4)', fontSize: 12 }}>Aplicada em {nomeEmpresa}</p></div>
@@ -196,9 +197,9 @@ export default function ExcecaoItem() {
               <div className="field" style={{ gridColumn: '1 / -1' }}><label>Código do item</label>
                 <input required maxLength={60} value={form.codigo_produto} placeholder="Ex.: 13846"
                   onChange={e => setCampo('codigo_produto', e.target.value)} /></div>
-              <div className="field"><label>Data início</label><input required type="date" value={form.data_inicio_vigencia} onChange={e => setCampo('data_inicio_vigencia', e.target.value)} /></div>
+              <div className="field"><label>Data início</label><DatePicker required value={form.data_inicio_vigencia} onChange={v => setCampo('data_inicio_vigencia', v)} /></div>
               <div className="field"><label>Data fim <span style={{ color: 'var(--text-4)', fontWeight: 400 }}>(opcional)</span></label>
-                <input type="date" value={form.data_fim_vigencia} onChange={e => setCampo('data_fim_vigencia', e.target.value)} /></div>
+                <DatePicker value={form.data_fim_vigencia} onChange={v => setCampo('data_fim_vigencia', v)} /></div>
               <div style={{ gridColumn: '1 / -1' }}><SwitchFiscal checked={form.tributado_icms}
                 onChange={v => setCampo('tributado_icms', v)} label="Tributado ICMS"
                 description="Ativado = tributação normal; desativado = produto sujeito a ICMS-ST" /></div>
