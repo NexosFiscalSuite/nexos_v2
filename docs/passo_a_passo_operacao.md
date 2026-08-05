@@ -40,30 +40,31 @@ Conferências no `.env` do servidor (uma vez só):
 
 ## 3. Primeira rodada da automação (estreia — fazer uma vez)
 
-### 3.1 Alíquotas e FCP (se ainda não importou)
+### 3.1 Carga inicial: UM comando deixa a base cheia
 
-Os arquivos prontos estão em `docs/seeds/` (valores verificados com base
-legal — detalhes no `LEIA-ME.md` da pasta):
-
-- Matrizes Fiscais → aba **Alíquotas** → **Importar Planilha** → `matriz_aliquotas.csv`
-- Matrizes Fiscais → aba **FCP** → **Importar Planilha** → `matriz_fcp.csv`
-
-### 3.2 MVAs de MG (1.080 pares do Anexo VII do RICMS/2023)
-
-Na VM, dispare o robô sem esperar o dia 2:
+Na VM:
 
 ```bash
-cd ~/nexos_v2/backend && docker compose -f docker-compose.prod.yml exec worker celery -A app.core.celery_app call fiscal.sync_mva_mg
+cd ~/nexos_v2/backend && docker compose -f docker-compose.prod.yml exec worker celery -A app.core.celery_app call fiscal.carga_inicial_matrizes
 ```
 
-Depois, no sistema: **Matrizes Fiscais → Revisão** → filtre **MVA** + UF
-**MG** → revise por amostragem (abra algumas propostas e confira com o anexo)
-→ **"Aprovar tudo (filtro atual)"**. Regras de segurança que valem sempre:
+O que ele faz (idempotente — rodar de novo não duplica nada):
+
+1. **Alíquotas** das 7 UFs + **FCP** geral do RJ — os valores verificados com
+   base legal (os mesmos de `docs/seeds/`), pulando qualquer linha que já
+   exista (cadastro manual tem sempre prioridade);
+2. **MVAs de MG** (≈1.080 pares) e **Protocolos UF→MG** (≈2.800 acordos
+   escopados por NCM) extraídos do Anexo VII do RICMS/2023 — propostos e
+   **aprovados em nome da "carga inicial (robô)"**, com trilha completa.
+
+Regras de segurança que valem sempre:
 
 - Linha cadastrada **na mão nunca é tocada** pelo robô (ex.: a MVA 35% de
   tintas continua intacta);
 - **Rejeitar** uma proposta vale para sempre — ela não volta à fila;
-- Item sem margem publicada ou ambíguo na fonte **não vira proposta**.
+- Item sem margem publicada ou ambíguo na fonte **não vira proposta**;
+- Depois da carga inicial, as rodadas mensais voltam ao normal: **mudança
+  nova cai na aba Revisão** para aprovação humana.
 
 ### 3.3 Pares interestaduais (o que mais destrava o motor)
 

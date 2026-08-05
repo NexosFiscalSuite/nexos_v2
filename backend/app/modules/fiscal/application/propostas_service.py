@@ -59,13 +59,16 @@ class PropostasService:
 
     async def aprovar_lote(
         self, *, revisor: str, tipo: str | None = None, uf: str | None = None,
-        ids: list[int] | None = None,
+        ids: list[int] | None = None, fonte: str | None = None,
     ) -> dict:
         """Aprova as pendentes do filtro; conflito de UMA não derruba o lote —
-        vira relatório (id + motivo), como no import de planilha."""
+        vira relatório (id + motivo), como no import de planilha. `fonte`
+        restringe a uma origem específica (ex.: carga inicial do Anexo VII)."""
         stmt = select(MatrizProposta).where(MatrizProposta.status == STATUS_PENDENTE)
         if tipo:
             stmt = stmt.where(MatrizProposta.tipo_matriz == tipo)
+        if fonte:
+            stmt = stmt.where(MatrizProposta.fonte == fonte)
         if ids:
             stmt = stmt.where(MatrizProposta.id.in_(ids))
         if uf:

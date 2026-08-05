@@ -16,6 +16,10 @@ from app.core.celery_app import celery_app
 from app.core.config import get_settings
 from app.core.worker_db import worker_global_session
 from app.modules.fiscal.crawlers.base import http_get
+from app.modules.fiscal.crawlers.carga_inicial import (
+    REVISOR_CARGA,
+    aplicar_seed_aliquotas_fcp,
+)
 from app.modules.fiscal.crawlers.confaz_cest import ConfazCestExtractor
 from app.modules.fiscal.crawlers.propor import (
     propor_enquadramento,
@@ -101,6 +105,44 @@ async def _sync_mva() -> dict:
         )
     logger.info("Protocolos/Anexo VII propostas: %s", resumo_prt)
     return {"mva": resumo, "protocolos": resumo_prt}
+
+
+@celery_app.task(name="fiscal.carga_inicial_matrizes", bind=True, max_retries=2)
+def carga_inicial_matrizes(self):
+    """Deixa a base CHEIA com um comando (rodar UMA vez, idempotente):
+    1) semeia alíquotas das 7 UFs + FCP geral do RJ (valores verificados com
+       base legal — nada sobrescreve linha existente);
+    2) roda o extrator do Anexo VII (MVA + Protocolos de MG) e APROVA o lote
+       em nome da carga inicial — a trilha registra o revisor 'robô'.
+    Depois disso, as rodadas mensais voltam ao normal: mudança nova cai na
+    fila de Revisão para aprovação humana."""
+    try:
+        return asyncio.run(_carga_inicial())
+    except Exception as exc:  # noqa: BLE001 — portal público instável: retry, não falha
+        logger.warning("carga_inicial_matrizes falhou (%s); reagendando.", exc)
+        raise self.retry(exc=exc, countdown=60 * 15) from exc
+
+
+async def _carga_inicial() -> dict:
+    from app.modules.fiscal.application.propostas_service import PropostasService
+
+    async with worker_global_session() as s:
+        seeds = await aplicar_seed_aliquotas_fcp(s)
+    logger.info("Carga inicial — seeds: %s", seeds)
+
+    # MVA + Protocolos do Anexo VII: propõe (fluxo normal)…
+    sync = await _sync_mva()
+
+    # …e aprova o lote da PRÓPRIA fonte em nome da carga inicial (trilha).
+    fonte = SefazMgMvaExtractor.fonte
+    aprovacoes: dict[str, dict] = {}
+    for tipo in ("mva", "protocolos"):
+        async with worker_global_session() as s:
+            aprovacoes[tipo] = await PropostasService(s).aprovar_lote(
+                revisor=REVISOR_CARGA, tipo=tipo, fonte=fonte,
+            )
+        logger.info("Carga inicial — %s aprovadas: %s", tipo, aprovacoes[tipo])
+    return {"seeds": seeds, "sync": sync, "aprovacoes": aprovacoes}
 
 
 @celery_app.task(name="fiscal.reconferir_aliquotas", bind=True, max_retries=2)
