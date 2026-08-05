@@ -384,14 +384,19 @@ function CoberturaPanel() {
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState(null)
   const [filtroUf, setFiltroUf] = useState('')
+  const [page, setPage] = useState(1)
 
   const carregar = useCallback(async () => {
     setLoading(true)
     setErro(null)
-    try { setDados(await api.coberturaMatrizes({ uf: filtroUf || undefined })) }
+    try {
+      setDados(await api.coberturaMatrizes({
+        uf: filtroUf || undefined, page, page_size: PAGE_SIZE,
+      }))
+    }
     catch (e) { setErro(e.message) }
     finally { setLoading(false) }
-  }, [filtroUf])
+  }, [filtroUf, page])
 
   useEffect(() => { carregar() }, [carregar])
 
@@ -399,16 +404,20 @@ function CoberturaPanel() {
   if (erro) return <ErroCarga mensagem={erro} onRetry={carregar} />
   const resumo = dados?.resumo || {}
   const grupos = dados?.grupos || []
+  const total = dados?.total ?? resumo.grupos ?? 0
+  const totalPaginas = dados?.total_pages ?? Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const primeiro = total ? (page - 1) * PAGE_SIZE + 1 : 0
+  const ultimo = Math.min(page * PAGE_SIZE, total)
 
   return (
     <div>
       <ToastContainer toasts={toasts} />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
-        <input value={filtroUf} onChange={e => setFiltroUf(e.target.value.toUpperCase())} maxLength={2}
+        <input value={filtroUf} onChange={e => { setFiltroUf(e.target.value.toUpperCase()); setPage(1) }} maxLength={2}
           placeholder="Filtrar por UF…" style={{ width: 160 }} />
         <div style={{ display: 'flex', gap: 18, alignItems: 'baseline' }}>
           <span style={{ color: 'var(--text-3)', fontSize: 13 }}>
-            {resumo.grupos || 0} grupos · {brl(resumo.valor_total)}
+            {total.toLocaleString('pt-BR')} grupos · {brl(resumo.valor_total)}
           </span>
           <span style={{ fontWeight: 700, fontSize: 18, color: (resumo.pct_valor_coberto ?? 100) >= 90 ? 'var(--ok-text)' : 'var(--err-text)' }}>
             {resumo.pct_valor_coberto ?? 100}% do valor coberto
@@ -453,6 +462,31 @@ function CoberturaPanel() {
               </tbody>
             </table>
           </div>
+          {totalPaginas > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: 12, borderTop: '1px solid var(--border-2)', flexWrap: 'wrap' }}>
+              <span style={{ color: 'var(--text-3)', fontSize: 12.5 }}>
+                Mostrando {primeiro.toLocaleString('pt-BR')}–{ultimo.toLocaleString('pt-BR')} de {total.toLocaleString('pt-BR')} grupos
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <button className="btn btn-ghost btn-sm" disabled={page === 1} onClick={() => setPage(p => p - 1)} title="Página anterior">
+                  <i className="ti ti-chevron-left" />
+                </button>
+                {paginasVisiveis(page, totalPaginas).map((n, i) => n === '…'
+                  ? <span key={`e${i}`} style={{ padding: '0 6px', color: 'var(--text-4)' }}>…</span>
+                  : (
+                    <button key={n} onClick={() => setPage(n)} className="btn btn-sm"
+                      style={{
+                        minWidth: 32, justifyContent: 'center', border: 'none',
+                        background: n === page ? 'var(--primary)' : 'transparent',
+                        color: n === page ? 'var(--primary-contrast)' : 'var(--text-2)', fontWeight: n === page ? 700 : 500,
+                      }}>{n}</button>
+                  ))}
+                <button className="btn btn-ghost btn-sm" disabled={page === totalPaginas} onClick={() => setPage(p => p + 1)} title="Próxima página">
+                  <i className="ti ti-chevron-right" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

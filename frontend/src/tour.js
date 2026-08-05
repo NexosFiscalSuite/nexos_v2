@@ -8,7 +8,7 @@
 // o modo demonstração desliga e a empresa anterior volta ao seletor.
 import { driver } from 'driver.js'
 import 'driver.js/dist/driver.css'
-import { ativarDemo, desativarDemo } from './tourDemo'
+import { ativarDemo, desativarDemo, TOUR_ADVANCE_EVENT } from './tourDemo'
 
 // Passo informativo (avança pelo botão Próximo).
 const info = (element, title, description) => ({
@@ -28,6 +28,13 @@ const pratico = (element, title, description) => ({
     description: `${description}<br/><br/>👉 <b>Clique no item destacado para continuar.</b>`,
     showButtons: ['previous', 'close'],
   },
+})
+
+// A confirmação chama a API antes de avançar. Em caso de falha, o usuário
+// permanece no passo e pode tentar novamente sem perder o tour.
+const praticoAsync = (element, title, description) => ({
+  ...pratico(element, title, description),
+  avancoManual: true,
 })
 
 // Passo-aula: sem âncora (centralizado, mais largo) — conteúdo didático que
@@ -102,8 +109,9 @@ const PASSOS = [
     'O balão mostra os dois caminhos: <b>Importar CT-e</b> (a auditoria destrava sozinha) '
     + 'ou <b>“Não há CT-e”</b> (a confirmação fica registrada no seu usuário).'),
   pratico('[data-tour="st-sem-cte"]', 'CORRIJA: “Não há CT-e” ✅',
-    'Clique e <b>aceite a confirmação</b> do navegador. Aqui é simulação — no dia a dia fica registrado quem confirmou e quando. '
-    + '<i>(Se cancelar sem querer, volte um passo e repita.)</i>'),
+    'Abra a confirmação para registrar que a nota não possui CT-e.'),
+  praticoAsync('[data-tour="st-confirmar-sem-cte"]', 'Confirme a ausência do CT-e ✅',
+    'Revise o impacto e confirme. Aqui é simulação — no dia a dia fica registrado <b>quem confirmou e quando</b>.'),
   info('[data-tour="st-cards"]', 'A pendência virou valor 💡',
     'Reaudita na hora: o card subiu para <b>R$ 332,42 a recolher</b> (+R$ 154,92 da nota destravada — '
     + 'sem o frete na base, a conta fecha menor que a da 1ª nota). <b>Destravar pendência revela dinheiro.</b>'),
@@ -115,8 +123,9 @@ const PASSOS = [
     'O balão explica: registre o acordo na matriz de Protocolos — ou registre que <b>não há acordo</b>. '
     + 'Os dois destravam, com efeitos diferentes.'),
   pratico('[data-tour="st-sem-acordo"]', 'CORRIJA: “Não há acordo” ✅',
-    'Clique e <b>aceite a confirmação</b>. O registro explícito também é curadoria: sem acordo, o fornecedor '
-    + 'não era obrigado a reter. <i>(Cancelou? Volte um passo e repita.)</i>'),
+    'Abra a confirmação para registrar a ausência de protocolo ou convênio.'),
+  praticoAsync('[data-tour="st-confirmar-sem-acordo"]', 'Confirme a ausência do acordo ✅',
+    'Revise o par de UFs e confirme. O registro explícito também é curadoria: sem acordo, o fornecedor não era obrigado a reter.'),
   info('[data-tour="st-cards"]', 'Virou antecipação 📌',
     'O item saiu de “não auditável” para <b>Antecipações: R$ 89,30</b> — obrigação do PRÓPRIO cliente (guia local), '
     + 'por isso <b>não entra na carta</b> ao fornecedor. Todas as pendências foram tratadas! 🎉'),
@@ -185,6 +194,7 @@ export function iniciarTour({ aoEncerrar } = {}) {
     progressText: '{{current}} de {{total}}',
     onDestroyed: () => {
       document.removeEventListener('click', aoClicar, true)
+      window.removeEventListener(TOUR_ADVANCE_EVENT, aoConcluirAcao)
       desativarDemo()
       aoEncerrar?.()            // devolve a empresa que estava selecionada
     },
@@ -197,9 +207,14 @@ export function iniciarTour({ aoEncerrar } = {}) {
     const alvo = d.getActiveElement?.()
     if (!passo?.pratico || !alvo) return
     if (alvo === e.target || alvo.contains(e.target)) {
+      if (passo.avancoManual) return
       setTimeout(() => d.moveNext(), 400)
     }
   }
+  function aoConcluirAcao() {
+    if (d.getActiveStep?.()?.avancoManual) d.moveNext()
+  }
   document.addEventListener('click', aoClicar, true)
+  window.addEventListener(TOUR_ADVANCE_EVENT, aoConcluirAcao)
   d.drive()
 }

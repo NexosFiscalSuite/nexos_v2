@@ -117,3 +117,20 @@ async def test_cobertura_respeita_vigencia_e_filtro_uf(sessao):
     r2 = await CoberturaService(sessao).cobertura(uf="MG")
     status = {g["ncm"]: g["status"] for g in r2["grupos"]}
     assert status["40111000"] == "ST_SEM_MVA"
+
+
+async def test_cobertura_pagina_sem_truncar_o_resumo(sessao):
+    await _cenario(sessao)
+
+    primeira = await CoberturaService(sessao).cobertura(page=1, page_size=2)
+    segunda = await CoberturaService(sessao).cobertura(page=2, page_size=2)
+
+    assert primeira["total"] == 4
+    assert primeira["total_pages"] == 2
+    assert primeira["page"] == 1
+    assert primeira["page_size"] == 2
+    assert [g["valor"] for g in primeira["grupos"]] == [8000.0, 5000.0]
+    assert [g["valor"] for g in segunda["grupos"]] == [3000.0, 1000.0]
+    # Cards e percentuais continuam representando toda a carteira, não só a página.
+    assert primeira["resumo"]["grupos"] == 4
+    assert primeira["resumo"]["valor_total"] == 17000.0

@@ -272,7 +272,8 @@ async def cobertura_matrizes(
     uf: str | None = Query(default=None, description="UF de destino"),
     ano: str | None = Query(default=None, description="Competência: ano (AAAA)"),
     mes: str | None = Query(default=None, description="Competência: mês (MM)"),
-    limite: int = Query(default=200, ge=1, le=1000),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=100),
     claims: TokenClaims = Depends(get_current_claims),
     session: AsyncSession = Depends(tenant_session),
 ):
@@ -280,7 +281,8 @@ async def cobertura_matrizes(
     com as matrizes vigentes e ordena por valor — mostra exatamente o que
     cadastrar primeiro (e quando parar)."""
     return await CoberturaService(session).cobertura(
-        empresa_id=empresa_id, uf=uf, ano=ano, mes=mes, limite=limite
+        empresa_id=empresa_id, uf=uf, ano=ano, mes=mes,
+        page=page, page_size=page_size,
     )
 
 

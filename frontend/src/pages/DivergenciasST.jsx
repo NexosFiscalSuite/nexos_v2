@@ -6,6 +6,7 @@ import ErroCarga from '../components/ErroCarga'
 import { useEmpresa } from '../context/EmpresaContext'
 import { useCompetencia } from '../context/CompetenciaContext'
 import { useToast, ToastContainer } from '../hooks/useToast'
+import { TOUR_ADVANCE_EVENT } from '../tourDemo'
 
 const PAGE_SIZE = 200
 const cnpjFmt = (c) => (c && c.length === 14 ? c.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5') : c || '—')
@@ -219,6 +220,76 @@ function TriagemModal({ item, onClose, onSalvar }) {
   )
 }
 
+function ConfirmacaoPendenciaModal({ alvo, busy, onClose, onConfirmar }) {
+  const semAcordo = alvo.tipo === 'sem-acordo'
+  const it = alvo.item
+  const titulo = semAcordo ? 'Registrar ausência de acordo?' : 'Confirmar ausência de CT-e?'
+  const referencia = semAcordo
+    ? `${it.uf_origem || '—'} → ${it.uf_destino || '—'}`
+    : `NF-e ${it.numero_nota || 'sem número'}`
+
+  return (
+    <div className="modal-overlay" onClick={busy ? undefined : onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 560 }} role="dialog" aria-modal="true" aria-labelledby="confirmacao-pendencia-titulo">
+        <div className="modal-header">
+          <div>
+            <div style={{ color: 'var(--warn-text)', fontSize: 10.5, fontWeight: 700, letterSpacing: 0.7, textTransform: 'uppercase', marginBottom: 3 }}>
+              {semAcordo ? 'Curadoria de protocolo/convênio' : 'Tratamento de frete'}
+            </div>
+            <h2 id="confirmacao-pendencia-titulo" style={{ margin: 0 }}>{titulo}</h2>
+          </div>
+          <button className="btn btn-icon" disabled={busy} onClick={onClose} aria-label="Fechar"><i className="ti ti-x" /></button>
+        </div>
+        <div className="modal-body">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14, borderRadius: 'var(--radius)', background: 'var(--warn-bg)', color: 'var(--warn-text)', marginBottom: 16 }}>
+            <span style={{ width: 38, height: 38, borderRadius: 10, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface)', flexShrink: 0 }}>
+              <i className={`ti ${semAcordo ? 'ti-route-off' : 'ti-truck-off'}`} style={{ fontSize: 20 }} />
+            </span>
+            <div>
+              <div style={{ fontSize: 11, opacity: 0.8 }}>{semAcordo ? 'Par interestadual' : 'Documento analisado'}</div>
+              <strong className="tnum" style={{ fontSize: 18 }}>{referencia}</strong>
+            </div>
+          </div>
+
+          <p style={{ margin: '0 0 14px', color: 'var(--text-2)', fontSize: 13.5, lineHeight: 1.6 }}>
+            {semAcordo
+              ? 'Use esta decisão somente após confirmar que não existe protocolo ou convênio de ICMS-ST aplicável ao par de UFs.'
+              : 'Use esta decisão quando o frete é do destinatário, mas não existe CT-e relacionado a esta compra.'}
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 10 }}>
+            <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 12 }}>
+              <div style={{ color: 'var(--text-4)', fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', marginBottom: 5 }}>Efeito no cálculo</div>
+              <div style={{ color: 'var(--text-2)', fontSize: 12.5, lineHeight: 1.5 }}>
+                {semAcordo
+                  ? 'As notas do par serão reauditadas como antecipação do destinatário.'
+                  : 'A nota será reauditada sem adicionar frete proveniente de conhecimento.'}
+              </div>
+            </div>
+            <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 12 }}>
+              <div style={{ color: 'var(--text-4)', fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', marginBottom: 5 }}>Rastreabilidade</div>
+              <div style={{ color: 'var(--text-2)', fontSize: 12.5, lineHeight: 1.5 }}>
+                {semAcordo
+                  ? 'A ausência do acordo fica registrada na matriz com vigência.'
+                  : 'A confirmação fica vinculada ao seu usuário, com data e hora.'}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-ghost" disabled={busy} onClick={onClose}>Cancelar</button>
+          <button className="btn btn-primary" disabled={busy} onClick={onConfirmar}
+            data-tour={semAcordo ? 'st-confirmar-sem-acordo' : 'st-confirmar-sem-cte'}>
+            {busy
+              ? <><span className="spinner" style={{ width: 13, height: 13 }} /> Processando…</>
+              : <><i className="ti ti-check" /> {semAcordo ? 'Registrar sem acordo' : 'Confirmar sem CT-e'}</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function DivergenciasST() {
   const { selectedEmpresa } = useEmpresa()
   const { ano, mes } = useCompetencia()
@@ -233,6 +304,8 @@ export default function DivergenciasST() {
   const [expandido, setExpandido] = useState(() => new Set())
   const [detalhe, setDetalhe] = useState(null)
   const [catalogo, setCatalogo] = useState({})   // código de erro → {mensagem, acao}
+  const [confirmacao, setConfirmacao] = useState(null)
+  const [confirmacaoBusy, setConfirmacaoBusy] = useState(false)
 
   useEffect(() => {
     api.stCatalogoErros()
@@ -286,7 +359,7 @@ export default function DivergenciasST() {
       toast(r.notas_reprocessadas
         ? `Reprocessadas ${r.notas_reprocessadas} nota(s)${partes.length ? ` · ${partes.join(' · ')}` : ''}.`
         : 'Nenhuma pendência reprocessável.', 'ok')
-      carregar()
+      await carregar()
     } catch (e) { toast(e.message, 'error') }
     finally { setReproBusy(false) }
   }
@@ -294,7 +367,6 @@ export default function DivergenciasST() {
   // "Não há acordo": registra a ausência de protocolo no par de UFs (linha
   // SEM_ACORDO — cura o par sem criar acordo) e reaudita na sequência.
   async function registrarSemAcordo(it) {
-    if (!confirm(`Registrar que NÃO há protocolo/convênio de ST no par ${it.uf_origem}→${it.uf_destino}? As notas desse par serão reauditadas como antecipação do destinatário.`)) return
     try {
       await api.criarMatrizProtocolo({
         uf_origem: it.uf_origem, uf_destino: it.uf_destino,
@@ -304,7 +376,9 @@ export default function DivergenciasST() {
       })
       toast(`Registrado: sem acordo ${it.uf_origem}→${it.uf_destino}. Reprocessando…`, 'ok')
       await reprocessar()
+      return true
     } catch (e) { toast(e.message, 'error') }
+    return false
   }
 
   // Triagem manual por item (o endpoint é o mesmo da marcação automática da carta).
@@ -326,12 +400,27 @@ export default function DivergenciasST() {
 
   // "Não há CT-e": confirma a ausência (fica registrado quem/quando) e reaudita.
   async function confirmarSemCte(it) {
-    if (!confirm(`Confirmar que a NF-e ${it.numero_nota || ''} NÃO tem CT-e? A auditoria recalcula sem frete de conhecimento e a confirmação fica registrada no seu usuário.`)) return
     try {
       await api.stConfirmarSemCte(it.nota_id)
       toast('Confirmado — nota reauditada sem CT-e.', 'ok')
-      carregar()
+      await carregar()
+      return true
     } catch (e) { toast(e.message, 'error') }
+    return false
+  }
+
+  async function executarConfirmacao() {
+    if (!confirmacao) return
+    setConfirmacaoBusy(true)
+    try {
+      const ok = confirmacao.tipo === 'sem-acordo'
+        ? await registrarSemAcordo(confirmacao.item)
+        : await confirmarSemCte(confirmacao.item)
+      if (ok) {
+        setConfirmacao(null)
+        window.dispatchEvent(new Event(TOUR_ADVANCE_EVENT))
+      }
+    } finally { setConfirmacaoBusy(false) }
   }
 
   // Carta PDF de cobrança por fornecedor (ranking) — sem antecipações.
@@ -586,7 +675,8 @@ export default function DivergenciasST() {
                     <FragmentoNota
                       key={nota.chave} nota={nota} aberto={aberto} catalogo={catalogo}
                       onToggle={() => toggle(nota.chave)} onMemoria={setDetalhe}
-                      onSemAcordo={registrarSemAcordo} onSemCte={confirmarSemCte}
+                      onSemAcordo={item => setConfirmacao({ tipo: 'sem-acordo', item })}
+                      onSemCte={item => setConfirmacao({ tipo: 'sem-cte', item })}
                       onTriagem={setTriagemAlvo}
                       dataTour={['st-nota-demo', 'st-nota-demo2', 'st-nota-demo3'][i]}
                     />
@@ -614,6 +704,15 @@ export default function DivergenciasST() {
 
       {triagemAlvo && (
         <TriagemModal item={triagemAlvo} onClose={() => setTriagemAlvo(null)} onSalvar={salvarTriagem} />
+      )}
+
+      {confirmacao && (
+        <ConfirmacaoPendenciaModal
+          alvo={confirmacao}
+          busy={confirmacaoBusy}
+          onClose={() => setConfirmacao(null)}
+          onConfirmar={executarConfirmacao}
+        />
       )}
 
       {/* Ciência do aviso de legislação antes de emitir (com trilha) */}

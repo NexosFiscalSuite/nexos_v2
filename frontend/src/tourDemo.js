@@ -23,6 +23,7 @@ let estado = { semCte: false, semAcordo: false }
 export const demoAtivo = () => ativo
 export const ativarDemo = () => { ativo = true; estado = { semCte: false, semAcordo: false } }
 export const desativarDemo = () => { ativo = false }
+export const TOUR_ADVANCE_EVENT = 'sol-tour:advance-after-action'
 
 const CHAVE_1 = '1'.repeat(44)
 const CHAVE_2 = '2'.repeat(44)

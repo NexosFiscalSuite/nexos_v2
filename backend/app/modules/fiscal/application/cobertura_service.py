@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from math import ceil
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -68,12 +69,16 @@ class CoberturaService:
         uf: str | None = None,
         ano: str | None = None,
         mes: str | None = None,
-        limite: int = 200,
+        page: int = 1,
+        page_size: int = 50,
     ) -> dict:
+        page = max(1, page)
+        page_size = max(1, min(100, page_size))
         grupos = await self._agrupar_itens(empresa_id, uf, ano, mes)
         if not grupos:
             return {"resumo": {"grupos": 0, "valor_total": 0.0, "pct_valor_coberto": 100.0,
-                               "por_status": {}}, "grupos": []}
+                               "por_status": {}}, "grupos": [], "total": 0,
+                    "page": page, "page_size": page_size, "total_pages": 0}
 
         ufs = {g["uf"] for g in grupos}
         enq_map = await self._mapa_enquadramento(ufs)
@@ -84,7 +89,16 @@ class CoberturaService:
             g["status"], g["regime"] = self._classificar(g, enq_map, mva_map, aliq_map)
 
         grupos.sort(key=lambda g: g["valor"], reverse=True)
-        return {"resumo": self._resumo(grupos), "grupos": grupos[:limite]}
+        total = len(grupos)
+        inicio = (page - 1) * page_size
+        return {
+            "resumo": self._resumo(grupos),
+            "grupos": grupos[inicio:inicio + page_size],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": ceil(total / page_size),
+        }
 
     # ── agregação da carteira ────────────────────────────────────────────────
     async def _agrupar_itens(self, empresa_id, uf, ano, mes) -> list[dict]:
