@@ -514,6 +514,9 @@ tr.filha td:first-child { box-shadow: inset 3px 0 0 var(--primary-lt2); }
   color: var(--text-4);
 }
 .driver-popover.sol-tour .driver-popover-footer { margin-top: 14px; }
+/* Passos-aula do tour (sem âncora, centralizados): mais largos para caber a
+   explicação do cálculo/matrizes sem virar um fio de texto. */
+.driver-popover.sol-tour.sol-tour-aula { max-width: 460px; }
 .driver-popover.sol-tour .driver-popover-navigation-btns button + button { margin-left: 8px; }
 .driver-popover.sol-tour .driver-popover-footer button {
   border-radius: var(--radius-pill);

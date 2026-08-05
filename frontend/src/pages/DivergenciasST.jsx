@@ -494,7 +494,7 @@ export default function DivergenciasST() {
         <>
           {/* O dinheiro em jogo — totais do período (backend, sem truncar) */}
           {data.resumo && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 18 }}>
+            <div data-tour="st-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 18 }}>
               {CARDS.map(c => {
                 const ativo = filtroCard === c.key
                 return (
