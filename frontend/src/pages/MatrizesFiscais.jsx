@@ -170,10 +170,6 @@ const ABAS = [
     ],
   },
   {
-    id: 'excecoes', label: 'Exceção do Item', icon: 'ti-adjustments-exclamation', custom: true,
-    descricao: 'Decisão por empresa e código do item — tributação normal ou ICMS-ST, com vigência e base legal',
-  },
-  {
     id: 'revisao', label: 'Revisão', icon: 'ti-inbox', custom: true,
     descricao: 'Propostas dos robôs de auto-alimentação — nada entra nas matrizes sem aprovação da curadoria',
   },
@@ -738,7 +734,7 @@ const FORM_EXCECAO_VAZIO = {
   tributado_icms: true, lei_icms: '', ativo: true,
 }
 
-function ExcecoesItemPanel() {
+export function ExcecoesItemPanel() {
   const { toasts, toast } = useToast()
   const [empresas, setEmpresas] = useState([])
   const [lista, setLista] = useState([])
@@ -1133,10 +1129,10 @@ function lerDeepLink() {
   return { aba, prefill }
 }
 
-export default function MatrizesFiscais({ initialTab = 'mva' }) {
+export default function MatrizesFiscais() {
   const { toasts, toast } = useToast()
   const [deepLink] = useState(lerDeepLink)
-  const [tab, setTab] = useState(deepLink?.aba || initialTab)
+  const [tab, setTab] = useState(deepLink?.aba || 'mva')
   const [bulkVersion, setBulkVersion] = useState(0)   // bump → remonta o grid após import
   const [bulkBusy, setBulkBusy] = useState(false)
   const [resultado, setResultado] = useState(null)    // resumo da importação (modal)
@@ -1192,7 +1188,7 @@ export default function MatrizesFiscais({ initialTab = 'mva' }) {
       <input ref={fileRef} type="file" accept=".csv" onChange={importar} style={{ display: 'none' }} />
       <div className="page-header">
         <div>
-          <h1 className="page-title">{aba.id === 'excecoes' ? 'Exceção do Item' : 'Matrizes Fiscais'}</h1>
+          <h1 className="page-title">Matrizes Fiscais</h1>
           <p className="page-breadcrumb">{aba.descricao}</p>
         </div>
         {!aba.custom && (
@@ -1226,8 +1222,6 @@ export default function MatrizesFiscais({ initialTab = 'mva' }) {
       <div data-tour={`matrizes-painel-${aba.id}`}>
         {aba.id === 'revisao'
           ? <RevisaoPanel key={`${tab}:${bulkVersion}`} onMudou={atualizarPendencias} />
-          : aba.id === 'excecoes'
-            ? <ExcecoesItemPanel key={`${tab}:${bulkVersion}`} />
           : aba.id === 'saude'
             ? <SaudePanel key={`${tab}:${bulkVersion}`} onCadastrarPar={cadastrarPar} />
             : aba.custom

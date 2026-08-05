@@ -144,8 +144,8 @@ const PASSOS = [
   info('[data-tour="matrizes-abas"]', 'O mapa das Matrizes Fiscais 🗺️',
     'As cinco primeiras abas são as <b>fontes do cálculo</b>: MVA, Enquadramento, FCP, Alíquotas e Protocolos. '
     + 'Cada regra tem <b>vigência</b>: o motor escolhe a linha válida na data da nota e preserva o histórico. '
-    + 'A <b>Exceção do Item</b> resolve produtos específicos que contrariam o NCM geral. As três últimas abas cuidam '
-    + 'da operação: <b>Revisão</b>, <b>Saúde</b> e <b>Cobertura</b>.'),
+    + 'As três últimas abas cuidam da operação: <b>Revisão</b>, <b>Saúde</b> e <b>Cobertura</b>. A '
+    + '<b>Exceção do Item</b> é um módulo separado no menu Cadastros.'),
   pratico('[data-tour="nav-excecao-item"]', 'Abra a Exceção do Item 🧩',
     'Use esta regra quando <b>dois produtos compartilham o mesmo NCM</b>, mas somente um deles é ST. '
     + 'Agora ela também aparece como um módulo próprio em <b>Cadastros</b>. A decisão é feita pelo '

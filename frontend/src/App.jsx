@@ -20,6 +20,7 @@ import DivergenciasST from './pages/DivergenciasST'
 import VerificacaoIbsCbs from './pages/VerificacaoIbsCbs'
 import CfopRegras from './pages/CfopRegras'
 import MatrizesFiscais from './pages/MatrizesFiscais'
+import ExcecaoItem from './pages/ExcecaoItem'
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth()
@@ -56,7 +57,7 @@ export default function App() {
                 <Route path="/notas"         element={<Notas />} />
                 <Route path="/cadastros"     element={<Cadastros />} />
                 <Route path="/matrizes-fiscais" element={<MatrizesFiscais />} />
-                <Route path="/excecao-item" element={<MatrizesFiscais initialTab="excecoes" />} />
+                <Route path="/excecao-item" element={<ExcecaoItem />} />
                 <Route path="/conformidade"  element={<Conformidade />} />
                 <Route path="/divergencias-st" element={<DivergenciasST />} />
                 <Route path="/ibs-cbs"       element={<VerificacaoIbsCbs />} />
