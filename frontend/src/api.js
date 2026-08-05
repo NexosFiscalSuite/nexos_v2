@@ -219,6 +219,9 @@ export const api = {
     return downloadBlob('/fiscal/ibs-cbs/carta' + (q ? `?${q}` : ''), { fallback: 'carta-ibscbs.pdf' })
   },
 
+  // Saúde das matrizes: frescor da base (Fase 2 — radar de verificação)
+  saudeMatrizes: () => request('GET', '/matrizes/saude'),
+
   // Cobertura: o que a carteira movimenta × o que as matrizes cobrem (fila de curadoria)
   coberturaMatrizes: (params = {}) => {
     const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()

@@ -41,6 +41,7 @@ from app.modules.fiscal.api.matrizes_schemas import (
     MatrizProtocoloUpdate,
 )
 from app.modules.fiscal.application.cobertura_service import CoberturaService
+from app.modules.fiscal.application.matrizes_saude import saude_matrizes
 from app.modules.fiscal.infrastructure.matrizes_models import (
     MatrizAliquota,
     MatrizEnquadramentoSt,
@@ -239,6 +240,17 @@ def _filtrar_aliquota(stmt, uf, ncm, cest):
     if uf:
         stmt = stmt.where(MatrizAliquota.uf_destino == uf.upper())
     return stmt.order_by(MatrizAliquota.uf_destino, MatrizAliquota.data_inicio_vigencia.desc())
+
+
+@router.get("/saude")
+async def saude_matrizes_endpoint(
+    claims: TokenClaims = Depends(get_current_claims),
+    session: AsyncSession = Depends(tenant_session),
+):
+    """Radar de frescor da base (Fase 2): % das linhas vigentes verificadas
+    nos últimos 90 dias, a verificação mais antiga por matriz e as propostas
+    aguardando revisão — o que está envelhecendo aparece antes de virar erro."""
+    return await saude_matrizes(session)
 
 
 @router.get("/cobertura")

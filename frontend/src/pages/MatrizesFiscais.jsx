@@ -174,10 +174,102 @@ const ABAS = [
     descricao: 'Propostas dos robôs de auto-alimentação — nada entra nas matrizes sem aprovação da curadoria',
   },
   {
+    id: 'saude', label: 'Saúde', icon: 'ti-activity-heartbeat', custom: true,
+    descricao: 'O frescor da base: quanto foi verificado nos últimos 90 dias e o que está envelhecendo',
+  },
+  {
     id: 'cobertura', label: 'Cobertura', icon: 'ti-radar-2', custom: true,
     descricao: 'O que a carteira movimenta × o que as matrizes cobrem — a fila de curadoria, ordenada por valor',
   },
 ]
+
+// ── Saúde: radar de frescor da base (Fase 2 da automação) ──
+function SaudePanel() {
+  const { toasts } = useToast()
+  const [dados, setDados] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [erro, setErro] = useState(null)
+
+  const carregar = useCallback(async () => {
+    setLoading(true)
+    setErro(null)
+    try { setDados(await api.saudeMatrizes()) }
+    catch (e) { setErro(e.message) }
+    finally { setLoading(false) }
+  }, [])
+  useEffect(() => { carregar() }, [carregar])
+
+  if (loading) return <div className="center-loader"><div className="spinner" /></div>
+  if (erro) return <ErroCarga mensagem={erro} onRetry={carregar} />
+
+  const g = dados?.geral || {}
+  const tomPct = (p) => (p == null ? 'var(--text-3)' : p >= 90 ? 'var(--ok-text)' : p >= 60 ? 'var(--warn-text)' : 'var(--err-text)')
+  const dataHora = (s) => (s ? new Date(s).toLocaleDateString('pt-BR') : '—')
+
+  return (
+    <div>
+      <ToastContainer toasts={toasts} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(200px, 1fr))', gap: 16, marginBottom: 18 }}>
+        <div className="card">
+          <div style={{ fontSize: 11, color: 'var(--text-4)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>Verificado nos últimos {g.janela_dias || 90} dias</div>
+          <div className="tnum" style={{ fontSize: 34, fontWeight: 800, marginTop: 8, color: tomPct(g.pct_verificado_90d) }}>
+            {g.pct_verificado_90d == null ? '—' : `${g.pct_verificado_90d}%`}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-4)', marginTop: 4 }}>das {Number(g.vigentes || 0).toLocaleString('pt-BR')} regras vigentes hoje</div>
+        </div>
+        <div className="card">
+          <div style={{ fontSize: 11, color: 'var(--text-4)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>Última atualização da base</div>
+          <div className="tnum" style={{ fontSize: 34, fontWeight: 800, marginTop: 8 }}>{dataHora(g.ultima_atualizacao)}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-4)', marginTop: 4 }}>é a data que sai no aviso da carta de ST</div>
+        </div>
+        <div className="card">
+          <div style={{ fontSize: 11, color: 'var(--text-4)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>Propostas aguardando revisão</div>
+          <div className="tnum" style={{ fontSize: 34, fontWeight: 800, marginTop: 8, color: g.propostas_pendentes > 0 ? 'var(--warn-text)' : 'var(--ok-text)' }}>
+            {Number(g.propostas_pendentes || 0).toLocaleString('pt-BR')}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-4)', marginTop: 4 }}>dos robôs de auto-alimentação (aba Revisão)</div>
+        </div>
+      </div>
+
+      <div className="card" style={{ padding: 0 }}>
+        <div className="tbl-wrap">
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Matriz</th>
+                <th style={{ textAlign: 'right' }}>Regras vigentes</th>
+                <th style={{ textAlign: 'right' }}>Verificadas (90d)</th>
+                <th>Frescor</th>
+                <th>Verificação mais antiga</th>
+                <th>Mais recente</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(dados?.matrizes || []).map(m => (
+                <tr key={m.tipo}>
+                  <td style={{ fontWeight: 500, color: 'var(--text-1)' }}>{TIPOS_PROPOSTA[m.tipo] || m.tipo}</td>
+                  <td className="tnum" style={{ textAlign: 'right' }}>{Number(m.vigentes).toLocaleString('pt-BR')}</td>
+                  <td className="tnum" style={{ textAlign: 'right' }}>{Number(m.verificadas_90d).toLocaleString('pt-BR')}</td>
+                  <td>
+                    {m.pct_90d == null
+                      ? <span style={{ color: 'var(--text-4)', fontSize: 12 }}>sem regras</span>
+                      : badge(`${m.pct_90d}%`, m.pct_90d >= 90 ? 'ok' : m.pct_90d >= 60 ? 'warn' : 'err')}
+                  </td>
+                  <td style={{ color: 'var(--text-3)', fontSize: 12 }}>{dataHora(m.verificacao_mais_antiga)}</td>
+                  <td style={{ color: 'var(--text-3)', fontSize: 12 }}>{dataHora(m.ultima_atualizacao)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ padding: '10px 16px', fontSize: 12, color: 'var(--text-4)', borderTop: '1px solid var(--border-2)' }}>
+          Verificar = alguém cadastrou, editou, reimportou a planilha ou aprovou uma proposta da linha.
+          Regra envelhecida não é regra errada — é regra que ninguém confere há tempo.
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // ── Revisão: fila de propostas da auto-alimentação (robô propõe, curador decide) ──
 const ACOES_PROPOSTA = {
@@ -834,10 +926,12 @@ export default function MatrizesFiscais() {
 
       {aba.id === 'revisao'
         ? <RevisaoPanel key={`${tab}:${bulkVersion}`} onMudou={atualizarPendencias} />
-        : aba.custom
-          ? <CoberturaPanel key={`${tab}:${bulkVersion}`} />
-          : <CrudMatriz key={`${tab}:${bulkVersion}`} aba={aba}
-              prefill={deepLink?.aba === tab ? deepLink.prefill : null} />}
+        : aba.id === 'saude'
+          ? <SaudePanel key={`${tab}:${bulkVersion}`} />
+          : aba.custom
+            ? <CoberturaPanel key={`${tab}:${bulkVersion}`} />
+            : <CrudMatriz key={`${tab}:${bulkVersion}`} aba={aba}
+                prefill={deepLink?.aba === tab ? deepLink.prefill : null} />}
       {resultado && <ResumoImportModal r={resultado} onClose={() => setResultado(null)} />}
     </div>
   )
