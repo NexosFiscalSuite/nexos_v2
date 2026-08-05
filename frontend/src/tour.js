@@ -146,9 +146,10 @@ const PASSOS = [
     + 'Cada regra tem <b>vigência</b>: o motor escolhe a linha válida na data da nota e preserva o histórico. '
     + 'A <b>Exceção do Item</b> resolve produtos específicos que contrariam o NCM geral. As três últimas abas cuidam '
     + 'da operação: <b>Revisão</b>, <b>Saúde</b> e <b>Cobertura</b>.'),
-  pratico('[data-tour="matrizes-tab-excecoes"]', 'Abra a Exceção do Item 🧩',
+  pratico('[data-tour="nav-excecao-item"]', 'Abra a Exceção do Item 🧩',
     'Use esta regra quando <b>dois produtos compartilham o mesmo NCM</b>, mas somente um deles é ST. '
-    + 'A decisão é feita pelo <b>código do item dentro de cada empresa</b> e prevalece sobre o enquadramento geral.'),
+    + 'Agora ela também aparece como um módulo próprio em <b>Cadastros</b>. A decisão é feita pelo '
+    + '<b>código do item dentro de cada empresa</b> e prevalece sobre o enquadramento geral.'),
   info('[data-tour="matrizes-painel-excecoes"]', 'Uma decisão específica e rastreável 🔎',
     'O exemplo mostra o item <b>EX-1</b> como Tributado ICMS. A exceção vale somente para a Empresa Exemplo e durante '
     + 'a vigência cadastrada — produtos iguais de outras empresas continuam seguindo suas próprias regras. '

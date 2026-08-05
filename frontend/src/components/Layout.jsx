@@ -35,6 +35,7 @@ const NAV = [
   { to:'/cadastros-grp', icon:'ti-address-book', label:'Cadastros', subItems: [
     { to:'/cadastros',        icon:'ti-users',         label:'Clientes e Fornecedores' },
     { to:'/matrizes-fiscais', icon:'ti-table-options', label:'Matrizes Fiscais' },
+    { to:'/excecao-item',     icon:'ti-adjustments-exclamation', label:'Exceção do Item' },
   ] },
 ]
 const ADMIN_NAV = [

@@ -1133,10 +1133,10 @@ function lerDeepLink() {
   return { aba, prefill }
 }
 
-export default function MatrizesFiscais() {
+export default function MatrizesFiscais({ initialTab = 'mva' }) {
   const { toasts, toast } = useToast()
   const [deepLink] = useState(lerDeepLink)
-  const [tab, setTab] = useState(deepLink?.aba || 'mva')
+  const [tab, setTab] = useState(deepLink?.aba || initialTab)
   const [bulkVersion, setBulkVersion] = useState(0)   // bump → remonta o grid após import
   const [bulkBusy, setBulkBusy] = useState(false)
   const [resultado, setResultado] = useState(null)    // resumo da importação (modal)
@@ -1192,7 +1192,7 @@ export default function MatrizesFiscais() {
       <input ref={fileRef} type="file" accept=".csv" onChange={importar} style={{ display: 'none' }} />
       <div className="page-header">
         <div>
-          <h1 className="page-title">Matrizes Fiscais</h1>
+          <h1 className="page-title">{aba.id === 'excecoes' ? 'Exceção do Item' : 'Matrizes Fiscais'}</h1>
           <p className="page-breadcrumb">{aba.descricao}</p>
         </div>
         {!aba.custom && (
