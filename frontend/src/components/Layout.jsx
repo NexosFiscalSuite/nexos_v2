@@ -9,6 +9,7 @@ import CompetenciaPicker from './CompetenciaPicker'
 import logoEmblema from '../assets/sol-emblema.svg'
 import logoConsole from '../assets/sol-logo-console.png'   // mesma marca do SOL Treinamentos
 import { iniciarTour } from '../tour'
+import { DEMO_EMPRESA, demoAtivo } from '../tourDemo'
 
 // Ações rápidas do topo direito: círculos flutuando no canvas (padrão do
 // Console do SOL Treinamentos — a topbar branca saiu; cada página tem título).
@@ -192,6 +193,17 @@ function EmpresaTopbar() {
           </div>
 
           <div style={{ maxHeight:240, overflowY:'auto' }}>
+            {/* Empresa Exemplo do tour: só aparece com o modo demonstração
+                ativo — dados fictícios, nada é salvo. */}
+            {demoAtivo() && (
+              <div
+                data-tour="empresa-demo"
+                onClick={() => { setSelectedEmpresa(DEMO_EMPRESA); setOpen(false) }}
+                style={{ padding:'10px 14px', cursor:'pointer', fontSize:13, fontWeight:600, background:'var(--primary-lt)', color:'var(--primary-text)', borderBottom:'1px solid var(--border-2)' }}
+              >
+                ☀️ Empresa Exemplo (tour) — dados fictícios
+              </div>
+            )}
             {/* Opção nenhuma empresa */}
             <div
               onClick={() => { setSelectedEmpresa(null); setOpen(false) }}
@@ -245,7 +257,7 @@ function CompetenciaPickerTopbar() {
 
 export default function Layout() {
   const { user, logout } = useAuth()
-  const { selectedEmpresa } = useEmpresa()
+  const { selectedEmpresa, setSelectedEmpresa } = useEmpresa()
   const { ano, mes } = useCompetencia()
   const { dataVersion } = useRefresh()
   const navigate  = useNavigate()
@@ -257,6 +269,15 @@ export default function Layout() {
   }
   const [quebraCount, setQuebraCount] = useState(0)
   const [boasVindas, setBoasVindas] = useState(false)
+
+  // Tour em modo demonstração: guarda a empresa atual e devolve no fim —
+  // durante o tour a pessoa trabalha na Empresa Exemplo (dados fictícios).
+  function abrirTour() {
+    setCollapsed(false)
+    const antes = selectedEmpresa && selectedEmpresa.id !== DEMO_EMPRESA.id
+      ? selectedEmpresa : null
+    iniciarTour({ aoEncerrar: () => setSelectedEmpresa(antes) })
+  }
 
   // Primeiro acesso deste usuário neste navegador? Oferece o tour guiado.
   const chaveTour = user ? `sol_tour_v1_${user.id}` : null
@@ -270,7 +291,7 @@ export default function Layout() {
     if (fazer) {
       setCollapsed(false)
       navigate('/dashboard')
-      setTimeout(iniciarTour, 350)   // espera o modal fechar e a rota assentar
+      setTimeout(abrirTour, 350)   // espera o modal fechar e a rota assentar
     }
   }
 
@@ -371,8 +392,8 @@ export default function Layout() {
           <div data-tour="topbar-empresa"><EmpresaTopbar /></div>
 
           {/* Ajuda: refaz o tour guiado a qualquer momento */}
-          <button style={TOP_ICON} data-tour="topbar-ajuda" title="Refazer o tour guiado"
-            onClick={() => { setCollapsed(false); iniciarTour() }}>
+          <button style={TOP_ICON} data-tour="topbar-ajuda" title="Refazer o tour guiado (empresa de exemplo, nada é salvo)"
+            onClick={abrirTour}>
             <i className="ti ti-help-circle" style={{ fontSize:17 }} />
           </button>
 

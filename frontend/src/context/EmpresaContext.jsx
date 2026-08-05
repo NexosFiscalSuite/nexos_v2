@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { api } from '../api'
+import { DEMO_EMPRESA } from '../tourDemo'
 import { useAuth } from './AuthContext'
 
 const EmpresaCtx = createContext(null)
@@ -9,7 +10,12 @@ export function EmpresaProvider({ children }) {
   const { user } = useAuth()
   const [empresas, setEmpresas] = useState([])
   const [selectedEmpresa, setSelectedEmpresaState] = useState(() => {
-    try { return JSON.parse(sessionStorage.getItem(STORAGE_KEY) || 'null') } catch { return null }
+    try {
+      const emp = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || 'null')
+      // A Empresa Exemplo (tour) nunca sobrevive a um recarregamento: sem o
+      // modo demonstração ativo, as chamadas dela iriam ao servidor de verdade.
+      return emp && emp.id !== DEMO_EMPRESA.id ? emp : null
+    } catch { return null }
   })
   const [loading, setLoading] = useState(false)
 
@@ -47,8 +53,10 @@ export function EmpresaProvider({ children }) {
   }, [user])
 
   // Se a empresa selecionada nao esta mais na lista do usuario logado, limpa
+  // (a Empresa Exemplo do tour nao esta na lista de proposito — nao limpar).
   useEffect(() => {
     if (!selectedEmpresa || !empresas.length) return
+    if (selectedEmpresa.id === DEMO_EMPRESA.id) return
     const ainda_tem = empresas.some(e => e.id === selectedEmpresa.id)
     if (!ainda_tem) setSelectedEmpresa(null)
   }, [empresas, selectedEmpresa, setSelectedEmpresa])

@@ -580,7 +580,7 @@ export default function DivergenciasST() {
                 </tr>
               </thead>
               <tbody>
-                {notas.map(nota => {
+                {notas.map((nota, i) => {
                   const aberto = expandido.has(nota.chave)
                   return (
                     <FragmentoNota
@@ -588,6 +588,7 @@ export default function DivergenciasST() {
                       onToggle={() => toggle(nota.chave)} onMemoria={setDetalhe}
                       onSemAcordo={registrarSemAcordo} onSemCte={confirmarSemCte}
                       onTriagem={setTriagemAlvo}
+                      dataTour={i === 0 ? 'st-nota-demo' : undefined}
                     />
                   )
                 })}
@@ -773,7 +774,7 @@ function AcaoSugerida({ acao, destinoMatriz, onIrMatriz, onSemAcordo, verificar,
 }
 
 // ── Linha-mestre (Nota) + linhas-filhas (itens) quando expandida ──
-function FragmentoNota({ nota, aberto, onToggle, onMemoria, catalogo, onSemAcordo, onSemCte, onTriagem }) {
+function FragmentoNota({ nota, aberto, onToggle, onMemoria, catalogo, onSemAcordo, onSemCte, onTriagem, dataTour }) {
   const navigate = useNavigate()
   const temCte = nota.ctes.length > 0
   // Primeira ação sugerida do catálogo do motor para os códigos do item.
@@ -785,7 +786,7 @@ function FragmentoNota({ nota, aberto, onToggle, onMemoria, catalogo, onSemAcord
   }
   return (
     <>
-      <tr onClick={onToggle} style={{ cursor: 'pointer', background: aberto ? 'var(--surface-2)' : undefined }}>
+      <tr onClick={onToggle} data-tour={dataTour} style={{ cursor: 'pointer', background: aberto ? 'var(--surface-2)' : undefined }}>
         <td style={{ textAlign: 'center', color: 'var(--text-4)' }}>
           <i className={`ti ti-chevron-${aberto ? 'down' : 'right'}`} />
         </td>

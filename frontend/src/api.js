@@ -1,4 +1,6 @@
 // Cliente da API Nexos V2. JWT access + refresh (rotação), tenant via token.
+import { responderDemo } from './tourDemo'
+
 const BASE = '/api/v1'
 const TIMEOUT_MS = 120_000
 
@@ -44,6 +46,11 @@ function fail() {
 }
 
 async function request(method, path, body = null, isForm = false, _retried = false) {
+  // Modo demonstração do tour: escrita bloqueada; leituras da empresa
+  // exemplo respondidas no navegador, sem tocar o servidor (tourDemo.js).
+  const demo = responderDemo(method, path)
+  if (demo) return demo
+
   const headers = {}
   const token = getAccess()
   if (token) headers['Authorization'] = `Bearer ${token}`
