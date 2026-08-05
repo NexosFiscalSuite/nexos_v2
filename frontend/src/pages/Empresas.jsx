@@ -313,7 +313,7 @@ export default function Empresas() {
                     style={{
                       minWidth: 32, justifyContent: 'center', border: 'none',
                       background: n === page ? 'var(--primary)' : 'transparent',
-                      color: n === page ? '#fff' : 'var(--text-2)', fontWeight: n === page ? 700 : 500,
+                      color: n === page ? 'var(--primary-contrast)' : 'var(--text-2)', fontWeight: n === page ? 700 : 500,
                     }}>{n}</button>
                 ))}
               <button className="btn btn-ghost btn-sm" disabled={page === totalPaginas} onClick={() => setPage(p => p + 1)}>

@@ -43,8 +43,10 @@ os comandos de deploy.
 - **PDF (fpdf2)**: tudo passa por `carta_base.py` (`CartaTimbrada`, `_t`
   latin-1 com mapa `_TROCAS` para “—”/“→”, `_brl/_pct/_cnpj`). O timbrado
   mantém o navy da marca Sol (#24477B) mesmo com a paleta nova do app.
-- **Front**: paleta roxo claro #8B5FBF (pedido do João em ago/2026 — antes
-  azul #0056D2). Layout no padrão do Console do sol-treinamentos-hub
+- **Front**: paleta amarelo/laranja Sol #F39200 — o amarelo da logo — com
+  texto navy #24477B (`--primary-contrast`) sobre a cor primária, par da
+  marca (pedido do João em ago/2026; antes roxo #8B5FBF, antes azul
+  #0056D2). Layout no padrão do Console do sol-treinamentos-hub
   (pasta vizinha): sidebar em card flutuante sticky recolhível com marca
   compacta e usuário no rodapé, SEM topbar branca — competência/empresa/
   ajuda/sair flutuam no topo direito; cada página tem seu próprio título.

@@ -616,7 +616,7 @@ function RevisaoPanel({ onMudou }) {
                     style={{
                       minWidth: 32, justifyContent: 'center', border: 'none',
                       background: n === page ? 'var(--primary)' : 'transparent',
-                      color: n === page ? '#fff' : 'var(--text-2)', fontWeight: n === page ? 700 : 500,
+                      color: n === page ? 'var(--primary-contrast)' : 'var(--text-2)', fontWeight: n === page ? 700 : 500,
                     }}>{n}</button>
                 ))}
               <button className="btn btn-ghost btn-sm" disabled={page === totalPaginas} onClick={() => setPage(p => p + 1)}>
@@ -876,7 +876,7 @@ function CrudMatriz({ aba, prefill }) {
                     style={{
                       minWidth: 32, justifyContent: 'center', border: 'none',
                       background: n === page ? 'var(--primary)' : 'transparent',
-                      color: n === page ? '#fff' : 'var(--text-2)', fontWeight: n === page ? 700 : 500,
+                      color: n === page ? 'var(--primary-contrast)' : 'var(--text-2)', fontWeight: n === page ? 700 : 500,
                     }}>{n}</button>
                 ))}
               <button className="btn btn-ghost btn-sm" disabled={page === totalPaginas} onClick={() => setPage(p => p + 1)}>
@@ -1014,7 +1014,7 @@ export default function MatrizesFiscais() {
             <i className={`ti ${a.icon}`} /> {a.label}
             {a.id === 'revisao' && pendencias > 0 && (
               <span className="tnum" style={{
-                marginLeft: 6, background: 'var(--primary)', color: '#fff',
+                marginLeft: 6, background: 'var(--primary)', color: 'var(--primary-contrast)',
                 borderRadius: 999, fontSize: 11, fontWeight: 700, padding: '1px 7px',
               }}>{pendencias > 99 ? '99+' : pendencias}</span>
             )}

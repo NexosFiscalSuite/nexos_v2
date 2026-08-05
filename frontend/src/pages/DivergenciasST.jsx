@@ -1097,7 +1097,7 @@ function NumeroPasso({ n, final }) {
       width: 26, height: 26, borderRadius: '50%', flexShrink: 0, display: 'flex',
       alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700,
       background: final ? 'var(--primary)' : 'var(--primary-lt)',
-      color: final ? '#fff' : 'var(--primary-text)',
+      color: final ? 'var(--primary-contrast)' : 'var(--primary-text)',
     }}>{n}</div>
   )
 }

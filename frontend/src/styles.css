@@ -12,12 +12,15 @@
   --topbar-bg:    #FFFFFF;
   --sidebar-bg:   #FFFFFF;   /* sidebar clara: a logo respira e aparece 100% */
 
-  --primary:      #8B5FBF;   /* Roxo claro suave (pedido ago/2026) = ação */
-  --primary-h:    #7A4FAE;
-  --primary-d:    #66408F;
-  --primary-text: #7A4FAE;
-  --primary-lt:   #F2ECFA;
-  --primary-lt2:  #DFD0F2;
+  --primary:      #F39200;   /* Amarelo/laranja Sol (da logo) = ação */
+  --primary-h:    #DD8400;
+  --primary-d:    #B96E00;
+  --primary-text: #B96E00;
+  --primary-lt:   #FEF1DD;
+  --primary-lt2:  #FBDCA8;
+  /* Texto SOBRE a cor primária: navy da marca (par da logo) — branco não
+     tem contraste suficiente sobre o amarelo. */
+  --primary-contrast: #24477B;
 
   --accent:       #F39200;   /* Laranja Sol = destaque/realce */
   --accent-h:     #DD8400;
@@ -98,7 +101,7 @@ a:hover { color: var(--primary-h); }
   white-space: nowrap; line-height: 1;
 }
 .btn:active { transform: scale(0.96); }   /* micro-interação Apple */
-.btn-primary { background: var(--primary); color: #FFFFFF; border-color: var(--primary); font-weight: 600; }
+.btn-primary { background: var(--primary); color: var(--primary-contrast); border-color: var(--primary); font-weight: 600; }
 .btn-primary:hover { background: var(--primary-h); border-color: var(--primary-h); }
 .btn-secondary { background: var(--surface); color: var(--ink); border-color: var(--hairline); }
 .btn-secondary:hover { background: var(--surface-2); }
@@ -164,7 +167,7 @@ input, select, textarea {
 }
 input:hover, select:hover { border-color: #D1D5DB; }
 input:focus, select:focus, textarea:focus {
-  border-color: var(--primary); box-shadow: 0 0 0 3px rgba(139,95,191,0.12);
+  border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,146,0,0.12);
 }
 input::placeholder, textarea::placeholder { color: var(--text-4); }
 select { cursor: pointer; }
@@ -205,7 +208,7 @@ input[type="radio"]:checked::after {
   transform: translate(-50%, -50%);
 }
 input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible {
-  outline: none; box-shadow: 0 0 0 3px rgba(139,95,191,0.30);
+  outline: none; box-shadow: 0 0 0 3px rgba(243,146,0,0.30);
 }
 
 .input-wrap { position: relative; }
@@ -444,10 +447,10 @@ tr.filha td:first-child { box-shadow: inset 3px 0 0 var(--primary-lt2); }
 .login-bg .s6 { width: 140px; height: 140px; top: 14%; left: 30%; background: #8EA0CE; opacity: 0.20; }
 .login-bg .s7 { width: 120px; height: 120px; bottom: 16%; right: 26%; background: #F39200; opacity: 0.16; }
 /* aneis de contorno (sem preenchimento) */
-.login-bg .ring { border-radius: 50%; border: 2px solid rgba(139,95,191,0.25); background: transparent; }
+.login-bg .ring { border-radius: 50%; border: 2px solid rgba(243,146,0,0.25); background: transparent; }
 .login-bg .r1 { width: 380px; height: 380px; top: -90px; right: 8%; }
-.login-bg .r2 { width: 240px; height: 240px; bottom: -60px; left: 18%; border-color: rgba(139,95,191,0.18); }
-.login-bg .r3 { width: 90px;  height: 90px;  top: 24%; right: 22%; border-color: rgba(139,95,191,0.30); }
+.login-bg .r2 { width: 240px; height: 240px; bottom: -60px; left: 18%; border-color: rgba(243,146,0,0.18); }
+.login-bg .r3 { width: 90px;  height: 90px;  top: 24%; right: 22%; border-color: rgba(243,146,0,0.30); }
 /* pequenos pontos sólidos */
 .login-bg .dot { border-radius: 50%; background: var(--primary); }
 .login-bg .d1 { width: 16px; height: 16px; top: 30%; left: 16%; opacity: 0.5; }
@@ -600,7 +603,7 @@ tr.filha td:first-child { box-shadow: inset 3px 0 0 var(--primary-lt2); }
 .login-input input {
   width: 100%; box-sizing: border-box;
   padding: 12px 14px 12px 44px; font-size: 14px;
-  border: 1.5px solid rgba(139,95,191,0.25); border-radius: 12px; outline: none;
+  border: 1.5px solid rgba(243,146,0,0.25); border-radius: 12px; outline: none;
   background: rgba(255,255,255,0.85); color: var(--text-1);
   font-family: inherit; transition: border-color .15s, box-shadow .15s, background .15s;
 }
@@ -608,7 +611,7 @@ tr.filha td:first-child { box-shadow: inset 3px 0 0 var(--primary-lt2); }
 .login-input input:focus {
   border-color: var(--primary);
   background: #fff;
-  box-shadow: 0 0 0 3px rgba(139,95,191,0.15);
+  box-shadow: 0 0 0 3px rgba(243,146,0,0.15);
 }
 .login-eye {
   position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
@@ -624,13 +627,13 @@ tr.filha td:first-child { box-shadow: inset 3px 0 0 var(--primary-lt2); }
 
 .login-submit {
   width: 100%; padding: 13px; border: none; border-radius: 12px;
-  background: var(--primary); color: #FFFFFF; font-size: 15px; font-weight: 700;
+  background: var(--primary); color: var(--primary-contrast); font-size: 15px; font-weight: 700;
   font-family: inherit; cursor: pointer; margin-top: 6px;
   display: flex; align-items: center; justify-content: center; gap: 8px;
   transition: transform .08s, box-shadow .15s, background .15s;
-  box-shadow: 0 8px 22px rgba(139,95,191,0.32);
+  box-shadow: 0 8px 22px rgba(243,146,0,0.32);
 }
-.login-submit:hover:not(:disabled) { background: var(--primary-h); box-shadow: 0 10px 28px rgba(139,95,191,0.4); }
+.login-submit:hover:not(:disabled) { background: var(--primary-h); box-shadow: 0 10px 28px rgba(243,146,0,0.4); }
 .login-submit:active:not(:disabled) { transform: translateY(1px); }
 .login-submit:disabled { opacity: 0.75; cursor: not-allowed; }
 .login-submit .ti { font-size: 17px; }
