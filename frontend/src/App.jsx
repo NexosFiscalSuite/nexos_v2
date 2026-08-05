@@ -56,6 +56,7 @@ export default function App() {
                 <Route path="/notas"         element={<Notas />} />
                 <Route path="/cadastros"     element={<Cadastros />} />
                 <Route path="/matrizes-fiscais" element={<MatrizesFiscais />} />
+                <Route path="/excecao-item" element={<MatrizesFiscais initialTab="excecoes" />} />
                 <Route path="/conformidade"  element={<Conformidade />} />
                 <Route path="/divergencias-st" element={<DivergenciasST />} />
                 <Route path="/ibs-cbs"       element={<VerificacaoIbsCbs />} />
