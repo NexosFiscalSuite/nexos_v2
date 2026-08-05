@@ -13,16 +13,20 @@ from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.fiscal.infrastructure.models import (
+    TRIAGENS,
     AuditoriaIcmsSt,
+    DivergenciaTriagem,
     NfeCteVinculo,
     Nota,
     NotaItem,
 )
 from app.shared.domain.value_objects import only_digits
 
-_A, _N, _IT = AuditoriaIcmsSt, Nota, NotaItem
+_A, _N, _IT, _T = AuditoriaIcmsSt, Nota, NotaItem, DivergenciaTriagem
 # LEFT JOIN do item: dá nome/NCM/CEST à linha (a auditoria guarda só o nº).
 _J_ITEM = and_(_IT.nota_id == _A.nota_id, _IT.numero_item == _A.numero_item)
+# LEFT JOIN da triagem: a decisão do analista sobrevive ao reprocessamento.
+_J_TRIAGEM = and_(_T.nota_id == _A.nota_id, _T.numero_item == _A.numero_item)
 
 
 def _filtros(
@@ -35,9 +39,14 @@ def _filtros(
     status: str | None = None,
     codigo_erro: str | None = None,
     q: str | None = None,
+    triagem: str | None = None,
 ) -> list:
     a, n, it = _A, _N, _IT
     where = [a.empresa_id == empresa_id, a.status != "OK"]   # DIVERGENTE + NAO_AUDITAVEL
+    if triagem == "EM_ABERTO":
+        where.append(_T.id.is_(None))            # sem decisão do analista ainda
+    elif triagem in TRIAGENS:
+        where.append(_T.status == triagem)
     if fluxo:   # abas Entradas (tpNF=0) × Saídas (tpNF=1)
         where.append(n.fluxo == fluxo)
     # data_emissao é 'YYYY-MM-DD' (ISO): comparação lexicográfica = cronológica.
@@ -79,6 +88,7 @@ async def listar_divergencias(
     status: str | None = None,
     codigo_erro: str | None = None,
     q: str | None = None,
+    triagem: str | None = None,
     page: int = 1,
     page_size: int = 50,
 ) -> dict:
@@ -86,6 +96,7 @@ async def listar_divergencias(
     where = _filtros(
         empresa_id=empresa_id, fluxo=fluxo, data_inicio=data_inicio,
         data_fim=data_fim, cnpj=cnpj, status=status, codigo_erro=codigo_erro, q=q,
+        triagem=triagem,
     )
 
     page = max(1, page)
@@ -93,7 +104,8 @@ async def listar_divergencias(
 
     total = await session.scalar(
         select(func.count()).select_from(a)
-        .join(n, a.nota_id == n.id).outerjoin(it, _J_ITEM).where(*where)
+        .join(n, a.nota_id == n.id).outerjoin(it, _J_ITEM)
+        .outerjoin(_T, _J_TRIAGEM).where(*where)
     )
 
     # ── Agregados do período inteiro (sem paginação): o dinheiro em jogo. ──
@@ -112,13 +124,25 @@ async def listar_divergencias(
             func.coalesce(func.sum(case((eh_antecipacao, -d), else_=0)), 0),
             func.coalesce(func.sum(case((divergente, 1), else_=0)), 0),
             func.coalesce(func.sum(case((a.status == "NAO_AUDITAVEL", 1), else_=0)), 0),
-        ).select_from(a).join(n, a.nota_id == n.id).outerjoin(it, _J_ITEM).where(*where)
+        ).select_from(a).join(n, a.nota_id == n.id).outerjoin(it, _J_ITEM)
+        .outerjoin(_T, _J_TRIAGEM).where(*where)
     )).one()
     resumo = {
         "a_recolher": float(agg[0]), "a_favor": float(agg[1]),
         "antecipacao": float(agg[2]),
         "divergentes": int(agg[3]), "nao_auditaveis": int(agg[4]),
     }
+
+    # Triagem dos DIVERGENTES do filtro: quanto já foi cobrado/justificado/
+    # aceito e quanto segue em aberto — o pós-carta em números.
+    tri_rows = (await session.execute(
+        select(func.coalesce(_T.status, "EM_ABERTO"), func.count())
+        .select_from(a).join(n, a.nota_id == n.id).outerjoin(it, _J_ITEM)
+        .outerjoin(_T, _J_TRIAGEM)
+        .where(*where, divergente)
+        .group_by(func.coalesce(_T.status, "EM_ABERTO"))
+    )).all()
+    resumo["triagem"] = {s: int(c) for s, c in tri_rows}
 
     # Ranking de emitentes pelo valor COBRÁVEL (divergências sem ERRO_111):
     # quem cobrar primeiro / onde a parametrização mais erra.
@@ -129,6 +153,7 @@ async def listar_divergencias(
             func.coalesce(func.sum(func.abs(d)), 0).label("valor"),
         )
         .select_from(a).join(n, a.nota_id == n.id).outerjoin(it, _J_ITEM)
+        .outerjoin(_T, _J_TRIAGEM)
         .where(*where, divergente, ~eh_antecipacao)
         .group_by(n.cnpj_emit, n.nome_emit)
         .order_by(func.coalesce(func.sum(func.abs(d)), 0).desc())
@@ -139,9 +164,11 @@ async def listar_divergencias(
         for r in rank_rows
     ]
     res = await session.execute(
-        select(a, n, it.descricao, it.codigo, it.ncm, it.cest)
+        select(a, n, it.descricao, it.codigo, it.ncm, it.cest,
+               _T.status, _T.observacao, _T.definido_por, _T.definido_em)
         .join(n, a.nota_id == n.id)
         .outerjoin(it, _J_ITEM)
+        .outerjoin(_T, _J_TRIAGEM)
         .where(*where)
         # DIVERGENTE ('D') antes de NAO_AUDITAVEL ('N'); depois a maior diferença.
         .order_by(a.status.asc(), func.abs(a.vicms_st_divergencia).desc())
@@ -165,8 +192,10 @@ async def listar_divergencias(
 
     itens = [
         _linha(a_row, n_row, descricao, codigo, ncm, cest,
-               ctes_por_chave.get(a_row.chave_acesso, []))
-        for a_row, n_row, descricao, codigo, ncm, cest in linhas
+               ctes_por_chave.get(a_row.chave_acesso, []),
+               (t_status, t_obs, t_por, t_em))
+        for a_row, n_row, descricao, codigo, ncm, cest, t_status, t_obs, t_por, t_em
+        in linhas
     ]
     return {
         "total": total or 0, "page": page, "page_size": page_size, "itens": itens,
@@ -174,8 +203,15 @@ async def listar_divergencias(
     }
 
 
-def _linha(a_row, n_row, descricao, codigo, ncm, cest, ctes: list[str]) -> dict:
+def _linha(a_row, n_row, descricao, codigo, ncm, cest, ctes: list[str],
+           triagem: tuple = (None, None, None, None)) -> dict:
+    t_status, t_obs, t_por, t_em = triagem
     return {
+        "triagem": (
+            {"status": t_status, "observacao": t_obs, "por": t_por,
+             "em": t_em.isoformat() if t_em else None}
+            if t_status else None
+        ),
         "chave_acesso": a_row.chave_acesso,
         "nota_id": str(a_row.nota_id),
         "numero_item": a_row.numero_item,
@@ -293,6 +329,7 @@ async def exportar_divergencias(
     status: str | None = None,
     codigo_erro: str | None = None,
     q: str | None = None,
+    triagem: str | None = None,
     limite: int = 20000,
 ) -> list[dict]:
     """Todas as linhas do filtro (sem paginação) para a planilha de trabalho —
@@ -301,16 +338,21 @@ async def exportar_divergencias(
     where = _filtros(
         empresa_id=empresa_id, fluxo=fluxo, data_inicio=data_inicio,
         data_fim=data_fim, cnpj=cnpj, status=status, codigo_erro=codigo_erro, q=q,
+        triagem=triagem,
     )
     res = await session.execute(
-        select(a, n, it.descricao, it.codigo, it.ncm, it.cest)
+        select(a, n, it.descricao, it.codigo, it.ncm, it.cest,
+               _T.status, _T.observacao, _T.definido_por, _T.definido_em)
         .join(n, a.nota_id == n.id)
         .outerjoin(it, _J_ITEM)
+        .outerjoin(_T, _J_TRIAGEM)
         .where(*where)
         .order_by(n.nome_emit, n.numero, a.numero_item)
         .limit(limite)
     )
     return [
-        _linha(a_row, n_row, descricao, codigo, ncm, cest, [])
-        for a_row, n_row, descricao, codigo, ncm, cest in res.all()
+        _linha(a_row, n_row, descricao, codigo, ncm, cest, [],
+               (t_status, t_obs, t_por, t_em))
+        for a_row, n_row, descricao, codigo, ncm, cest, t_status, t_obs, t_por, t_em
+        in res.all()
     ]

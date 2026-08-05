@@ -24,6 +24,7 @@ from app.modules.fiscal.infrastructure.matrizes_models import (
 )
 from app.modules.fiscal.infrastructure.models import (
     AuditoriaIcmsSt,
+    DivergenciaTriagem,
     NfeCteVinculo,
     Nota,
     NotaItem,
@@ -36,6 +37,7 @@ _TABELAS = [
     MatrizMva.__table__, MatrizEnquadramentoSt.__table__, MatrizFcp.__table__,
     MatrizProtocoloSt.__table__, MatrizAliquota.__table__, Nota.__table__,
     NotaItem.__table__, NfeCteVinculo.__table__, AuditoriaIcmsSt.__table__,
+    DivergenciaTriagem.__table__,   # a listagem faz outerjoin da triagem
 ]
 
 _CHAVE_NFE = "1" * 44

@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Response
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,12 +24,53 @@ from app.modules.fiscal.application.st_audit_service import StAuditService
 from app.modules.fiscal.application.st_carta import gerar_carta_st
 from app.modules.fiscal.application.st_diagnostico import gerar_diagnostico_pdf
 from app.modules.fiscal.application.st_export import gerar_xlsx_divergencias
+from app.modules.fiscal.application.triagem_service import definir_triagem
 from app.modules.fiscal.domain.st.errors import ErroST
 from app.modules.fiscal.infrastructure.repositories import NotaRepository
 from app.modules.identity.infrastructure.models import User
 from app.shared.domain.value_objects import only_digits
 
 router = APIRouter(prefix="/auditoria/st", tags=["Auditoria ST"])
+
+
+async def _email_do(claims: TokenClaims, session: AsyncSession) -> str:
+    email = await session.scalar(select(User.email).where(User.id == claims.sub))
+    return email or str(claims.sub)
+
+
+class TriagemItemRef(BaseModel):
+    nota_id: UUID
+    numero_item: int
+
+
+class TriagemBody(BaseModel):
+    itens: list[TriagemItemRef] = Field(..., min_length=1)
+    status: str = Field(..., description="EM_ABERTO | COBRADA | JUSTIFICADA | ACEITA")
+    observacao: str | None = Field(default=None, max_length=300)
+
+
+@router.post("/triagem")
+async def triagem_divergencias(
+    body: TriagemBody,
+    empresa_id: UUID = Query(..., description="Empresa (cliente) auditada"),
+    claims: TokenClaims = Depends(get_current_claims),
+    session: AsyncSession = Depends(tenant_session),
+):
+    """Triagem do pós-auditoria: registra o que o escritório decidiu sobre os
+    itens divergentes (cobrada/justificada/aceita), com quem/quando na
+    trilha. EM_ABERTO desfaz. A decisão sobrevive ao reprocessamento."""
+    revisor = await _email_do(claims, session)
+    resumo = await definir_triagem(
+        session, tenant_id=claims.tid, empresa_id=empresa_id,
+        itens=[(i.nota_id, i.numero_item) for i in body.itens],
+        status=body.status, observacao=body.observacao, por=revisor,
+    )
+    await AuditService(session).registrar(
+        tenant_id=claims.tid, user_id=claims.sub, acao="st.triagem",
+        entidade="empresa", entidade_id=str(empresa_id),
+        detalhe={"status": body.status, "itens": len(body.itens), **resumo},
+    )
+    return resumo
 
 
 @router.get("/catalogo-erros")
@@ -163,6 +205,16 @@ async def carta_st(
         cliente_nome=empresa.razao_social if empresa else None,
         verificacao_matrizes=verificacao.strftime("%d/%m/%Y") if verificacao else None,
     )
+    # Gerar a carta É a cobrança: marca os itens como COBRADA na triagem —
+    # sem sobrescrever decisão que o analista já tenha tomado.
+    await definir_triagem(
+        session, tenant_id=claims.tid, empresa_id=empresa_id,
+        itens=[(UUID(i["nota_id"]), i["numero_item"]) for i in itens],
+        status="COBRADA",
+        observacao=f"Carta gerada em {datetime.now(UTC).strftime('%d/%m/%Y')}",
+        por=await _email_do(claims, session),
+        apenas_em_aberto=True,
+    )
     return Response(
         content=pdf,
         media_type="application/pdf",
@@ -180,6 +232,7 @@ async def divergencias(
     status: str | None = Query(default=None, description="DIVERGENTE | NAO_AUDITAVEL"),
     codigo_erro: str | None = Query(default=None, description="Filtra por código do motor"),
     q: str | None = Query(default=None, description="Busca livre: fornecedor/produto/NF/NCM"),
+    triagem: str | None = Query(default=None, description="EM_ABERTO | COBRADA | JUSTIFICADA | ACEITA"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=200, ge=1, le=500),
     claims: TokenClaims = Depends(get_current_claims),
@@ -197,6 +250,7 @@ async def divergencias(
         status=status,
         codigo_erro=codigo_erro,
         q=q,
+        triagem=triagem,
         page=page,
         page_size=page_size,
     )
@@ -212,6 +266,7 @@ async def divergencias_export(
     status: str | None = Query(default=None),
     codigo_erro: str | None = Query(default=None),
     q: str | None = Query(default=None),
+    triagem: str | None = Query(default=None),
     claims: TokenClaims = Depends(get_current_claims),
     session: AsyncSession = Depends(tenant_session),
 ):
@@ -220,6 +275,7 @@ async def divergencias_export(
     itens = await exportar_divergencias(
         session, empresa_id=empresa_id, fluxo=fluxo, data_inicio=data_inicio,
         data_fim=data_fim, cnpj=cnpj, status=status, codigo_erro=codigo_erro, q=q,
+        triagem=triagem,
     )
     if not itens:
         raise NotFoundError("Nenhuma divergência no filtro atual.")

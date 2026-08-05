@@ -188,13 +188,14 @@ export default function DivergenciasST() {
   const [q, setQ] = useState('')
   const [fStatus, setFStatus] = useState('')
   const [fCodigo, setFCodigo] = useState('')
+  const [fTriagem, setFTriagem] = useState('')
   useEffect(() => { const t = setTimeout(() => setQ(busca.trim()), 400); return () => clearTimeout(t) }, [busca])
 
   const params = useCallback((page = 1) => ({
     fluxo: tab, data_inicio: `${ano}-${mes}-01`, data_fim: `${ano}-${mes}-31`,
-    status: fStatus, codigo_erro: fCodigo, q,
+    status: fStatus, codigo_erro: fCodigo, triagem: fTriagem, q,
     page, page_size: PAGE_SIZE,
-  }), [tab, ano, mes, fStatus, fCodigo, q])
+  }), [tab, ano, mes, fStatus, fCodigo, fTriagem, q])
 
   const carregar = useCallback(async () => {
     if (!selectedEmpresa) { setData({ total: 0, itens: [] }); return }
@@ -269,7 +270,8 @@ export default function DivergenciasST() {
         data_inicio: `${ano}-${mes}-01`, data_fim: `${ano}-${mes}-31`,
       })
       saveBlob(blob, filename)
-      toast('Carta de ST gerada — pronta para encaminhar.', 'ok')
+      toast('Carta gerada — itens marcados como “Cobrada” na triagem.', 'ok')
+      carregar()
     } catch (e) { toast(e.message, 'error') }
     finally { setCartaBusy(null) }
   }
@@ -311,7 +313,7 @@ export default function DivergenciasST() {
 
   const [filtroCard, setFiltroCard] = useState(null)
   useEffect(() => { carregar() }, [carregar])
-  useEffect(() => { setExpandido(new Set()); setFiltroCard(null) }, [selectedEmpresa, ano, mes, tab, q, fStatus, fCodigo])
+  useEffect(() => { setExpandido(new Set()); setFiltroCard(null) }, [selectedEmpresa, ano, mes, tab, q, fStatus, fCodigo, fTriagem])
 
   const itensVisiveis = useMemo(() => {
     const card = CARDS.find(c => c.key === filtroCard)
@@ -383,6 +385,15 @@ export default function DivergenciasST() {
             ...Object.keys(catalogo).sort().map(c => ({
               value: c, label: c.replace(/^ERRO_(\d+_)?/, '').replaceAll('_', ' ').toLowerCase(),
             })),
+          ]} />
+        </div>
+        <div style={{ width: 190 }}>
+          <Dropdown value={fTriagem} onChange={setFTriagem} options={[
+            { value: '', label: 'Toda triagem' },
+            { value: 'EM_ABERTO', label: 'Em aberto (sem decisão)' },
+            { value: 'COBRADA', label: 'Cobradas (carta enviada)' },
+            { value: 'JUSTIFICADA', label: 'Justificadas (baixadas)' },
+            { value: 'ACEITA', label: 'Aceitas (cliente recolhe)' },
           ]} />
         </div>
         <div style={{ position: 'relative', marginLeft: 'auto', width: 280, maxWidth: '100%' }}>

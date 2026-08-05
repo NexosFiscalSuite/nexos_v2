@@ -233,6 +233,39 @@ class AuditoriaIcmsSt(Base):
     )
 
 
+# Triagem: o que o escritório DECIDIU sobre o item divergente.
+TRIAGENS = ("COBRADA", "JUSTIFICADA", "ACEITA")
+
+
+class DivergenciaTriagem(Base):
+    """Triagem do pós-auditoria: COBRADA (carta ao fornecedor), JUSTIFICADA
+    (base normativa aceita — baixa do apontamento) ou ACEITA (o cliente
+    assume/recolhe). Tabela PRÓPRIA porque a auditoria é recalculada a cada
+    reprocessamento — a decisão do analista não pode evaporar; a âncora
+    (nota_id, numero_item) sobrevive à reauditoria."""
+
+    __tablename__ = "divergencia_triagem"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "nota_id", "numero_item", name="uq_triagem_item"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), index=True
+    )
+    empresa_id: Mapped[UUID] = mapped_column(
+        ForeignKey("empresas.id", ondelete="CASCADE"), index=True
+    )
+    nota_id: Mapped[UUID] = mapped_column(ForeignKey("notas.id", ondelete="CASCADE"), index=True)
+    numero_item: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(12))            # TRIAGENS
+    observacao: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    definido_por: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    definido_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
 class NotaEvento(Base):
     """Eventos (cancelamento/CC-e). Pode existir órfão (nota ainda não importada)."""
 
