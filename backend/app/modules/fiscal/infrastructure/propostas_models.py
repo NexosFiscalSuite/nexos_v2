@@ -24,6 +24,9 @@ ACAO_INSERIR = "INSERIR"
 ACAO_ATUALIZAR = "ATUALIZAR"
 ACAO_NOVA_VIGENCIA = "NOVA_VIGENCIA"
 ACAO_ENCERRAR_VIGENCIA = "ENCERRAR_VIGENCIA"
+# Reconferência (Fase 4): aprovar = "continua valendo" — só renova o carimbo
+# de verificação da linha; mudou? rejeita e ajusta pelo CRUD (vigência nova).
+ACAO_REVALIDAR = "REVALIDAR"
 
 # with_variant: permite aos testes (sqlite) criar a tabela; Postgres segue JSONB.
 _JSON = JSONB().with_variant(JSON(), "sqlite")

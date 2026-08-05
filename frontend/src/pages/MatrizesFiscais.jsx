@@ -341,6 +341,7 @@ const ACOES_PROPOSTA = {
   ATUALIZAR: { label: 'Alteração', tone: 'warn' },
   NOVA_VIGENCIA: { label: 'Nova vigência', tone: 'warn' },
   ENCERRAR_VIGENCIA: { label: 'Encerrar vigência', tone: 'err' },
+  REVALIDAR: { label: 'Reconferência', tone: 'info' },
 }
 const TIPOS_PROPOSTA = {
   enquadramento: 'Enquadramento', mva: 'MVA', fcp: 'FCP',
@@ -574,8 +575,10 @@ function RevisaoPanel({ onMudou }) {
                       <td>{badge(TIPOS_PROPOSTA[p.tipo_matriz] || p.tipo_matriz)}</td>
                       <td className="mono" style={{ fontSize: 13 }}>{p.chave_resumo}</td>
                       <td style={{ color: 'var(--text-2)', fontSize: 13 }}>
-                        {muda.slice(0, 2).map(m => `${m.campo}: ${fmtDiff(m.de)} → ${fmtDiff(m.para)}`).join(' · ')}
-                        {muda.length > 2 ? ` · +${muda.length - 2}` : ''}
+                        {p.acao === 'REVALIDAR'
+                          ? 'Confirme que os valores continuam valendo'
+                          : (<>{muda.slice(0, 2).map(m => `${m.campo}: ${fmtDiff(m.de)} → ${fmtDiff(m.para)}`).join(' · ')}
+                            {muda.length > 2 ? ` · +${muda.length - 2}` : ''}</>)}
                       </td>
                       <td style={{ color: 'var(--text-3)', fontSize: 12 }}>{p.fonte}</td>
                       <td style={{ color: 'var(--text-3)', fontSize: 12 }}>{dataCadastro(p)}</td>
@@ -641,24 +644,47 @@ function RevisaoPanel({ onMudou }) {
                 )}
               </p>
               <div className="tbl-wrap">
-                <table className="tbl">
-                  <thead><tr><th>Campo</th><th>Vigente</th><th>Proposto</th></tr></thead>
-                  <tbody>
-                    {mudancasDe(detalhe).map(m => (
-                      <tr key={m.campo}>
-                        <td style={{ color: 'var(--text-3)' }}>{m.campo}</td>
-                        <td>{fmtDiff(m.de)}</td>
-                        <td style={{ fontWeight: 600 }}>{fmtDiff(m.para)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                {detalhe.acao === 'REVALIDAR' ? (
+                  <table className="tbl">
+                    <thead><tr><th>Campo</th><th>Valor vigente</th></tr></thead>
+                    <tbody>
+                      {Object.keys(CAMPOS_DIFF).filter(k => k in (detalhe.payload || {})).map(k => (
+                        <tr key={k}>
+                          <td style={{ color: 'var(--text-3)' }}>{CAMPOS_DIFF[k]}</td>
+                          <td style={{ fontWeight: 600 }}>{fmtDiff(detalhe.payload[k])}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <table className="tbl">
+                    <thead><tr><th>Campo</th><th>Vigente</th><th>Proposto</th></tr></thead>
+                    <tbody>
+                      {mudancasDe(detalhe).map(m => (
+                        <tr key={m.campo}>
+                          <td style={{ color: 'var(--text-3)' }}>{m.campo}</td>
+                          <td>{fmtDiff(m.de)}</td>
+                          <td style={{ fontWeight: 600 }}>{fmtDiff(m.para)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
+              {detalhe.acao === 'REVALIDAR' && (
+                <p style={{ fontSize: 12.5, color: 'var(--text-3)', lineHeight: 1.55, marginTop: 12, marginBottom: 0 }}>
+                  Confirmar renova a data de verificação sem mudar nada. Se a legislação
+                  mudou, rejeite e ajuste pelo cadastro — encerrando a vigência antiga e
+                  criando uma nova.
+                </p>
+              )}
             </div>
             {detalhe.status === 'PENDENTE' && (
               <div className="modal-footer">
                 <button className="btn btn-ghost" disabled={busy} onClick={() => rejeitar(detalhe)}>Rejeitar</button>
-                <button className="btn btn-primary" disabled={busy} onClick={() => aprovar(detalhe)}>Aprovar e aplicar</button>
+                <button className="btn btn-primary" disabled={busy} onClick={() => aprovar(detalhe)}>
+                  {detalhe.acao === 'REVALIDAR' ? 'Confirmar — continua valendo' : 'Aprovar e aplicar'}
+                </button>
               </div>
             )}
           </div>

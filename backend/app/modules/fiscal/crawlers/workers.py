@@ -7,7 +7,7 @@ abre a sessão global, POR unidade de trabalho.
 """
 import asyncio
 import logging
-from datetime import date
+from datetime import UTC, date, datetime
 
 from sqlalchemy import func, select
 
@@ -18,6 +18,7 @@ from app.core.worker_db import worker_global_session
 from app.modules.fiscal.crawlers.base import http_get
 from app.modules.fiscal.crawlers.confaz_cest import ConfazCestExtractor
 from app.modules.fiscal.crawlers.propor import propor_enquadramento, registrar_snapshot
+from app.modules.fiscal.crawlers.reconferencia import propor_reconferencia
 from app.modules.fiscal.infrastructure.propostas_models import FonteSnapshot
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,29 @@ def sync_cest_confaz(self, ufs: str = ""):
     except Exception as exc:  # noqa: BLE001 — portal público instável: retry, não falha o beat
         logger.warning("sync_cest_confaz falhou (%s); reagendando.", exc)
         raise self.retry(exc=exc, countdown=60 * 30) from exc
+
+
+@celery_app.task(name="fiscal.reconferir_aliquotas", bind=True, max_retries=2)
+def reconferir_aliquotas(self, ufs: str = ""):
+    """Reconferência semestral (Fase 4): alíquota modal e FCP vigentes de cada
+    UF alvo viram proposta REVALIDAR na fila — aprovar = 'continua valendo'
+    (renova o carimbo); mudou? rejeite e ajuste pelo CRUD (vigência nova)."""
+    try:
+        return asyncio.run(_reconferir(_ufs_alvo(ufs)))
+    except Exception as exc:  # noqa: BLE001 — retry, não falha o beat
+        logger.warning("reconferir_aliquotas falhou (%s); reagendando.", exc)
+        raise self.retry(exc=exc, countdown=60 * 30) from exc
+
+
+async def _reconferir(ufs: list[str]) -> dict:
+    agora = datetime.now(UTC)
+    semestre = 1 if agora.month <= 6 else 2
+    ciclo = f"{agora.year}-{semestre}"
+    inicio_ciclo = datetime(agora.year, 1 if semestre == 1 else 7, 1, tzinfo=UTC)
+    async with worker_global_session() as s:
+        resumo = await propor_reconferencia(s, ufs, ciclo=ciclo, inicio_ciclo=inicio_ciclo)
+    logger.info("Reconferência %s: %s", ciclo, resumo)
+    return resumo
 
 
 # Radar de Protocolos ICMS (Fase 3): o índice oficial por ano. Não extrai

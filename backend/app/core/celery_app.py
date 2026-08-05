@@ -36,6 +36,13 @@ celery_app.conf.beat_schedule = {
         "task": "fiscal.monitor_protocolos_confaz",
         "schedule": crontab(day_of_week=1, hour=5, minute=0),
     },
+    # Reconferência semestral de alíquotas/FCP (Fase 4): 1º de janeiro e de
+    # julho, 06h UTC — vira proposta REVALIDAR na fila de revisão.
+    "reconferir-aliquotas-semestral": {
+        "task": "fiscal.reconferir_aliquotas",
+        "schedule": crontab(month_of_year="1,7", day_of_month=1, hour=6, minute=0),
+        "args": (settings.crawler_uf_alvo,),
+    },
 }
 
 celery_app.conf.update(

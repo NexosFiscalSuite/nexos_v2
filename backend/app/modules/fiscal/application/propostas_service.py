@@ -20,6 +20,7 @@ from app.modules.fiscal.infrastructure.propostas_models import (
     ACAO_ENCERRAR_VIGENCIA,
     ACAO_INSERIR,
     ACAO_NOVA_VIGENCIA,
+    ACAO_REVALIDAR,
     STATUS_APROVADA,
     STATUS_PENDENTE,
     STATUS_REJEITADA,
@@ -114,7 +115,10 @@ class PropostasService:
         if linha is None:
             raise ConflictError("A linha alvo não existe mais — rejeite a proposta.")
 
-        if p.acao == ACAO_ATUALIZAR:
+        if p.acao == ACAO_REVALIDAR:
+            # "Continua valendo": nada muda na regra — só o carimbo renova.
+            self._tocar(linha)
+        elif p.acao == ACAO_ATUALIZAR:
             for campo, valor in dados.items():
                 setattr(linha, campo, valor)
             self._tocar(linha)
