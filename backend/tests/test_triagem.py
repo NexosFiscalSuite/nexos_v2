@@ -8,10 +8,14 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql.asyncpg import dialect as asyncpg_dialect
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.database import Base
-from app.modules.fiscal.application.auditoria_query import listar_divergencias
+from app.modules.fiscal.application.auditoria_query import (
+    _consulta_resumo_triagem,
+    listar_divergencias,
+)
 from app.modules.fiscal.application.triagem_service import definir_triagem
 from app.modules.fiscal.infrastructure.models import (
     AuditoriaIcmsSt,
@@ -22,6 +26,19 @@ from app.modules.fiscal.infrastructure.models import (
 )
 
 TENANT, EMPRESA = uuid4(), uuid4()
+
+
+def test_resumo_triagem_gera_group_by_valido_no_postgresql():
+    """Evita COALESCE com binds distintos no SELECT e GROUP BY (GroupingError)."""
+    stmt = _consulta_resumo_triagem(
+        where=[AuditoriaIcmsSt.empresa_id == EMPRESA],
+        divergente=AuditoriaIcmsSt.status == "DIVERGENTE",
+    )
+
+    sql = str(stmt.compile(dialect=asyncpg_dialect()))
+
+    assert "GROUP BY divergencia_triagem.status" in sql
+    assert "GROUP BY coalesce(" not in sql
 
 
 @pytest_asyncio.fixture

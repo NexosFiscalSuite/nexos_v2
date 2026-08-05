@@ -29,6 +29,27 @@ _J_ITEM = and_(_IT.nota_id == _A.nota_id, _IT.numero_item == _A.numero_item)
 _J_TRIAGEM = and_(_T.nota_id == _A.nota_id, _T.numero_item == _A.numero_item)
 
 
+def _consulta_resumo_triagem(*, where: list, divergente):
+    """Monta o resumo sem duplicar o bind do ``COALESCE`` no GROUP BY.
+
+    No PostgreSQL, criar o COALESCE novamente no GROUP BY gera outro parâmetro
+    posicional (por exemplo, $1 no SELECT e $8 no GROUP BY). As expressões
+    deixam de ser equivalentes para o parser e a consulta falha com
+    ``GroupingError``. Agrupar pela coluna de origem produz o mesmo resultado:
+    os valores NULL continuam sendo exibidos como EM_ABERTO pelo SELECT.
+    """
+    triagem_status = func.coalesce(_T.status, "EM_ABERTO")
+    return (
+        select(triagem_status, func.count())
+        .select_from(_A)
+        .join(_N, _A.nota_id == _N.id)
+        .outerjoin(_IT, _J_ITEM)
+        .outerjoin(_T, _J_TRIAGEM)
+        .where(*where, divergente)
+        .group_by(_T.status)
+    )
+
+
 def _filtros(
     *,
     empresa_id: UUID,
@@ -136,11 +157,7 @@ async def listar_divergencias(
     # Triagem dos DIVERGENTES do filtro: quanto já foi cobrado/justificado/
     # aceito e quanto segue em aberto — o pós-carta em números.
     tri_rows = (await session.execute(
-        select(func.coalesce(_T.status, "EM_ABERTO"), func.count())
-        .select_from(a).join(n, a.nota_id == n.id).outerjoin(it, _J_ITEM)
-        .outerjoin(_T, _J_TRIAGEM)
-        .where(*where, divergente)
-        .group_by(func.coalesce(_T.status, "EM_ABERTO"))
+        _consulta_resumo_triagem(where=where, divergente=divergente)
     )).all()
     resumo["triagem"] = {s: int(c) for s, c in tri_rows}
 
