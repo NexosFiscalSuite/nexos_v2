@@ -1007,9 +1007,9 @@ export default function MatrizesFiscais() {
       </div>
 
       {/* Abas: as fontes que o motor de ICMS-ST consome */}
-      <div style={{ display: 'inline-flex', background: 'var(--surface-2)', borderRadius: 'var(--radius)', padding: 3, marginBottom: 18 }}>
+      <div data-tour="matrizes-abas" style={{ display: 'inline-flex', background: 'var(--surface-2)', borderRadius: 'var(--radius)', padding: 3, marginBottom: 18 }}>
         {ABAS.map(a => (
-          <button key={a.id} onClick={() => { setPrefillPar(null); setTab(a.id) }} className="btn btn-sm"
+          <button key={a.id} data-tour={`matrizes-tab-${a.id}`} onClick={() => { setPrefillPar(null); setTab(a.id) }} className="btn btn-sm"
             style={{ border: 'none', background: tab === a.id ? 'var(--surface)' : 'transparent', color: tab === a.id ? 'var(--text-1)' : 'var(--text-3)', boxShadow: tab === a.id ? 'var(--shadow-sm)' : 'none' }}>
             <i className={`ti ${a.icon}`} /> {a.label}
             {a.id === 'revisao' && pendencias > 0 && (
@@ -1022,15 +1022,17 @@ export default function MatrizesFiscais() {
         ))}
       </div>
 
-      {aba.id === 'revisao'
-        ? <RevisaoPanel key={`${tab}:${bulkVersion}`} onMudou={atualizarPendencias} />
-        : aba.id === 'saude'
-          ? <SaudePanel key={`${tab}:${bulkVersion}`} onCadastrarPar={cadastrarPar} />
-          : aba.custom
-            ? <CoberturaPanel key={`${tab}:${bulkVersion}`} />
-            : <CrudMatriz key={`${tab}:${bulkVersion}`} aba={aba}
-                prefill={(tab === 'protocolos' && prefillPar)
-                  || (deepLink?.aba === tab ? deepLink.prefill : null)} />}
+      <div data-tour={`matrizes-painel-${aba.id}`}>
+        {aba.id === 'revisao'
+          ? <RevisaoPanel key={`${tab}:${bulkVersion}`} onMudou={atualizarPendencias} />
+          : aba.id === 'saude'
+            ? <SaudePanel key={`${tab}:${bulkVersion}`} onCadastrarPar={cadastrarPar} />
+            : aba.custom
+              ? <CoberturaPanel key={`${tab}:${bulkVersion}`} />
+              : <CrudMatriz key={`${tab}:${bulkVersion}`} aba={aba}
+                  prefill={(tab === 'protocolos' && prefillPar)
+                    || (deepLink?.aba === tab ? deepLink.prefill : null)} />}
+      </div>
       {resultado && <ResumoImportModal r={resultado} onClose={() => setResultado(null)} />}
     </div>
   )

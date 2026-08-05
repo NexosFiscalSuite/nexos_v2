@@ -96,7 +96,7 @@ function NavItem({ to, icon, label, collapsed, subItems, badge }) {
       {!collapsed && open && (
         <div style={{ marginLeft:16, marginBottom:4 }}>
           {subItems.map(sub => (
-            <NavLink key={sub.to} to={sub.to} style={({ isActive: a }) => ({
+            <NavLink key={sub.to} to={sub.to} data-tour={'nav' + sub.to.replace(/\//g, '-')} style={({ isActive: a }) => ({
               display:'flex', alignItems:'center', gap:8,
               padding:'7px 10px 7px 14px', borderRadius:'var(--radius)',
               fontSize:12, fontWeight: a ? 600 : 400,

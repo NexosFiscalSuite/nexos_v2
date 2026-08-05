@@ -127,25 +127,30 @@ const PASSOS = [
     + 'abre o cadastro já preenchido com NCM/CEST/UF do item. E a aba <b>Cobertura</b> das Matrizes lista '
     + 'tudo o que falta cadastrar, ordenado pelo valor que está travado.'),
 
-  // ── Matrizes ──
-  info('[data-tour="nav-cadastros-grp"]', 'Cadastros e Matrizes 📚',
-    'Clientes/fornecedores e as <b>Matrizes Fiscais</b> — o combustível do motor. Os dois próximos passos explicam como essa base funciona.'),
-  aula('As Matrizes Fiscais — o combustível ⛽',
-    'Cinco tabelas globais respondem tudo o que o motor pergunta:<br/>'
-    + '• <b>Enquadramento</b> — o produto é ST naquela UF?<br/>'
-    + '• <b>Protocolos</b> — há acordo entre as UFs (e para qual produto)?<br/>'
-    + '• <b>MVA</b> — qual margem aplicar?<br/>'
-    + '• <b>Alíquotas</b> — a alíquota interna da UF (com FCP integrado);<br/>'
-    + '• <b>FCP</b> — o adicional do Fundo de Combate à Pobreza.<br/><br/>'
-    + '<b>Regra de ouro — vigência:</b> taxa que muda vira <b>linha nova</b> (encerra a antiga). '
-    + 'O motor usa a regra <b>vigente na data de emissão da nota</b>: a MVA pode ser 40% para a nota de 2025 '
-    + 'e 55% para a de 2026 — e as duas auditorias continuam defensáveis.'),
-  aula('Robôs alimentam, você decide 🤖',
-    'Robôs leem as fontes oficiais (CONFAZ, Anexo VII do RICMS/MG) e <b>propõem</b> atualizações na aba '
-    + '<b>Revisão</b> — o chip mostra quantas esperam. Nada entra sem aprovação, <b>linha cadastrada à mão '
-    + 'nunca é tocada</b> e rejeitar vale para sempre.<br/><br/>'
-    + 'A aba <b>Saúde</b> é o radar: frescor da base, a data que sai no aviso da carta e os '
-    + '<b>pares de UF pendentes</b>. E a <b>Cobertura</b> mostra o que falta cadastrar, por valor.'),
+  // ── Matrizes: navegação prática pela central de regras ──
+  pratico('[data-tour="nav-cadastros-grp"]', 'Abra o menu Cadastros 📚',
+    'Aqui ficam os cadastros de clientes/fornecedores e as regras fiscais usadas pelo motor.'),
+  pratico('[data-tour="nav-matrizes-fiscais"]', 'Entre em Matrizes Fiscais ⛽',
+    'Esta é a central que responde se o produto é ST, se há acordo entre as UFs e quais percentuais usar.'),
+  info('[data-tour="matrizes-abas"]', 'O mapa das Matrizes Fiscais 🗺️',
+    'As cinco primeiras abas são as <b>fontes do cálculo</b>: MVA, Enquadramento, FCP, Alíquotas e Protocolos. '
+    + 'Cada regra tem <b>vigência</b>: o motor escolhe a linha válida na data da nota e preserva o histórico. '
+    + 'As três últimas abas cuidam da operação: <b>Revisão</b>, <b>Saúde</b> e <b>Cobertura</b>.'),
+  pratico('[data-tour="matrizes-tab-cobertura"]', 'Veja primeiro a Cobertura 🎯',
+    'Ela cruza os XMLs reais da carteira com as regras existentes e mostra exatamente o que ainda impede cálculos.'),
+  info('[data-tour="matrizes-painel-cobertura"]', 'Sua fila de prioridade fiscal 💰',
+    'As lacunas aparecem organizadas pelo <b>valor movimentado</b>. Assim você cadastra primeiro o que destrava mais notas, '
+    + 'em vez de procurar NCM, CEST ou par de UF no escuro.'),
+  pratico('[data-tour="matrizes-tab-revisao"]', 'Abra a Revisão dos robôs 🤖',
+    'Os robôs consultam fontes oficiais e trazem propostas; nenhuma alteração entra automaticamente.'),
+  info('[data-tour="matrizes-painel-revisao"]', 'Robô propõe, você decide ✅',
+    'Aqui o curador compara a fonte e <b>aprova ou rejeita</b>. Regras cadastradas manualmente são preservadas, '
+    + 'e o contador na aba mostra o que ainda aguarda análise.'),
+  pratico('[data-tour="matrizes-tab-saude"]', 'Confira a Saúde da base 🩺',
+    'O último painel funciona como radar de manutenção e confiabilidade das matrizes.'),
+  info('[data-tour="matrizes-painel-saude"]', 'Base pronta para auditoria 🛡️',
+    'Acompanhe o <b>frescor das fontes</b>, a data de verificação exibida nos documentos e os '
+    + '<b>pares interestaduais pendentes</b>. É aqui que você percebe o que precisa de curadoria antes de reprocessar as notas.'),
 
   info('[data-tour="nav-ibs-cbs"]', 'IBS/CBS — Reforma Tributária 🧪',
     '2026 é o ano-teste da Reforma: nessa tela você fiscaliza o destaque de IBS/CBS dos fornecedores — '
