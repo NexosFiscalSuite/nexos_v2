@@ -141,6 +141,14 @@ class MemoriaCalculo:
     reducao_base_st: Decimal = ZERO
     reducao_base_st_xml: Decimal = ZERO
     reducao_fonte: str | None = None
+    # POR QUE a margem saiu zerada. Item de ST calculado com MVA 0,00 é o
+    # sintoma mais confuso da ferramenta: a tela mostra "0,00%" com a frase
+    # genérica sobre o que é margem presumida, e o analista não tem como saber
+    # se falta cadastro, se a vigência não alcança a nota ou se foi decisão
+    # curada. Quando o gate de fail-closed está desligado nem código de erro
+    # existe para se apoiar — então a explicação viaja na própria memória.
+    # None = a margem não é zero (caminho normal, nada a explicar).
+    mva_zero_motivo: str | None = None
 
     # Composição do CUSTO que formou a base (Seção 4.1): a resposta do "como
     # verificar o rateio de frete/IPI" fica NA memória — conta aberta na tela.

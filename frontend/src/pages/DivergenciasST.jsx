@@ -114,12 +114,35 @@ function linkMatriz(item) {
     return q({ aba: 'protocolos', uf_origem: item.uf_origem, uf_destino: item.uf_destino })
   return null
 }
-// Parâmetros do diagnóstico "por que não achamos a margem" para o item que
-// caiu sem MVA. A DATA é a de EMISSÃO da nota (`data_emissao`, ISO do XML) —
-// é ela que decide a vigência da linha da matriz; a data de hoje mostraria
-// uma matriz que não é a que valia quando a nota foi emitida.
-function consultaMva(item) {
-  if (!(item.codigo_erro || '').includes('ERRO_MVA_NAO_ENCONTRADA')) return null
+// Margem zerada tem DOIS motivos possíveis, e a diferença muda tudo:
+//  - decisão curada da matriz (linha 0,00 com base legal): a base é o valor da
+//    operação de propósito, não há nada a corrigir;
+//  - falta de regra para o par de UFs na data da nota: é lacuna da NOSSA base
+//    de regras, e a investigação da matriz mostra o que existe cadastrado.
+// O motor manda o texto pronto em `memoria.mva_zero_motivo` (null = a margem
+// não é zero). A marca da decisão curada é a expressão "decisão da matriz".
+const MVA_ZERO_CURADA = /decis[aã]o da matriz/i
+function leituraMvaZero(memoria) {
+  const m = memoria || {}
+  const motivo = m.mva_zero_motivo || null
+  const zerada = motivo != null
+    || (m.mva_aplicada != null && Math.abs(Number(m.mva_aplicada || 0)) < 0.005)
+  return { zerada, motivo, curada: !!motivo && MVA_ZERO_CURADA.test(motivo) }
+}
+
+// Aviso na linha do item: só quando a margem zerou por FALTA de regra e há
+// memória para abrir. Decisão curada não vira aviso — é o esperado.
+function avisoMvaZero(item) {
+  if (!item.memoria) return false
+  const { motivo, curada } = leituraMvaZero(item.memoria)
+  return !!motivo && !curada
+}
+
+// Parâmetros do diagnóstico "por que não achamos a margem". A DATA é a de
+// EMISSÃO da nota (`data_emissao`, ISO do XML) — é ela que decide a vigência
+// da linha da matriz; a data de hoje mostraria uma matriz que não é a que
+// valia quando a nota foi emitida.
+function paramsMva(item) {
   if (!item.ncm || !item.uf_destino) return null
   return {
     ncm: item.ncm,
@@ -128,6 +151,18 @@ function consultaMva(item) {
     uf_destino: item.uf_destino,
     data: item.data_emissao || '',
   }
+}
+
+// Quando OFERECER a investigação no balão do selo: o item que caiu em
+// ERRO_MVA_NAO_ENCONTRADA (gate fail-closed ligado) e também o item que
+// simplesmente calculou com margem zero por falta de regra — sem o gate ele
+// não recebe código de erro nenhum, e era justamente aí que o diagnóstico
+// ficava inalcançável. Decisão curada não entra: a linha 0,00 é legítima.
+function consultaMva(item) {
+  const { motivo, curada } = leituraMvaZero(item.memoria)
+  const semRegra = !!motivo && !curada
+  if (!(item.codigo_erro || '').includes('ERRO_MVA_NAO_ENCONTRADA') && !semRegra) return null
+  return paramsMva(item)
 }
 
 const brl = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -985,6 +1020,19 @@ function FragmentoNota({ nota, aberto, onToggle, onMemoria, catalogo, onSemAcord
             {it.status === 'NAO_AUDITAVEL' && it.observacao && (
               <div style={{ fontSize: 11, color: 'var(--warn-text)', marginTop: 2 }}><i className="ti ti-alert-circle" style={{ marginRight: 4 }} />{it.observacao}</div>
             )}
+            {/* Sem código de erro não há selo (nem balão): a margem zerada por
+                falta de regra precisa se anunciar aqui, senão o item calcula em
+                silêncio e ninguém descobre. O detalhe está na memória. */}
+            {!acao && avisoMvaZero(it) && (
+              <button type="button" onClick={(e) => { e.stopPropagation(); onMemoria(it) }}
+                title="Abre a memória de cálculo no passo da margem presumida"
+                style={{ marginTop: 3, padding: 0, border: 'none', background: 'transparent',
+                         fontFamily: 'inherit', fontSize: 11, lineHeight: 1.5, textAlign: 'left',
+                         color: 'var(--warn-text)', cursor: 'pointer', textDecoration: 'underline' }}>
+                <i className="ti ti-alert-triangle" style={{ marginRight: 4 }} />
+                Margem presumida 0,00% — veja por que na memória de cálculo
+              </button>
+            )}
             {acao && (
               <AcaoSugerida acao={acao} destinoMatriz={destinoMatriz}
                 seloTour={dataTour ? `${dataTour}-selo` : undefined}
@@ -1047,6 +1095,12 @@ function MemoriaModal({ d, onClose }) {
     && !Number.isNaN(mvaApl))
     ? Number(m.base_st_calculada) / (1 + mvaApl / 100)
     : null
+
+  // Margem zerada: a tela precisa dizer POR QUE, não recitar o que é margem
+  // presumida. O texto vem pronto do motor; a investigação da matriz só faz
+  // sentido quando a margem faltou (decisão curada não tem o que investigar).
+  const mvaZero = leituraMvaZero(m)
+  const consultaMvaZero = mvaZero.zerada && !mvaZero.curada ? paramsMva(d) : null
 
   // Composição REAL do custo (memórias novas trazem os componentes): a conta
   // aberta que responde "como verificar o rateio de frete/IPI" na plataforma.
@@ -1121,11 +1175,17 @@ function MemoriaModal({ d, onClose }) {
               </div>
 
               <Passo n="2" titulo="Margem presumida (MVA)"
-                sub={ajustada
-                  ? `A margem original de ${pct(m.mva_original)} é corrigida para ${pct(m.mva_aplicada)} porque a alíquota da compra (${pct(m.alq_inter)}) difere da interna (${pct(m.alq_intra)}) — o ajuste equaliza a carga entre comprar dentro e fora do estado`
-                  : 'Quanto a lei presume que o preço vai subir até chegar ao consumidor final — é sobre essa margem que o ST antecipa o imposto'}
+                sub={mvaZero.zerada
+                  ? <MvaZerada info={mvaZero} consulta={consultaMvaZero} />
+                  : (ajustada
+                    ? `A margem original de ${pct(m.mva_original)} é corrigida para ${pct(m.mva_aplicada)} porque a alíquota da compra (${pct(m.alq_inter)}) difere da interna (${pct(m.alq_intra)}) — o ajuste equaliza a carga entre comprar dentro e fora do estado`
+                    : 'Quanto a lei presume que o preço vai subir até chegar ao consumidor final — é sobre essa margem que o ST antecipa o imposto')}
                 valor={<><span style={{ color: 'var(--text-4)' }}>{pct(m.mva_original)}</span> <i className="ti ti-arrow-right" style={{ fontSize: 12 }} /> <b>{pct(m.mva_aplicada)}</b></>}
-                badge={ajustada ? { txt: 'Ajustada', cls: 'badge-info' } : { txt: 'Original', cls: 'badge-ok' }} />
+                badge={mvaZero.zerada
+                  ? (mvaZero.curada
+                    ? { txt: 'Base pelo valor da operação', cls: 'badge-info' }
+                    : { txt: 'Margem zerada', cls: 'badge-warn' })
+                  : (ajustada ? { txt: 'Ajustada', cls: 'badge-info' } : { txt: 'Original', cls: 'badge-ok' })} />
               <Passo n="3" titulo="Base de cálculo do ST"
                 sub={custoComposicao
                   ? <>
@@ -1201,6 +1261,37 @@ function MemoriaModal({ d, onClose }) {
         <div className="modal-footer"><button className="btn btn-ghost" onClick={onClose}>Fechar</button></div>
       </div>
     </div>
+  )
+}
+
+// Passo 2 quando a margem saiu 0,00%: no lugar da aula sobre o que É margem
+// presumida (que não explica nada), o motivo que o motor apurou — e, quando a
+// margem FALTOU, o caminho para investigar a matriz sem sair da memória.
+function MvaZerada({ info, consulta }) {
+  const curada = info.curada
+  const tom = curada
+    ? { bg: 'var(--info-bg)', fg: 'var(--info-text)', icone: 'ti-scale' }
+    : { bg: 'var(--warn-bg)', fg: 'var(--warn-text)', icone: 'ti-alert-triangle' }
+  return (
+    <>
+      <div style={{ background: tom.bg, color: tom.fg, borderRadius: 8, padding: '9px 11px', fontSize: 12, lineHeight: 1.55 }}>
+        <i className={`ti ${tom.icone}`} style={{ marginRight: 5 }} />
+        <strong>{curada ? 'Margem 0,00% por decisão da matriz' : 'Por que a margem está zerada'}:</strong>{' '}
+        {info.motivo || (
+          <>esta memória é de uma auditoria feita antes de o motor explicar a margem
+          zerada. Reprocesse a nota para o motor dizer se falta regra na matriz ou se
+          foi decisão curada — a consulta abaixo já mostra o que existe cadastrado.</>
+        )}
+      </div>
+      {!curada && (
+        <div style={{ marginTop: 6, fontSize: 11.5, color: 'var(--text-4)', lineHeight: 1.5 }}>
+          Sem margem, o ST foi calculado sobre o valor da operação — é por isso que o
+          valor devido saiu menor do que sairia com a margem cadastrada. Margem que
+          falta é lacuna da nossa base de regras, não erro de quem emitiu a nota.
+        </div>
+      )}
+      {consulta && <DiagnosticoMva consulta={consulta} />}
+    </>
   )
 }
 

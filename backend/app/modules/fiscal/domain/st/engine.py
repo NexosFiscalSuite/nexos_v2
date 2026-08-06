@@ -211,6 +211,8 @@ class StAuditEngine:
         # Registrado na memória quando a base sai pelo valor da operação por
         # DECISÃO da matriz (linha curada com 0,00) — nunca por omissão.
         base_por_matriz: str | None = None
+        # Por que a margem ficou zerada (falta de regra × decisão curada).
+        mva_zero_motivo: str | None = None
 
         if usa_mva:
             mva = calcular_mva(
@@ -242,6 +244,13 @@ class StAuditEngine:
                     f"cadastrada 0,00 para {item.ncm} em "
                     f"{mva_info.uf_origem_casada or '*'}→{operacao.uf_dest}{norma}."
                 )
+                mva_zero_motivo = base_por_matriz
+            else:
+                # Margem zerada por FALTA de regra, não por decisão. Sem o gate
+                # ligado não há código de erro aqui, então esta é a ÚNICA pista
+                # que chega à tela — sem ela o item mostra "0,00%" e a frase
+                # genérica de margem presumida, e ninguém descobre o porquê.
+                mva_zero_motivo = self._sem_mva_observacao(item, operacao)
             if item.p_mva_st > ZERO:
                 erros.append(ErroST.MVA_AJUSTADA_INDEVIDA)
 
@@ -334,6 +343,7 @@ class StAuditEngine:
             protocolo_fonte=protocolo_fonte,
             mva_base_legal=(mva_info.base_legal if tem_linha_mva else None),
             mva_uf_origem=(mva_info.uf_origem_casada if tem_linha_mva else None),
+            mva_zero_motivo=mva_zero_motivo,
             aliquota_base_legal=getattr(aliq_uf, "base_legal", None),
             aliquota_ncm_casado=aliq_uf.ncm_casado,
             reducao_base_st=p_red_aplicada,

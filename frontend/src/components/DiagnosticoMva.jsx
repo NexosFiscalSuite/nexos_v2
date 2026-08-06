@@ -2,9 +2,11 @@ import { useState, useCallback } from 'react'
 import { api } from '../api'
 
 // ── "Por que não achamos a margem" ────────────────────────────────────────────
-// Bloco que abre DENTRO do balão do item que caiu em ERRO_MVA_NAO_ENCONTRADA e
-// mostra o que EXISTE na matriz para aquele produto — em vez de só repetir que
-// não há MVA cadastrada. A consulta usa a data de EMISSÃO da nota (é ela que
+// Bloco que mostra o que EXISTE na matriz para aquele produto — em vez de só
+// repetir que não há MVA cadastrada. Abre em dois lugares: no balão do item que
+// caiu em ERRO_MVA_NAO_ENCONTRADA e no passo da margem dentro da memória de
+// cálculo, que é o caminho do item que calculou com margem zero SEM código de
+// erro (gate de fail-closed desligado). A consulta usa a data de EMISSÃO (é ela que
 // decide a vigência), nunca a data de hoje, e só sai quando o usuário abre o
 // bloco: a tela de divergências pode ter centenas de itens.
 
@@ -176,7 +178,9 @@ export default function DiagnosticoMva({ consulta }) {
                   reprocessar a nota.
                 </div>
               ) : (
-                <div style={{ marginTop: 5, maxHeight: 210, overflowY: 'auto', border: '1px solid var(--border-2)', borderRadius: 8 }}>
+                // overflowX: o bloco agora também abre dentro da memória de
+                // cálculo, numa coluna mais estreita que o balão do selo.
+                <div style={{ marginTop: 5, maxHeight: 210, overflowY: 'auto', overflowX: 'auto', border: '1px solid var(--border-2)', borderRadius: 8 }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11.5 }}>
                     <thead>
                       <tr style={{ background: 'var(--surface-2)', color: 'var(--text-3)' }}>

@@ -280,3 +280,44 @@ def test_mva_zero_curada_leva_matriz_id_e_base_legal_para_a_memoria():
 
     assert r.memoria.mva_matriz_id == 42
     assert r.memoria.mva_base_legal == "RICMS/MG Anexo VII"
+
+
+# ── Por que a margem saiu zerada (a pergunta que a tela não respondia) ───────
+def test_margem_zerada_por_falta_de_regra_explica_se_na_memoria():
+    """Com o gate DESLIGADO não há código de erro: a memória é a única pista.
+
+    Sem isto a tela mostra "0,00%" com a frase genérica sobre o que é margem
+    presumida, e não há como saber se falta cadastro ou se foi decisão curada.
+    """
+    op = Operacao(uf_emit="SP", uf_dest="MG", crt=Crt.NORMAL, data=DATA)
+    item = _item_sem_matriz(mod_bc_st=None, v_icms=D("120"), p_icms=D("12"))
+
+    r = _engine(_sem_linha()).auditar_item(item, op)
+
+    motivo = r.memoria.mva_zero_motivo or ""
+    assert motivo, "margem zerada sem explicação é o bug que estamos matando"
+    assert "sem MVA cadastrada" in motivo
+    assert NCM_SEM in motivo and "SP" in motivo and "MG" in motivo   # a chave que falta
+    assert "Cadastre a MVA do par" in motivo                          # e o que fazer
+
+
+def test_margem_zerada_por_decisao_curada_diz_que_foi_decisao():
+    """Linha 0,00 cadastrada é legítima — o texto não pode acusar falta."""
+    mva = MvaEmMemoria({(NCM, CEST, "SP", "MG"): D("0")})
+    op = Operacao(uf_emit="SP", uf_dest="MG", crt=Crt.NORMAL, data=DATA)
+
+    r = _engine(mva).auditar_item(_item(mod_bc_st=None), op)
+
+    motivo = r.memoria.mva_zero_motivo or ""
+    assert "decisão da matriz" in motivo
+    assert "sem MVA cadastrada" not in motivo
+
+
+def test_margem_normal_nao_inventa_explicacao():
+    """Não-regressão: com MVA > 0 o campo fica vazio (nada a explicar)."""
+    mva = MvaEmMemoria({(NCM, CEST, "SP", "MG"): D("42")})
+    op = Operacao(uf_emit="SP", uf_dest="MG", crt=Crt.NORMAL, data=DATA)
+
+    r = _engine(mva).auditar_item(_item(mod_bc_st=4), op)
+
+    assert r.memoria.mva_zero_motivo is None
