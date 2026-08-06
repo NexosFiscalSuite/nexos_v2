@@ -23,6 +23,7 @@ from app.modules.contrapartes.api.routers import lookup_router
 from app.modules.contrapartes.api.routers import router as contrapartes_router
 from app.modules.dashboard.api.routers import router as dashboard_router
 from app.modules.fiscal.api.auditoria_routers import router as auditoria_st_router
+from app.modules.fiscal.api.excecoes_bulk import router as excecoes_bulk_router
 from app.modules.fiscal.api.ibscbs_routers import router as ibscbs_router
 from app.modules.fiscal.api.matrizes_bulk import router as matrizes_bulk_router
 from app.modules.fiscal.api.matrizes_routers import router as matrizes_router
@@ -111,6 +112,9 @@ def create_app() -> FastAPI:
     # GET /matrizes/{sub} genérico (ordem de registro decide o match).
     app.include_router(matrizes_propostas_router, prefix=p)
     app.include_router(matrizes_router, prefix=p)
+    # ANTES do bulk das matrizes, de propósito: lá as rotas são /matrizes/{tipo}
+    # /export|import e "excecoes-produto" cairia no coringa como matriz inexistente.
+    app.include_router(excecoes_bulk_router, prefix=p)
     app.include_router(matrizes_bulk_router, prefix=p)
     app.include_router(compliance_router, prefix=p)
     app.include_router(reporting_router, prefix=p)

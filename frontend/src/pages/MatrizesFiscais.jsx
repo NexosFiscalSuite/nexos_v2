@@ -1,8 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import BalaoAjuda from '../components/BalaoAjuda'
 import Dropdown from '../components/Dropdown'
 import ErroCarga from '../components/ErroCarga'
 import ResumoImportModal from '../components/ResumoImportModal'
 import SelectUf from '../components/SelectUf'
+import SeletorFornecedor, {
+  AjudaFornecedor, formatarDoc, nomeDoFornecedor, useNomesFornecedores,
+} from '../components/SeletorFornecedor'
 import { api, saveBlob } from '../api'
 import { useToast, ToastContainer } from '../hooks/useToast'
 import { UF_QUALQUER } from '../constants/ufs'
@@ -44,57 +48,6 @@ const badgeOrigem = (uf) => badge(
   !uf || uf === UF_QUALQUER ? 'Qualquer' : uf,
   'warn',
 )
-
-// Balão de ajuda CLICÁVEL (padrão .balao-classif do projeto — nunca tooltip de
-// hover): abre no clique e fecha clicando fora ou de novo no gatilho.
-function BalaoAjuda({ titulo, children }) {
-  const [aberto, setAberto] = useState(false)
-  const [pos, setPos] = useState(null)
-  const ref = useRef(null)
-
-  useEffect(() => {
-    if (!aberto) return
-    const fechar = (e) => { if (!e.target.closest('.balao-classif')) setAberto(false) }
-    document.addEventListener('mousedown', fechar)
-    return () => document.removeEventListener('mousedown', fechar)
-  }, [aberto])
-
-  function alternar(e) {
-    e.preventDefault()
-    e.stopPropagation()
-    if (!aberto && ref.current) {
-      const r = ref.current.getBoundingClientRect()
-      setPos({
-        top: Math.min(r.bottom + 6, window.innerHeight - 240),
-        left: Math.min(Math.max(r.left - 140, 12), window.innerWidth - 372),
-      })
-    }
-    setAberto(a => !a)
-  }
-
-  return (
-    <span className="balao-classif" style={{ position: 'relative' }}>
-      <button ref={ref} type="button" onClick={alternar} title="Clique para entender"
-        style={{
-          border: 'none', background: 'transparent', padding: 0, marginLeft: 5,
-          cursor: 'pointer', color: 'var(--primary)', lineHeight: 1, verticalAlign: 'middle',
-        }}>
-        <i className="ti ti-help-circle-filled" style={{ fontSize: 14 }} />
-      </button>
-      {aberto && pos && (
-        <div className="balao-classif" style={{
-          position: 'fixed', top: pos.top, left: pos.left, zIndex: 2000, width: 360,
-          background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
-          boxShadow: '0 10px 30px rgba(0,0,0,.18)', padding: '13px 15px',
-          textAlign: 'left', fontWeight: 400, textTransform: 'none', letterSpacing: 0,
-        }}>
-          <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 6 }}>{titulo}</div>
-          <div style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.6 }}>{children}</div>
-        </div>
-      )}
-    </span>
-  )
-}
 
 // Ajuda do campo "UF de origem" da MVA — a MVA muda conforme o estado de onde
 // a mercadoria sai, então a tela precisa explicar o que o coringa significa.
@@ -886,9 +839,22 @@ function RevisaoPanel({ onMudou }) {
 }
 
 const FORM_EXCECAO_VAZIO = {
-  empresa_id: '', codigo_produto: '', descricao_produto: '',
+  empresa_id: '', cnpj_fornecedor: '', codigo_produto: '', descricao_produto: '',
   data_inicio_vigencia: '', data_fim_vigencia: '',
   tributado_icms: true, lei_icms: '', ativo: true,
+}
+
+// Como o fornecedor da exceção aparece na listagem: vazio é a regra geral, que
+// vale para as notas de todos os fornecedores.
+function celulaFornecedor(doc) {
+  if (!doc) return badge('Qualquer', 'warn')
+  const nome = nomeDoFornecedor(doc)
+  return (
+    <span>
+      {nome && <span style={{ display: 'block', fontWeight: 600 }}>{nome}</span>}
+      <span className="tnum" style={{ fontSize: 12, color: 'var(--text-3)' }}>{formatarDoc(doc)}</span>
+    </span>
+  )
 }
 
 export function ExcecoesItemPanel() {
@@ -919,6 +885,8 @@ export function ExcecoesItemPanel() {
   }, [filtros, page, empresas])
 
   useEffect(() => { carregar() }, [carregar])
+  // Razão social dos fornecedores da página atual (o servidor devolve só o CNPJ).
+  useNomesFornecedores(filtros.empresa_id, lista.map(i => i.cnpj_fornecedor))
   const totalPaginas = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const nomes = Object.fromEntries(empresas.map(e => [e.id, e.nome_fantasia || e.razao_social]))
   const opcoesEmpresas = empresas.map(e => ({
@@ -933,7 +901,8 @@ export function ExcecoesItemPanel() {
   function editar(m) {
     setEditId(m.id)
     setForm({
-      empresa_id: m.empresa_id, codigo_produto: m.codigo_produto,
+      empresa_id: m.empresa_id, cnpj_fornecedor: m.cnpj_fornecedor || '',
+      codigo_produto: m.codigo_produto,
       descricao_produto: m.descricao_produto || '',
       data_inicio_vigencia: m.data_inicio_vigencia,
       data_fim_vigencia: m.data_fim_vigencia || '',
@@ -950,6 +919,8 @@ export function ExcecoesItemPanel() {
       const payload = {
         ...form, data_fim_vigencia: form.data_fim_vigencia || null,
         descricao_produto: form.descricao_produto || null,
+        // Vazio = qualquer fornecedor; o cadastro guarda "" (nunca null).
+        cnpj_fornecedor: form.cnpj_fornecedor || '',
         lei_icms: form.lei_icms || null, ncm: null,
       }
       if (editId) await api.editarExcecaoItem(editId, payload)
@@ -993,9 +964,10 @@ export function ExcecoesItemPanel() {
             </div>
           ) : (
             <div className="card" style={{ padding: 0 }}><div className="tbl-wrap"><table className="tbl">
-              <thead><tr><th>Empresa</th><th>Código Item</th><th>Início</th><th>Fim</th><th>Tributado ICMS</th><th>Lei ICMS</th><th>Ativo</th><th></th></tr></thead>
+              <thead><tr><th>Empresa</th><th>Fornecedor</th><th>Código Item</th><th>Início</th><th>Fim</th><th>Tributado ICMS</th><th>Lei ICMS</th><th>Ativo</th><th></th></tr></thead>
               <tbody>{lista.map(m => <tr key={m.id} onClick={() => editar(m)} style={{ cursor: 'pointer' }}>
                 <td>{nomes[m.empresa_id] || '—'}</td>
+                <td>{celulaFornecedor(m.cnpj_fornecedor)}</td>
                 <td className="mono" style={{ fontWeight: 600 }}>{m.codigo_produto}</td>
                 <td>{dataBr(m.data_inicio_vigencia)}</td><td>{dataBr(m.data_fim_vigencia)}</td>
                 <td>{badge(m.tributado_icms ? 'Sim' : 'Não — ST', m.tributado_icms ? 'info' : 'warn')}</td>
@@ -1023,6 +995,10 @@ export function ExcecoesItemPanel() {
             <div className="modal-body"><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               <div className="field" style={{ gridColumn: '1 / -1' }}><label>Empresa</label>
                 <Dropdown value={form.empresa_id} options={opcoesEmpresas} placeholder="Selecione a empresa…" onChange={v => setCampo('empresa_id', v)} /></div>
+              <div className="field" style={{ gridColumn: '1 / -1' }}>
+                <label>Fornecedor<AjudaFornecedor /></label>
+                <SeletorFornecedor empresaId={form.empresa_id} value={form.cnpj_fornecedor}
+                  onChange={v => setCampo('cnpj_fornecedor', v)} /></div>
               <div className="field" style={{ gridColumn: '1 / -1' }}><label>Código do item</label>
                 <input required maxLength={60} value={form.codigo_produto} placeholder="Código do item"
                   onChange={e => setCampo('codigo_produto', e.target.value)} /></div>

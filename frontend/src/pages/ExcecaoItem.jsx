@@ -1,13 +1,20 @@
-import { useCallback, useEffect, useState } from 'react'
-import ErroCarga from '../components/ErroCarga'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import BalaoAjuda from '../components/BalaoAjuda'
 import DatePicker from '../components/DatePicker'
+import ErroCarga from '../components/ErroCarga'
+import Paginacao from '../components/Paginacao'
+import ResumoImportModal from '../components/ResumoImportModal'
+import SeletorFornecedor, {
+  AjudaFornecedor, formatarDoc, nomeDoFornecedor, useNomesFornecedores,
+} from '../components/SeletorFornecedor'
+import { useCompetencia } from '../context/CompetenciaContext'
 import { useEmpresa } from '../context/EmpresaContext'
 import { useToast, ToastContainer } from '../hooks/useToast'
-import { api } from '../api'
+import { api, saveBlob } from '../api'
 
 const PAGE_SIZE = 50
 const FORM_VAZIO = {
-  codigo_produto: '', data_inicio_vigencia: '', data_fim_vigencia: '',
+  cnpj_fornecedor: '', codigo_produto: '', data_inicio_vigencia: '', data_fim_vigencia: '',
   tributado_icms: true, lei_icms: '', ativo: true,
 }
 
@@ -15,6 +22,19 @@ const dataBr = (s) => (s ? s.split('-').reverse().join('/') : '—')
 const badge = (texto, tom) => <span className="badge" style={{
   background: `var(--${tom}-bg)`, color: `var(--${tom}-text)`,
 }}>{texto}</span>
+
+// Fornecedor na listagem: vazio é a regra geral, que vale para as notas de
+// todos os fornecedores. Com documento, mostra o nome quando já é conhecido.
+function celulaFornecedor(doc) {
+  if (!doc) return badge('Qualquer', 'warn')
+  const nome = nomeDoFornecedor(doc)
+  return (
+    <span>
+      {nome && <span style={{ display: 'block', fontWeight: 600 }}>{nome}</span>}
+      <span className="tnum" style={{ fontSize: 12, color: 'var(--text-3)' }}>{formatarDoc(doc)}</span>
+    </span>
+  )
+}
 
 function SwitchFiscal({ checked, onChange, label, description }) {
   return (
@@ -40,22 +60,112 @@ function SwitchFiscal({ checked, onChange, label, description }) {
   )
 }
 
+// Cadastro em lote pela planilha — o caminho para quem tem dezenas de itens
+// para liberar. Mesmo desenho das Matrizes Fiscais (CSV, upsert por chave).
+function PainelLote({ empresaId, nomeEmpresa, competencia, toast, onImportou }) {
+  const [busy, setBusy] = useState('')
+  const fileRef = useRef(null)
+  const [ano, mes] = (competencia || '').split('-')
+
+  async function baixar(qual) {
+    setBusy(qual)
+    try {
+      const { blob, filename } = qual === 'candidatos'
+        ? await api.candidatosExcecoesItem({ empresa_id: empresaId, ano, mes })
+        : await api.exportarExcecoesItem({ empresa_id: empresaId })
+      saveBlob(blob, filename)
+      toast(qual === 'candidatos'
+        ? 'Planilha de revisão baixada. Marque SIM só nos itens tributados.'
+        : 'Base atual baixada (vazia = template com os cabeçalhos).', 'ok')
+    } catch (e) { toast(e.message, 'error') }
+    finally { setBusy('') }
+  }
+
+  async function importar(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''                       // permite reenviar o mesmo arquivo
+    if (!file) return
+    setBusy('import')
+    try {
+      const r = await api.importarExcecoesItem(file)
+      onImportou(r)
+    } catch (e2) { toast(e2.message, 'error') }
+    finally { setBusy('') }
+  }
+
+  return (
+    <div className="card" data-tour="excecao-item-lote" style={{ marginBottom: 16, padding: '16px 18px' }}>
+      <input ref={fileRef} type="file" accept=".csv" onChange={importar} style={{ display: 'none' }} />
+      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+        <div style={{ minWidth: 280, flex: 1 }}>
+          <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--text-1)', display: 'flex', alignItems: 'center' }}>
+            <i className="ti ti-file-spreadsheet" style={{ marginRight: 7, color: 'var(--primary)' }} />
+            Cadastrar em lote pela planilha
+            <BalaoAjuda titulo="Como funciona a planilha de revisão">
+              A planilha de revisão já vem com os itens que o cálculo tratou como ICMS-ST
+              nas notas da competência, um por fornecedor e código, do maior valor para o
+              menor. Você só decide o que é exceção.
+              <br /><br />
+              A coluna <strong>tributado_icms</strong> chega <strong>em branco de
+              propósito</strong>: escreva <strong>SIM</strong> somente nos produtos que na
+              verdade são tributados normalmente. Linha deixada em branco é
+              <strong> ignorada</strong> na importação — nada muda para ela.
+              <br /><br />
+              Ao reenviar, quem já existe é atualizado e quem é novo entra; não duplica.
+              A chave é empresa + fornecedor + código do item + data de início.
+            </BalaoAjuda>
+          </div>
+          <p style={{ margin: '6px 0 0', fontSize: 12.5, color: 'var(--text-3)', lineHeight: 1.6 }}>
+            Baixe os itens que o cálculo tratou como ICMS-ST na competência{' '}
+            <strong className="tnum">{mes && ano ? `${mes}/${ano}` : '—'}</strong>, escreva{' '}
+            <strong>SIM</strong> na coluna <strong>tributado_icms</strong> só nos produtos que
+            são tributados normalmente e devolva o arquivo aqui. O que ficar em branco é
+            ignorado — nenhuma linha muda sem a sua marcação.
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn btn-primary" disabled={!empresaId || !!busy} onClick={() => baixar('candidatos')}>
+            <i className="ti ti-download" /> {busy === 'candidatos' ? 'Gerando…' : 'Baixar itens para revisar'}
+          </button>
+          <button className="btn btn-secondary" disabled={!empresaId || !!busy} onClick={() => baixar('base')}>
+            <i className="ti ti-list-details" /> {busy === 'base' ? 'Gerando…' : 'Baixar base atual'}
+          </button>
+          <button className="btn btn-secondary" disabled={!empresaId || !!busy} onClick={() => fileRef.current?.click()}>
+            <i className="ti ti-upload" /> {busy === 'import' ? 'Enviando…' : 'Importar planilha'}
+          </button>
+        </div>
+      </div>
+      {empresaId && (
+        <p style={{ margin: '12px 0 0', fontSize: 12, color: 'var(--text-4)' }}>
+          As três ações valem para <strong>{nomeEmpresa}</strong>. A planilha traz uma
+          coluna de fornecedor: deixada em branco, a exceção vale para qualquer fornecedor.
+        </p>
+      )}
+    </div>
+  )
+}
+
 export default function ExcecaoItem() {
   const { selectedEmpresa } = useEmpresa()
+  const { competencia } = useCompetencia()
   const { toasts, toast } = useToast()
   const [lista, setLista] = useState([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [codigo, setCodigo] = useState('')
+  const [filtroFornecedor, setFiltroFornecedor] = useState('')
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState(null)
   const [modal, setModal] = useState(false)
   const [editId, setEditId] = useState(null)
   const [form, setForm] = useState(FORM_VAZIO)
   const [saving, setSaving] = useState(false)
+  const [resultado, setResultado] = useState(null)   // resumo da importação
 
   const empresaId = selectedEmpresa?.id
   const nomeEmpresa = selectedEmpresa?.nome_fantasia || selectedEmpresa?.razao_social
+  // Razão social dos fornecedores da página atual (o servidor devolve só o CNPJ).
+  useNomesFornecedores(empresaId, lista.map(i => i.cnpj_fornecedor))
 
   const carregar = useCallback(async () => {
     if (!empresaId) {
@@ -64,26 +174,31 @@ export default function ExcecaoItem() {
     }
     setLoading(true); setErro(null)
     try {
-      const r = await api.excecoesItem({ empresa_id: empresaId, codigo, page, page_size: PAGE_SIZE })
+      const r = await api.excecoesItem({
+        empresa_id: empresaId, codigo, cnpj_fornecedor: filtroFornecedor,
+        page, page_size: PAGE_SIZE,
+      })
       setLista(r?.items || []); setTotal(r?.total || 0)
     } catch (e) { setErro(e.message) }
     finally { setLoading(false) }
-  }, [empresaId, codigo, page])
+  }, [empresaId, codigo, filtroFornecedor, page])
 
   useEffect(() => { carregar() }, [carregar])
-  useEffect(() => { setPage(1); setModal(false); setEditId(null) }, [empresaId])
+  useEffect(() => { setPage(1); setModal(false); setEditId(null); setFiltroFornecedor('') }, [empresaId])
 
-  const totalPaginas = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const setCampo = (campo, valor) => setForm(f => ({ ...f, [campo]: valor }))
 
   function nova() {
     if (!empresaId) return
-    setEditId(null); setForm(FORM_VAZIO); setModal(true)
+    setEditId(null)
+    setForm({ ...FORM_VAZIO, cnpj_fornecedor: filtroFornecedor || '' })
+    setModal(true)
   }
 
   function editar(item) {
     setEditId(item.id)
     setForm({
+      cnpj_fornecedor: item.cnpj_fornecedor || '',
       codigo_produto: item.codigo_produto,
       data_inicio_vigencia: item.data_inicio_vigencia,
       data_fim_vigencia: item.data_fim_vigencia || '',
@@ -98,6 +213,8 @@ export default function ExcecaoItem() {
     try {
       const payload = {
         ...form, empresa_id: empresaId, descricao_produto: null, ncm: null,
+        // Vazio = qualquer fornecedor; o cadastro guarda "" (nunca null).
+        cnpj_fornecedor: form.cnpj_fornecedor || '',
         data_fim_vigencia: form.data_fim_vigencia || null,
         lei_icms: form.lei_icms.trim() || null,
       }
@@ -117,13 +234,23 @@ export default function ExcecaoItem() {
     } catch (e) { toast(e.message, 'error') }
   }
 
+  function concluiuImportacao(r) {
+    setPage(1)
+    carregar()
+    if (r?.erros?.length || r?.ignorados) {
+      setResultado(r)              // abre o resumo com o que ficou de fora
+    } else {
+      toast(`Planilha aplicada: ${r?.inseridos || 0} nova(s), ${r?.atualizados || 0} atualizada(s).`, 'ok')
+    }
+  }
+
   return (
     <div>
       <ToastContainer toasts={toasts} />
       <div className="page-header">
         <div>
           <h1 className="page-title">Exceção do Item</h1>
-          <p className="page-breadcrumb">Defina por código do produto se o tratamento é Tributado ICMS ou ICMS-ST</p>
+          <p className="page-breadcrumb">Defina, por fornecedor e código do produto, se o tratamento é Tributado ICMS ou ICMS-ST</p>
         </div>
         <button className="btn btn-primary" data-tour="matrizes-excecao-nova" disabled={!empresaId} onClick={nova}>
           <i className="ti ti-plus" /> Nova exceção do item
@@ -142,13 +269,23 @@ export default function ExcecaoItem() {
         </div>
       </div>}
 
+      <PainelLote empresaId={empresaId} nomeEmpresa={nomeEmpresa} competencia={competencia}
+        toast={toast} onImportou={concluiuImportacao} />
+
       <div data-tour="matrizes-painel-excecoes">
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
-          <div style={{ position: 'relative' }}>
-            <i className="ti ti-search" style={{ position: 'absolute', left: 12, top: 10, color: 'var(--text-4)' }} />
-            <input value={codigo} disabled={!empresaId} placeholder="Pesquisar código do item…"
-              onChange={e => { setCodigo(e.target.value); setPage(1) }}
-              style={{ width: 300, paddingLeft: 36 }} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ position: 'relative' }}>
+              <i className="ti ti-search" style={{ position: 'absolute', left: 12, top: 10, color: 'var(--text-4)' }} />
+              <input value={codigo} disabled={!empresaId} placeholder="Pesquisar código do item…"
+                onChange={e => { setCodigo(e.target.value); setPage(1) }}
+                style={{ width: 300, paddingLeft: 36 }} />
+            </div>
+            <div style={{ width: 300 }}>
+              <SeletorFornecedor empresaId={empresaId} value={filtroFornecedor}
+                disabled={!empresaId} rotuloVazio="Todos os fornecedores"
+                onChange={v => { setFiltroFornecedor(v); setPage(1) }} />
+            </div>
           </div>
           {total > 0 && <span className="tnum" style={{ alignSelf: 'center', color: 'var(--text-3)', fontSize: 13 }}>{total.toLocaleString('pt-BR')} exceção(ões)</span>}
         </div>
@@ -162,10 +299,14 @@ export default function ExcecaoItem() {
             : lista.length === 0 ? <div className="empty-state card">
               <i className="ti ti-adjustments-exclamation" />
               <p className="empty-title">Nenhuma exceção cadastrada</p>
-              <p className="empty-subtitle">Cadastre apenas os produtos que precisam contrariar o enquadramento geral por NCM/CEST.</p>
+              <p className="empty-subtitle">Cadastre apenas os produtos que precisam contrariar o enquadramento geral por NCM/CEST — um a um, ou de uma vez pela planilha acima.</p>
             </div> : <div className="card" style={{ padding: 0 }}><div className="tbl-wrap"><table className="tbl">
-              <thead><tr><th>Código Item</th><th>Início</th><th>Fim</th><th>Tratamento</th><th>Lei ICMS</th><th>Ativo</th><th></th></tr></thead>
+              <thead><tr>
+                <th>Fornecedor<AjudaFornecedor /></th>
+                <th>Código Item</th><th>Início</th><th>Fim</th><th>Tratamento</th><th>Lei ICMS</th><th>Ativo</th><th></th>
+              </tr></thead>
               <tbody>{lista.map(item => <tr key={item.id} onClick={() => editar(item)} style={{ cursor: 'pointer' }}>
+                <td>{celulaFornecedor(item.cnpj_fornecedor)}</td>
                 <td className="mono" style={{ fontWeight: 650 }}>{item.codigo_produto}</td>
                 <td>{dataBr(item.data_inicio_vigencia)}</td><td>{dataBr(item.data_fim_vigencia)}</td>
                 <td>{badge(item.tributado_icms ? 'Tributado ICMS' : 'ICMS-ST', item.tributado_icms ? 'info' : 'warn')}</td>
@@ -177,11 +318,8 @@ export default function ExcecaoItem() {
                 </td>
               </tr>)}</tbody>
             </table></div>
-            {totalPaginas > 1 && <div style={{ display: 'flex', justifyContent: 'center', gap: 8, padding: 12, borderTop: '1px solid var(--border-2)' }}>
-              <button className="btn btn-sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>←</button>
-              <span className="tnum" style={{ alignSelf: 'center' }}>{page} de {totalPaginas}</span>
-              <button className="btn btn-sm" disabled={page === totalPaginas} onClick={() => setPage(p => p + 1)}>→</button>
-            </div>}</div>}
+            <Paginacao page={page} total={total} pageSize={PAGE_SIZE} onChange={setPage} />
+            </div>}
       </div>
 
       {modal && <div className="modal-overlay" onClick={() => setModal(false)}>
@@ -194,9 +332,22 @@ export default function ExcecaoItem() {
           </div>
           <form onSubmit={salvar}>
             <div className="modal-body"><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+              <div className="field" style={{ gridColumn: '1 / -1' }}>
+                <label>Fornecedor<AjudaFornecedor /></label>
+                <SeletorFornecedor empresaId={empresaId} value={form.cnpj_fornecedor}
+                  onChange={v => setCampo('cnpj_fornecedor', v)} />
+                <p style={{ margin: '6px 0 0', fontSize: 11.5, color: 'var(--text-4)', lineHeight: 1.5 }}>
+                  Em <strong>“Qualquer fornecedor”</strong> a regra vale para todas as notas.
+                  Escolhendo um fornecedor, ela vale só para as notas dele — o mesmo código
+                  vindo de outro fornecedor segue o enquadramento normal.
+                </p>
+              </div>
               <div className="field" style={{ gridColumn: '1 / -1' }}><label>Código do item</label>
                 <input required maxLength={60} value={form.codigo_produto} placeholder="Ex.: 13846"
-                  onChange={e => setCampo('codigo_produto', e.target.value)} /></div>
+                  onChange={e => setCampo('codigo_produto', e.target.value)} />
+                <p style={{ margin: '6px 0 0', fontSize: 11.5, color: 'var(--text-4)' }}>
+                  É o código que vem no item da nota (cProd), do jeito que o fornecedor escreve.
+                </p></div>
               <div className="field"><label>Data início</label><DatePicker required value={form.data_inicio_vigencia} onChange={v => setCampo('data_inicio_vigencia', v)} /></div>
               <div className="field"><label>Data fim <span style={{ color: 'var(--text-4)', fontWeight: 400 }}>(opcional)</span></label>
                 <DatePicker value={form.data_fim_vigencia} onChange={v => setCampo('data_fim_vigencia', v)} /></div>
@@ -219,6 +370,8 @@ export default function ExcecaoItem() {
           </form>
         </div>
       </div>}
+
+      {resultado && <ResumoImportModal r={resultado} onClose={() => setResultado(null)} />}
     </div>
   )
 }

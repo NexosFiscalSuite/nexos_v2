@@ -50,8 +50,9 @@ def test_regime_conflito_entre_cests_abre_o_portao():
 
 
 def test_excecao_do_item_tem_precedencia_sobre_ncm_e_cest():
+    # Exceção genérica ("" = qualquer fornecedor), o formato do legado migrado.
     tributado = _EnquadramentoSnapshot(
-        {(NCM, CEST, UF): Regime.ST}, excecoes={"PROD-1": Regime.TN}
+        {(NCM, CEST, UF): Regime.ST}, excecoes={("", "PROD-1"): Regime.TN}
     )
     assert (
         tributado.regime(
@@ -61,14 +62,14 @@ def test_excecao_do_item_tem_precedencia_sobre_ncm_e_cest():
     )
 
     st = _EnquadramentoSnapshot(
-        {(NCM, CEST, UF): Regime.TN}, excecoes={"PROD-2": Regime.ST}
+        {(NCM, CEST, UF): Regime.TN}, excecoes={("", "PROD-2"): Regime.ST}
     )
     assert st.regime(NCM, CEST, "MG", UF, DATA, codigo_produto="PROD-2") == Regime.ST
 
 
 def test_excecao_tributado_aparece_na_rastreabilidade_do_motor():
     eng = _engine_snapshots(
-        _EnquadramentoSnapshot({}, excecoes={"PROD-1": Regime.TN}),
+        _EnquadramentoSnapshot({}, excecoes={("", "PROD-1"): Regime.TN}),
         _MvaSnapshot({}),
     )
     op = Operacao(uf_emit="MG", uf_dest="MG", crt=Crt.NORMAL, data=DATA)

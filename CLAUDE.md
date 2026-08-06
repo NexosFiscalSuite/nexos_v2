@@ -138,6 +138,28 @@ Protocolos e estava sendo descartado); o hash de proposta mudou, então rejeiç�
 antigas de MVA voltam uma vez à fila. Cobertura real: **só MG tem MVA de fonte
 oficial automatizada** — ver docs/estado_base_matrizes_st.md.
 
+**Exceção do Item por FORNECEDOR + envio em lote (06/08).** O cProd é do
+fornecedor: dois fornecedores usam o MESMO código para produtos diferentes, e a
+exceção casava só pelo código dentro da empresa — vazava de um fornecedor para
+outro e desligava o ST do item errado, sem sinal nenhum. Agora
+`excecao_enquadramento_st_produto.cnpj_fornecedor` (migração 0034; `""` =
+qualquer fornecedor, todo o legado virou genérico) e a busca prefere o CNPJ
+exato, caindo no genérico só na ausência de regra do fornecedor. O motor JÁ
+passava `cnpj_emitente` ao portão (`engine.py:87`) — só o repositório ignorava;
+o índice normaliza o documento na CONSTRUÇÃO, senão cadastro formatado não casa
+com o CNPJ limpo do XML. `fonte_regime` também recebe o CNPJ (antes dizia
+"EXCECAO_ITEM" para nota de fornecedor sem exceção). Envio em lote em
+`api/excecoes_bulk.py`: export/import CSV (`cnpj_empresa` identifica a empresa —
+ninguém digita UUID) e **`/candidatos`**, que devolve no MESMO layout os itens
+das notas já auditadas que o motor tratou como ST, agrupados por
+(fornecedor, código) e ordenados por valor, com `tributado_icms` VAZIO — o
+importador IGNORA linha em branco, então nada vira exceção por descuido (uma
+exceção errada tira imposto devido). Import reaudita as notas dos pares tocados
+(`?reprocessar=false` desliga). `shared/bulk_csv.py` ganhou `LinhaIgnorada`,
+`chave_vigencia`, `exportar_valor` e `filtros` — retrocompatível com as 5
+matrizes. `excecoes_bulk_router` é registrado ANTES do `matrizes_bulk_router`
+em `main.py`, senão `/matrizes/{tipo}/export` engole a rota.
+
 Automação das matrizes (proposta em docs/proposta_automacao_matrizes_st.md):
 Fases 1–5 entregues — crawler CONFAZ NCM×CEST (7 UFs: MG,PR,SP,DF,RS,RJ,GO;
 vigência-piso 2026-06-01) propõe na FILA de revisão (aba Revisão, nada entra
@@ -155,8 +177,8 @@ propostas UF→MG escopadas por NCM nos dados reais, base legal no estilo
 "Protocolo ICMS 103/12 — Anexo VII, âmbito 2.1"; CHAVE_VIGENCIA do
 protocolo agora inclui ncm — vários escopos por acordo; FCP de MG segue
 manual, fonte própria Lei 6.763/75 art. 12-A). Paginação em
-todas as listas (15–50/página; componente Paginacao). Migrações até 0033.
-Suite: 307 passed, 4 skipped. Deploys de 04-06/08 AGUARDANDO o João
+todas as listas (15–50/página; componente Paginacao). Migrações até 0034.
+Suite: 332 passed, 4 skipped. Deploys de 04-06/08 AGUARDANDO o João
 (sem acesso ao servidor no momento) — um git pull + build + compose aplica
 tudo, migrações rodam sozinhas. Falta da proposta: Fase 6 (pauta/PMPF — com
 MG fora do PMPF, relevância caiu; avaliar por UF).
@@ -175,6 +197,14 @@ MG fora do PMPF, relevância caiu; avaliar por UF).
   Saúde para "linhas com UF fora do padrão" (o legado gravado por texto
   livre continua no banco — a leitura da API é leniente de propósito para
   o curador conseguir achar e corrigir pela tela).
+- Dívidas conhecidas da Exceção do Item (nenhuma é regressão): o
+  `ExcecoesItemPanel` de `MatrizesFiscais.jsx` é RESÍDUO — exportado e
+  importado por ninguém, sobra de antes de a Exceção virar módulo próprio
+  (`/excecao-item`); remover em commit separado. Duas exceções da mesma
+  chave com vigências SOBREPOSTAS resolvem por "última ganha", sem
+  desempate (a UNIQUE só barra a mesma data de início) — é anterior a
+  06/08. `ReprocessService.reprocessar_produto` reaudita por código sem
+  olhar o fornecedor: abrangente demais, nunca de menos.
 - **MVA aprendida das notas** (proposta em 06/08, não aprovada): juntar o
   `pMVAST` que os fornecedores já mandam, agrupar por NCM/CEST/origem→destino
   e propor na fila quando vários convergirem, com a contagem de notas que

@@ -104,8 +104,12 @@ class StAuditEngine:
                         return self._nao_auditavel(
                             item, ErroST.ENQUADRAMENTO_NAO_CADASTRADO, observacao=detalhe
                         )
+                    # O cProd sozinho mentiria aqui: com a chave composta, a
+                    # exceção só é do item se for do MESMO fornecedor.
                     fonte = getattr(self.enquadramento_repo, "fonte_regime", None)
-                    if fonte is not None and fonte(item.codigo_produto) == "EXCECAO_ITEM":
+                    if fonte is not None and fonte(
+                        item.codigo_produto, item.cnpj_emitente
+                    ) == "EXCECAO_ITEM":
                         return self._nao_auditavel(
                             item,
                             "Tributado ICMS pela Exceção do Item da empresa "

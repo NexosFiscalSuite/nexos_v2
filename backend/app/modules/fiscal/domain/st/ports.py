@@ -75,7 +75,26 @@ class AliquotaRepository(Protocol):
 
 
 class EnquadramentoRepository(Protocol):
-    """MATRIZ_NCM_Enquadramento_ST — portão ST / TN / ST_ENTRADA / DIFAL."""
+    """MATRIZ_NCM_Enquadramento_ST — portão ST / TN / ST_ENTRADA / DIFAL.
+
+    A Exceção do Item da empresa (quando a implementação a suporta) é
+    identificada pelo PAR `codigo_produto` + `cnpj_emitente`: o cProd é o
+    código do FORNECEDOR, e fornecedores diferentes reaproveitam o mesmo
+    código para produtos distintos. `cnpj_emitente` vazio (ou sem regra do
+    fornecedor) cai na exceção genérica, cadastrada para qualquer fornecedor.
+
+    Métodos OPCIONAIS que o motor consulta por `getattr` (implemente para ter
+    diagnóstico melhor; a ausência só perde texto, nunca muda o cálculo):
+
+      - ``explicar_tn(ncm, cest, uf_dest, codigo_produto="", cnpj_emitente="")
+        -> str | None`` — por que o item caiu em TN. `None` = TN por decisão de
+        cadastro (legítimo, fora do motor); string = falta/conflito de cadastro,
+        que vira NAO_AUDITAVEL acionável.
+      - ``fonte_regime(codigo_produto="", cnpj_emitente="") -> str`` — de onde
+        veio a decisão: ``"EXCECAO_ITEM"`` (regra da empresa PARA AQUELE
+        fornecedor) ou ``"MATRIZ"``. Sem o CNPJ a resposta mentiria, marcando
+        como exceção o item homônimo de outro fornecedor.
+    """
 
     def regime(
         self, ncm: str, cest: str, uf_orig: str, uf_dest: str, data: date,

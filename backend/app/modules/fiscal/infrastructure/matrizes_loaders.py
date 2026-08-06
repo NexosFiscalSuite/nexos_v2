@@ -103,23 +103,59 @@ class _MvaSnapshot:
 
 @dataclass(frozen=True, slots=True)
 class _EnquadramentoSnapshot:
-    dados: dict[tuple[str, str, str], Regime]    # (ncm, cest, uf) -> regime
-    excecoes: dict[str, Regime] = field(default_factory=dict)  # cProd -> regime
+    """Portão NCM×CEST×UF + as Exceções do Item da empresa.
 
-    def _excecao(self, codigo_produto: str) -> Regime | None:
+    A exceção é chaveada por (CNPJ do fornecedor, cProd) porque o código do
+    produto é do FORNECEDOR: dois fornecedores usam códigos diferentes para o
+    mesmo produto e — pior — o MESMO código para produtos distintos. Chaveada
+    só pelo código, a exceção do fornecedor A desligava o ST do item homônimo
+    do fornecedor B (imposto fora da conta sem ninguém ver).
+
+    Precedência igual à da UF de origem na MVA: o CNPJ EXATO vence e o genérico
+    `""` (vale para qualquer fornecedor, valor do legado migrado) só responde
+    quando não há regra do fornecedor. Uma regra genérica nunca sequestra a
+    regra específica.
+    """
+
+    dados: dict[tuple[str, str, str], Regime]    # (ncm, cest, uf) -> regime
+    # (cnpj_fornecedor, cProd) -> regime; cnpj "" = qualquer fornecedor
+    excecoes: dict[tuple[str, str], Regime] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        # Normaliza a chave na CONSTRUÇÃO (e não só na busca) para que o
+        # casamento independa de quem montou o snapshot: cadastro formatado
+        # ("11.111.111/0001-11") tem de bater com o CNPJ limpo do XML, e o
+        # cProd é comparado sem espaços e em caixa alta.
+        normalizado = {
+            (only_digits(cnpj), (codigo or "").strip().upper()): regime
+            for (cnpj, codigo), regime in self.excecoes.items()
+        }
+        if normalizado != self.excecoes:
+            object.__setattr__(self, "excecoes", normalizado)
+
+    def _excecao(self, codigo_produto: str, cnpj_emitente: str = "") -> Regime | None:
         codigo = (codigo_produto or "").strip().upper()
         if not codigo:
             return None
-        return self.excecoes.get(codigo)
+        # Normaliza dos DOIS lados: o XML traz o documento com pontuação em
+        # alguns casos e o cadastro pode ter sido salvo formatado.
+        cnpj = only_digits(cnpj_emitente)
+        candidatos = ((cnpj, codigo), ("", codigo)) if cnpj else (("", codigo),)
+        for chave in candidatos:
+            regime = self.excecoes.get(chave)
+            if regime is not None:
+                return regime
+        return None
 
-    def fonte_regime(self, codigo_produto: str) -> str:
-        return "EXCECAO_ITEM" if self._excecao(codigo_produto) is not None else "MATRIZ"
+    def fonte_regime(self, codigo_produto: str, cnpj_emitente: str = "") -> str:
+        excecao = self._excecao(codigo_produto, cnpj_emitente)
+        return "EXCECAO_ITEM" if excecao is not None else "MATRIZ"
 
     def regime(
         self, ncm: str, cest: str, uf_orig: str, uf_dest: str, data: date,
         codigo_produto: str = "", cnpj_emitente: str = "",
     ) -> Regime:
-        excecao = self._excecao(codigo_produto)
+        excecao = self._excecao(codigo_produto, cnpj_emitente)
         if excecao is not None:
             return excecao
         cest_l, uf = only_digits(cest), uf_dest.upper()
@@ -144,7 +180,7 @@ class _EnquadramentoSnapshot:
         """Por que o item caiu em TN? None = TN explícito por cadastro (legítimo,
         fora do motor por decisão). String = falta/conflito de cadastro — vira
         NAO_AUDITAVEL acionável (com código de erro, reprocessável)."""
-        if self._excecao(codigo_produto) == Regime.TN:
+        if self._excecao(codigo_produto, cnpj_emitente) == Regime.TN:
             return None
         cest_l, uf = only_digits(cest), uf_dest.upper()
         candidatos = _candidatos_ncm(ncm)
@@ -288,7 +324,7 @@ class MatrizesLoader:
             data,
         )
         rows = (await self.session.execute(stmt)).scalars().all()
-        excecoes: dict[str, Regime] = {}
+        excecoes: dict[tuple[str, str], Regime] = {}
         codigos = {
             (it.codigo_produto or "").strip().upper()
             for it in (itens or []) if (it.codigo_produto or "").strip()
@@ -305,8 +341,13 @@ class MatrizesLoader:
                 ),
             )
             exc_rows = (await self.session.execute(stmt_exc)).scalars().all()
+            # Chave composta (fornecedor, código): sem o CNPJ a regra de um
+            # fornecedor vazaria para o item homônimo de outro. O CNPJ é
+            # normalizado aqui porque o cadastro pode ter vindo formatado —
+            # o snapshot compara sempre só dígitos.
             excecoes = {
-                r.codigo_produto: (Regime.TN if r.tributado_icms else Regime.ST)
+                (only_digits(r.cnpj_fornecedor), r.codigo_produto.strip().upper()):
+                    (Regime.TN if r.tributado_icms else Regime.ST)
                 for r in exc_rows
             }
         return _EnquadramentoSnapshot(

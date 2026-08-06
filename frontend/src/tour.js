@@ -151,13 +151,22 @@ const PASSOS = [
     + 'Agora ela também aparece como um módulo próprio em <b>Cadastros</b>. A decisão é feita pelo '
     + '<b>código do item dentro de cada empresa</b> e prevalece sobre o enquadramento geral.'),
   info('[data-tour="matrizes-painel-excecoes"]', 'Uma decisão específica e rastreável 🔎',
-    'O exemplo mostra o item <b>EX-1</b> como Tributado ICMS. A exceção vale somente para a Empresa Exemplo e durante '
-    + 'a vigência cadastrada — produtos iguais de outras empresas continuam seguindo suas próprias regras. '
-    + 'Ao criar, editar ou remover, as notas existentes daquele código são <b>reauditadas automaticamente</b>.'),
+    'Repare nas duas linhas do exemplo: o <b>mesmo código EX-1</b> aparece duas vezes, uma para cada fornecedor — '
+    + 'e cada uma com um tratamento. O código do item é <b>do fornecedor</b>, então dois fornecedores podem usar o '
+    + 'mesmo número para produtos diferentes. Amarrando a exceção ao fornecedor, a decisão não escapa para o produto errado. '
+    + 'Deixando o fornecedor em branco, ela vale para <b>qualquer</b> um. Ao criar, editar ou remover, as notas daquele '
+    + 'código são <b>reauditadas automaticamente</b>.'),
+  info('[data-tour="excecao-item-lote"]', 'Resolver muitos itens de uma vez 📄',
+    'Cadastrar um a um não escala. Em <b>Baixar itens para revisar</b> sai uma planilha já preenchida com os produtos '
+    + 'que o cálculo tratou como ICMS-ST na competência, agrupados por fornecedor e código e ordenados pelo valor. '
+    + 'Você escreve <b>SIM</b> na coluna <b>tributado_icms</b> só nos que são tributados normalmente e devolve o arquivo '
+    + 'em <b>Importar planilha</b>. <b>Linha em branco é ignorada</b> — nada muda sem a sua marcação.'),
   pratico('[data-tour="matrizes-excecao-nova"]', 'Conheça o cadastro da exceção ➕',
     'Abra o formulário para ver quais informações definem a decisão fiscal do produto.'),
   info('[data-tour="matrizes-excecao-modal"]', 'Como preencher a Exceção do Item 📝',
-    '<b>Empresa + código do item</b> identificam o produto sem depender apenas do NCM.<br/>'
+    '<b>Fornecedor</b> diz de quem é a regra: em “Qualquer fornecedor” vale para todas as notas; escolhendo um, vale só '
+    + 'para as dele. Dá para digitar um CNPJ que ainda não está no cadastro.<br/>'
+    + '<b>Código do item</b> é o código que vem na nota, do jeito que o fornecedor escreve.<br/>'
     + '<b>Início e fim</b> controlam a vigência histórica.<br/>'
     + '<b>Tributado ICMS marcado</b> = tributação normal · <b>desmarcado</b> = ICMS-ST.<br/>'
     + 'A <b>Lei ICMS</b> é opcional e guarda o fundamento da decisão. Durante o tour, salvar permanece bloqueado.'),

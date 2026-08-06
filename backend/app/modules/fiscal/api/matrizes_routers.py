@@ -91,6 +91,12 @@ async def listar_excecoes_produto(
     empresa_id: UUID | None = Query(default=None),
     codigo: str | None = Query(default=None),
     ncm: str | None = Query(default=None),
+    cnpj_fornecedor: str | None = Query(
+        default=None,
+        description="Só as regras deste fornecedor (com ou sem pontuação). "
+                    "Sem o filtro a lista traz também as regras genéricas, "
+                    "as que valem para qualquer fornecedor.",
+    ),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=100),
     claims: TokenClaims = Depends(get_current_claims),
@@ -105,6 +111,10 @@ async def listar_excecoes_produto(
         )
     if ncm:
         stmt = stmt.where(ExcecaoEnquadramentoStProduto.ncm.like(f"{only_digits(ncm)}%"))
+    if cnpj_fornecedor is not None:
+        stmt = stmt.where(
+            ExcecaoEnquadramentoStProduto.cnpj_fornecedor == only_digits(cnpj_fornecedor)
+        )
     total = await session.scalar(
         select(func.count()).select_from(stmt.order_by(None).subquery())
     ) or 0
@@ -112,6 +122,9 @@ async def listar_excecoes_produto(
         stmt.order_by(
             ExcecaoEnquadramentoStProduto.empresa_id,
             ExcecaoEnquadramentoStProduto.codigo_produto,
+            # O mesmo código pode ter uma regra por fornecedor: elas ficam
+            # lado a lado na tela, a genérica ("") primeiro.
+            ExcecaoEnquadramentoStProduto.cnpj_fornecedor,
         ).offset((page - 1) * page_size).limit(page_size)
     )).scalars().all()
     return Pagina(items=list(rows), total=total, page=page, page_size=page_size)
@@ -125,6 +138,10 @@ async def _garantir_excecao_unica(
     fim = dados["data_fim_vigencia"] or date.max
     stmt = select(ExcecaoEnquadramentoStProduto.id).where(
         ExcecaoEnquadramentoStProduto.empresa_id == dados["empresa_id"],
+        # O fornecedor faz PARTE da identidade da regra: o mesmo código de
+        # produto vindo de dois fornecedores são duas regras legítimas e
+        # independentes — sem isto uma acusaria a outra de conflito.
+        ExcecaoEnquadramentoStProduto.cnpj_fornecedor == dados["cnpj_fornecedor"],
         ExcecaoEnquadramentoStProduto.codigo_produto == dados["codigo_produto"],
         ExcecaoEnquadramentoStProduto.ativo.is_(True),
         ExcecaoEnquadramentoStProduto.data_inicio_vigencia <= fim,
@@ -136,9 +153,13 @@ async def _garantir_excecao_unica(
     if excluir_id:
         stmt = stmt.where(ExcecaoEnquadramentoStProduto.id != excluir_id)
     if await session.scalar(stmt):
+        alvo = (
+            f"do fornecedor {dados['cnpj_fornecedor']}"
+            if dados["cnpj_fornecedor"] else "válida para qualquer fornecedor"
+        )
         raise ConflictError(
             "Já existe uma exceção ativa para esta empresa e código de produto "
-            "com vigência sobreposta."
+            f"({alvo}) com vigência sobreposta."
         )
 
 
@@ -166,6 +187,7 @@ async def criar_excecao_produto(
         tenant_id=claims.tid, user_id=claims.sub, acao="excecao_st_produto.criar",
         entidade="excecao_st_produto", entidade_id=str(linha.id),
         detalhe={"empresa_id": str(linha.empresa_id), "codigo": linha.codigo_produto,
+                 "cnpj_fornecedor": linha.cnpj_fornecedor,
                  "tributado_icms": linha.tributado_icms, **reprocesso},
     )
     return linha
@@ -202,6 +224,7 @@ async def editar_excecao_produto(
         tenant_id=claims.tid, user_id=claims.sub, acao="excecao_st_produto.editar",
         entidade="excecao_st_produto", entidade_id=str(linha.id),
         detalhe={"empresa_id": str(linha.empresa_id), "codigo": linha.codigo_produto,
+                 "cnpj_fornecedor": linha.cnpj_fornecedor,
                  "tributado_icms": linha.tributado_icms, **reprocesso},
     )
     return linha
@@ -218,6 +241,7 @@ async def remover_excecao_produto(
         raise NotFoundError("Exceção não encontrada.")
     empresa_id = linha.empresa_id
     codigo_produto = linha.codigo_produto
+    cnpj_fornecedor = linha.cnpj_fornecedor
     await session.delete(linha)
     await session.flush()
     reprocesso = await ReprocessService(session).reprocessar_produto(
@@ -226,7 +250,8 @@ async def remover_excecao_produto(
     await AuditService(session).registrar(
         tenant_id=claims.tid, user_id=claims.sub, acao="excecao_st_produto.remover",
         entidade="excecao_st_produto", entidade_id=str(linha_id),
-        detalhe={"empresa_id": str(empresa_id), "codigo": codigo_produto, **reprocesso},
+        detalhe={"empresa_id": str(empresa_id), "codigo": codigo_produto,
+                 "cnpj_fornecedor": cnpj_fornecedor, **reprocesso},
     )
 
 

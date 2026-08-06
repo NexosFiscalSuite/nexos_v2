@@ -23,13 +23,38 @@ from app.shared.domain.vigencia import intervalos_conflitam
 _NUM_VIRGULA = re.compile(r"^\d+,\d+$")
 
 
+class LinhaIgnorada(Exception):
+    """A linha é válida, mas o usuário DEIXOU EM BRANCO a decisão que ela pede.
+
+    Não é erro (não houve engano) nem cadastro (nada entra por omissão): a linha
+    volta no resumo como "ignorada", com o motivo. Nasceu da lista de candidatos
+    a Exceção de Item, que sai com `tributado_icms` vazio de propósito — quem
+    decide se o produto é tributado é a pessoa, nunca o preenchimento default.
+    """
+
+    def __init__(self, motivo: str):
+        super().__init__(motivo)
+        self.motivo = motivo
+
+
 @dataclass(frozen=True)
 class BulkSpec:
     modelo: type
     schema: type[BaseModel]
     chave: tuple[str, ...]                                   # campos que identificam a linha
     # Como obter o dict de persistência do schema validado (default: model_dump).
+    # Pode levantar ValueError (linha recusada, vira erro relatado) ou
+    # LinhaIgnorada (linha em branco de propósito, vira "ignorada").
     normalizar: Callable[[BaseModel], dict] = field(default=lambda obj: obj.model_dump())
+    # Famílias de vigência (ADR-0002) quando o MODELO não declara CHAVE_VIGENCIA
+    # — o caso das tabelas cuja chave depende do contexto (tenant/empresa).
+    chave_vigencia: tuple[str, ...] | None = None
+    # Como renderizar cada coluna na EXPORTAÇÃO. O default lê o atributo homônimo;
+    # tabelas com coluna derivada (ex.: cnpj_empresa a partir de empresa_id) ou
+    # com booleano em português (SIM/NAO) trocam este hook.
+    exportar_valor: Callable[[object, str], object] = field(
+        default=lambda obj, coluna: getattr(obj, coluna)
+    )
 
     @property
     def colunas(self) -> list[str]:
@@ -50,15 +75,23 @@ def _resumo_erro(e: ValidationError) -> str:
     )
 
 
-async def exportar_csv(session: AsyncSession, spec: BulkSpec) -> str:
-    """CSV com cabeçalho + linhas. Tabela vazia → só o cabeçalho (= template)."""
+async def exportar_csv(session: AsyncSession, spec: BulkSpec, *, filtros=()) -> str:
+    """CSV com cabeçalho + linhas. Tabela vazia → só o cabeçalho (= template).
+
+    `filtros` são critérios SQLAlchemy opcionais (ex.: uma empresa só). O recorte
+    por tenant continua sendo do RLS — nunca de um filtro que o chamador possa
+    esquecer de passar.
+    """
     cols = spec.colunas
-    rows = (await session.execute(select(spec.modelo))).scalars().all()
+    stmt = select(spec.modelo)
+    if filtros:
+        stmt = stmt.where(*filtros)
+    rows = (await session.execute(stmt)).scalars().all()
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";", lineterminator="\n")
     w.writerow(cols)
     for r in rows:
-        w.writerow([_fmt(getattr(r, c)) for c in cols])
+        w.writerow([_fmt(spec.exportar_valor(r, c)) for c in cols])
     return buf.getvalue()
 
 
@@ -70,6 +103,7 @@ async def importar_csv(session: AsyncSession, spec: BulkSpec, conteudo: bytes) -
     leitor = csv.DictReader(io.StringIO(texto), delimiter=";")
 
     erros: list[dict] = []
+    ignoradas: list[dict] = []
     validos: list[tuple[int, dict]] = []            # (nº da linha no arquivo, dados)
     for i, linha in enumerate(leitor, start=2):     # linha 1 = cabeçalho
         bruto = {}
@@ -80,11 +114,18 @@ async def importar_csv(session: AsyncSession, spec: BulkSpec, conteudo: bytes) -
             bruto[c] = v.replace(",", ".") if _NUM_VIRGULA.match(v) else v
         try:
             validos.append((i, spec.normalizar(spec.schema(**bruto))))
+        except LinhaIgnorada as e:
+            ignoradas.append({"linha": i, "motivo": e.motivo})
         except ValidationError as e:
             erros.append({"linha": i, "erro": _resumo_erro(e)})
+        except ValueError as e:                     # recusa do `normalizar` (ADR: linha ≠ lote)
+            erros.append({"linha": i, "erro": str(e)})
 
     resumo = await _upsert(session, spec, validos, erros)
-    return {"linhas_validas": len(validos), **resumo, "erros": erros}
+    return {
+        "linhas_validas": len(validos), **resumo,
+        "ignoradas": ignoradas, "erros": erros,
+    }
 
 
 async def _upsert(
@@ -96,7 +137,9 @@ async def _upsert(
 
     # Modelos com vigência (ADR-0002) validam a não-sobreposição por família:
     # linha que conflita vira erro relatado (linha + motivo), não entra no lote.
-    chave_vig: tuple[str, ...] | None = getattr(spec.modelo, "CHAVE_VIGENCIA", None)
+    chave_vig: tuple[str, ...] | None = (
+        spec.chave_vigencia or getattr(spec.modelo, "CHAVE_VIGENCIA", None)
+    )
     familias: dict[tuple, list] = {}
     if chave_vig:
         for obj in existentes.values():

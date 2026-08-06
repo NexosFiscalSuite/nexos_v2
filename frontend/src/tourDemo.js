@@ -177,17 +177,39 @@ export function responderDemo(method, path) {
   if (path === '/empresas' || path.startsWith('/empresas?')) {
     return Promise.resolve(clonar([DEMO_EMPRESA]))
   }
+  // Fornecedores de exemplo do seletor da Exceção do Item: dois nomes fictícios
+  // que usam o MESMO código de produto — é exatamente o caso que a regra por
+  // fornecedor resolve.
+  if (path.startsWith(`/contrapartes/empresas/${DEMO_EMPRESA.id}`)) {
+    return Promise.resolve(clonar({
+      items: [
+        { id: 'tour-demo-forn-1', cnpj: '00000000000272', razao_social: 'Fornecedor Exemplo S.A.', tipo: 'fornecedor' },
+        { id: 'tour-demo-forn-2', cnpj: '00000000000353', razao_social: 'Distribuidora Exemplo Ltda', tipo: 'fornecedor' },
+      ],
+      total: 2, page: 1, page_size: 25,
+    }))
+  }
   if (path.startsWith('/matrizes/excecoes-produto')) {
     return Promise.resolve(clonar({
       items: [{
         id: 'tour-demo-excecao-1', empresa_id: DEMO_EMPRESA.id,
+        cnpj_fornecedor: '00000000000272',
         codigo_produto: 'EX-1', descricao_produto: 'Produto exemplo', ncm: '40111000',
         data_inicio_vigencia: '2026-01-01', data_fim_vigencia: null,
         tributado_icms: true,
         lei_icms: 'Fundamento legal da tributação normal (dado de exemplo)',
         ativo: true,
+      }, {
+        // Mesmo código, outro fornecedor, outro produto: continua em ICMS-ST.
+        id: 'tour-demo-excecao-2', empresa_id: DEMO_EMPRESA.id,
+        cnpj_fornecedor: '00000000000353',
+        codigo_produto: 'EX-1', descricao_produto: 'Outro produto, mesmo código', ncm: '40111000',
+        data_inicio_vigencia: '2026-01-01', data_fim_vigencia: null,
+        tributado_icms: false,
+        lei_icms: 'Produto realmente sujeito à substituição (dado de exemplo)',
+        ativo: true,
       }],
-      total: 1, page: 1, page_size: 50,
+      total: 2, page: 1, page_size: 50,
     }))
   }
 

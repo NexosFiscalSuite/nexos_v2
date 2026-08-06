@@ -6,8 +6,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, BeforeValidator, Field, field_validator
 
+from app.core.exceptions import DomainError
 from app.shared.domain.uf import CURINGA_UF, UF_NOMES, normalizar_uf
-from app.shared.domain.value_objects import only_digits
+from app.shared.domain.value_objects import DocumentoFiscal, only_digits
 
 
 # ── UF: campo controlado, nunca texto livre ─────────────────────────────────
@@ -66,8 +67,33 @@ def ufs_disponiveis() -> list[UfOpcao]:
 
 
 # ── Exceção por produto da empresa ──────────────────────────────────────────
+def _documento_ou_vazio(valor: object) -> object:
+    """CNPJ/CPF/CEI do fornecedor — vazio é válido e quer dizer "qualquer um".
+
+    O código do produto é do fornecedor: dois fornecedores usam códigos
+    diferentes para o mesmo produto e o MESMO código para produtos distintos.
+    Aqui a entrada é generosa (aceita com ou sem pontuação) e a saída é só
+    dígitos; documento com DV errado é recusado na hora — regra gravada torto é
+    regra que nunca vai ser encontrada pelo motor.
+    """
+    if not isinstance(valor, str):
+        return valor                      # deixa o pydantic reclamar do tipo
+    if not valor.strip():
+        return ""                         # "" = vale para QUALQUER fornecedor
+    try:
+        return DocumentoFiscal(valor).value
+    except DomainError as e:              # pydantic espera ValueError
+        raise ValueError(getattr(e, "message", None) or str(e)) from e
+
+
 class _ExcecaoProdutoCampos(BaseModel):
     empresa_id: UUID
+    cnpj_fornecedor: Annotated[str, BeforeValidator(_documento_ou_vazio)] = Field(
+        default="", examples=["11.444.777/0001-61", ""],
+        description="CNPJ (ou CPF do produtor rural) do FORNECEDOR que usa esse "
+                    "código de produto. Deixe em branco para a regra valer "
+                    "quando qualquer fornecedor mandar esse código.",
+    )
     codigo_produto: str = Field(..., min_length=1, max_length=60)
     descricao_produto: str | None = Field(default=None, max_length=500)
     ncm: str | None = Field(default=None, max_length=10)

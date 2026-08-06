@@ -189,6 +189,27 @@ export const api = {
   criarExcecaoItem: (data) => request('POST', '/matrizes/excecoes-produto', data),
   editarExcecaoItem: (id, data) => request('PATCH', `/matrizes/excecoes-produto/${id}`, data),
   removerExcecaoItem: (id) => request('DELETE', `/matrizes/excecoes-produto/${id}`),
+  // Envio em lote da Exceção do Item (mesmo desenho das matrizes: CSV com ";").
+  // `export` = base atual (vazia = template só com cabeçalho).
+  exportarExcecoesItem: (params = {}) => {
+    const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
+    return downloadBlob('/matrizes/excecoes-produto/export' + (q ? `?${q}` : ''),
+      { fallback: 'excecoes_item.csv' })
+  },
+  // `candidatos` = os itens das notas já importadas que o motor tratou como ST,
+  // agrupados por (fornecedor, código) e ordenados por impacto. Vem no MESMO
+  // layout do import, com "tributado_icms" VAZIO de propósito: o escritório
+  // marca SIM só nos que são tributados; linha em branco o importador ignora.
+  candidatosExcecoesItem: (params = {}) => {
+    const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
+    return downloadBlob('/matrizes/excecoes-produto/candidatos' + (q ? `?${q}` : ''),
+      { fallback: 'excecoes_item_candidatos.csv' })
+  },
+  importarExcecoesItem: (file) => {
+    const fd = new FormData()
+    fd.append('arquivo', file)
+    return request('POST', '/matrizes/excecoes-produto/import', fd, true)
+  },
 
   matrizesFcp: (params = {}) => {
     const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()

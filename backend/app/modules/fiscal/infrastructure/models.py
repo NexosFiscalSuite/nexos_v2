@@ -167,12 +167,22 @@ class ExcecaoEnquadramentoStProduto(Base):
     A matriz NCM+CEST continua global; esta tabela resolve a exceção comercial
     em que produtos diferentes compartilham o mesmo NCM. Marcado como
     `tributado_icms` = tributação normal; desmarcado = sujeito a ICMS-ST.
+
+    O código do produto (cProd) é do FORNECEDOR, não do mundo: dois fornecedores
+    usam códigos diferentes para o mesmo produto e — pior — o MESMO código para
+    produtos distintos. Sem `cnpj_fornecedor` a exceção casava só pelo código e
+    vazava de um fornecedor para outro, tributando indevidamente o item errado.
+    Vazio ("") = vale para QUALQUER fornecedor; a busca prefere o CNPJ exato e
+    só cai no genérico quando não há regra do fornecedor (mesma precedência da
+    UF de origem na MVA). Guardado como string vazia, e não NULL, porque no
+    Postgres NULLs não colidem e a UNIQUE deixaria passar duplicata.
     """
 
     __tablename__ = "excecao_enquadramento_st_produto"
     __table_args__ = (
         UniqueConstraint(
-            "tenant_id", "empresa_id", "codigo_produto", "data_inicio_vigencia",
+            "tenant_id", "empresa_id", "cnpj_fornecedor", "codigo_produto",
+            "data_inicio_vigencia",
             name="uq_excecao_st_empresa_produto_inicio",
         ),
         Index("ix_excecao_st_busca", "empresa_id", "codigo_produto"),
@@ -185,6 +195,8 @@ class ExcecaoEnquadramentoStProduto(Base):
     empresa_id: Mapped[UUID] = mapped_column(
         ForeignKey("empresas.id", ondelete="CASCADE"), index=True
     )
+    # CNPJ (14) ou CPF (11) do emitente — produtor rural também emite. "" = todos.
+    cnpj_fornecedor: Mapped[str] = mapped_column(String(14), default="", server_default="")
     codigo_produto: Mapped[str] = mapped_column(String(60))
     descricao_produto: Mapped[str | None] = mapped_column(String(500), nullable=True)
     ncm: Mapped[str | None] = mapped_column(String(8), nullable=True)
