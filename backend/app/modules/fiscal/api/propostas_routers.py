@@ -34,6 +34,10 @@ class PropostaResponse(BaseModel):
     payload: dict
     linha_atual: dict | None
     linha_atual_id: int | None
+    # Por que o robô sugere isto. Proposta de fonte oficial se explica pelo
+    # base_legal do payload; a APRENDIDA das notas não tem norma, e sem os
+    # fornecedores/notas que sustentam o número o curador aprova no escuro.
+    evidencia: dict | None
     fonte: str
     status: str
     motivo_rejeicao: str | None

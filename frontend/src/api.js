@@ -241,6 +241,17 @@ export const api = {
     return request('GET', '/matrizes/propostas' + (q ? `?${q}` : ''))
   },
   propostasResumo: () => request('GET', '/matrizes/propostas/resumo'),
+
+  // MVA aprendida das próprias notas: só MG tem fonte oficial de margem; nas
+  // demais UFs o robô junta o pMVAST que os fornecedores já declaram nos XMLs
+  // e, quando vários fornecedores independentes convergem no mesmo número,
+  // sugere. O GET é PRÉVIA (não grava nada); o POST é que cria as propostas na
+  // fila de revisão — nada entra na matriz sem curadoria.
+  previaMvaAprendida: (params = {}) => {
+    const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
+    return request('GET', '/matrizes/mva-aprendida' + (q ? `?${q}` : ''))
+  },
+  gerarMvaAprendida: (payload = {}) => request('POST', '/matrizes/mva-aprendida', payload),
   aprovarProposta: (id) => request('POST', `/matrizes/propostas/${id}/aprovar`),
   rejeitarProposta: (id, motivo) => request('POST', `/matrizes/propostas/${id}/rejeitar`, { motivo: motivo || null }),
   aprovarPropostasLote: (payload = {}) => request('POST', '/matrizes/propostas/aprovar-lote', payload),

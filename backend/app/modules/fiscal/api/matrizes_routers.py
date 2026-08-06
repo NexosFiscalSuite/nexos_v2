@@ -50,6 +50,11 @@ from app.modules.fiscal.api.matrizes_schemas import (
 )
 from app.modules.fiscal.application.cobertura_service import CoberturaService
 from app.modules.fiscal.application.matrizes_saude import saude_matrizes
+from app.modules.fiscal.application.mva_aprendida import (
+    MIN_FORNECEDORES,
+    gerar_propostas_mva_aprendida,
+    previa_mva_aprendida,
+)
 from app.modules.fiscal.application.pares_interestaduais import pares_interestaduais
 from app.modules.fiscal.application.reprocess_service import ReprocessService
 from app.modules.fiscal.infrastructure.matrizes_models import (
@@ -603,6 +608,64 @@ async def lacunas_mva_export(
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": 'attachment; filename="mva_lacunas.csv"'},
     )
+
+
+@router.get("/mva-aprendida")
+async def previa_mva_aprendida_endpoint(
+    empresa_id: UUID | None = Query(default=None, description="Limita a uma empresa"),
+    uf: str | None = Query(default=None, description="UF de destino"),
+    ano: str | None = Query(default=None, description="Competência: ano (AAAA)"),
+    mes: str | None = Query(default=None, description="Competência: mês (MM)"),
+    min_fornecedores: int = Query(
+        default=MIN_FORNECEDORES, ge=1, le=20,
+        description="Quantos fornecedores distintos precisam declarar o mesmo valor",
+    ),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    claims: TokenClaims = Depends(get_current_claims),
+    session: AsyncSession = Depends(tenant_session),
+):
+    """PRÉVIA da MVA aprendida das próprias notas — não grava nada.
+
+    Mostra o que viraria proposta na fila: os pares NCM×CEST×origem→destino em
+    que vários fornecedores INDEPENDENTES declararam a mesma margem. Só entram
+    os casos em que o `pMVAST` do XML É a MVA original por lei — operação
+    interna ou emitente do Simples —, porque no interestadual com emitente
+    normal o declarado é a MVA AJUSTADA, e cadastrá-la como original erraria a
+    margem em escala. Ordenado por impacto (valor, depois itens)."""
+    return await previa_mva_aprendida(
+        session, empresa_id=empresa_id, uf=uf, ano=ano, mes=mes,
+        min_fornecedores=min_fornecedores, page=page, page_size=page_size,
+    )
+
+
+@router.post("/mva-aprendida", status_code=status.HTTP_201_CREATED)
+async def gerar_mva_aprendida_endpoint(
+    empresa_id: UUID | None = Query(default=None, description="Limita a uma empresa"),
+    uf: str | None = Query(default=None, description="UF de destino"),
+    ano: str | None = Query(default=None, description="Competência: ano (AAAA)"),
+    mes: str | None = Query(default=None, description="Competência: mês (MM)"),
+    min_fornecedores: int = Query(default=MIN_FORNECEDORES, ge=1, le=20),
+    claims: TokenClaims = Depends(require_curador),
+    session: AsyncSession = Depends(tenant_session),
+):
+    """Manda a MVA aprendida para a FILA de revisão (aba Revisão).
+
+    Nada entra na matriz aqui: cada par vira uma proposta com a evidência
+    (quantos fornecedores, quantas notas, período e CNPJs) para o curador
+    julgar. A `base_legal` vai VAZIA de propósito — número aprendido não tem
+    norma, e é o curador quem preenche a que sai nas cartas."""
+    resumo = await gerar_propostas_mva_aprendida(
+        session, empresa_id=empresa_id, uf=uf, ano=ano, mes=mes,
+        min_fornecedores=min_fornecedores,
+    )
+    await AuditService(session).registrar(
+        tenant_id=claims.tid, user_id=claims.sub, acao="matrizes.mva_aprendida",
+        entidade="matriz_mva",
+        detalhe={"criadas": resumo["criadas"], "suprimidas": resumo["suprimidas"],
+                 "min_fornecedores": resumo["min_fornecedores"], "uf": uf},
+    )
+    return resumo
 
 
 _registrar_crud(

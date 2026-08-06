@@ -37,6 +37,30 @@ def _uf(valor: str | None) -> str:
     return CURINGA_UF if bruto == CURINGA_UF else bruto.upper()
 
 
+def _desempate_vigencia(stmt, modelo):
+    """Ordem CANÔNICA de leitura das matrizes — determinismo (ADR-0002).
+
+    Os snapshots deste arquivo montam dicionários chave→valor, então quem
+    escreve por último vence. Sem ORDER BY explícito, "por último" é a ordem
+    que o banco resolveu devolver — indefinida: a MESMA nota podia ser
+    auditada com regras diferentes em execuções diferentes.
+
+    Regra ÚNICA, aplicada a toda leitura de matriz aqui: ordena por
+    `data_inicio_vigencia` CRESCENTE e, no empate, por `id` crescente. Como o
+    dicionário é montado nessa ordem, o vencedor é a linha de vigência MAIS
+    RECENTE — a regra que começou a valer depois é a que vale — e, se duas
+    começarem no mesmo dia, a de maior `id` (a cadastrada por último).
+
+    Onde NÃO há sobreposição (o caso normal: a UNIQUE barra duas linhas com a
+    mesma data de início e `sobreposicao_existente` barra a sobreposição na
+    escrita pela API) só existe uma linha por chave e nada muda. Isto é
+    correção de determinismo, não mudança de regra de negócio — o desempate só
+    aparece para dado que entrou por outro caminho (carga antiga, import,
+    migração).
+    """
+    return stmt.order_by(modelo.data_inicio_vigencia.asc(), modelo.id.asc())
+
+
 def _candidatos_ncm(ncm: str) -> list[str]:
     """NCM do mais específico ao mais geral (8→6→4), sem duplicar."""
     n = only_digits(ncm)
@@ -304,14 +328,17 @@ class MatrizesLoader:
         # fallback por NCM) — poucas linhas por NCM, custo irrelevante.
         # A origem entra na query com o curinga junto: o snapshot é quem decide
         # a precedência (exata > "*") dentro de cada nível de NCM.
-        stmt = filtrar_vigencia(
-            select(MatrizMva).where(
-                MatrizMva.uf_destino == uf,
-                MatrizMva.uf_origem.in_({uf_orig, CURINGA_UF}),
-                MatrizMva.ncm.in_(ncms),
+        stmt = _desempate_vigencia(
+            filtrar_vigencia(
+                select(MatrizMva).where(
+                    MatrizMva.uf_destino == uf,
+                    MatrizMva.uf_origem.in_({uf_orig, CURINGA_UF}),
+                    MatrizMva.ncm.in_(ncms),
+                ),
+                MatrizMva,
+                data,
             ),
             MatrizMva,
-            data,
         )
         rows = (await self.session.execute(stmt)).scalars().all()
         return _MvaSnapshot({
@@ -327,13 +354,16 @@ class MatrizesLoader:
     ) -> _EnquadramentoSnapshot:
         # Sem filtro por CEST (mesma razão do _mva): o cadastro NCM×CEST precisa
         # ser visível mesmo quando a nota veio sem a tag CEST.
-        stmt = filtrar_vigencia(
-            select(MatrizEnquadramentoSt).where(
-                MatrizEnquadramentoSt.uf_destino == uf,
-                MatrizEnquadramentoSt.ncm.in_(ncms),
+        stmt = _desempate_vigencia(
+            filtrar_vigencia(
+                select(MatrizEnquadramentoSt).where(
+                    MatrizEnquadramentoSt.uf_destino == uf,
+                    MatrizEnquadramentoSt.ncm.in_(ncms),
+                ),
+                MatrizEnquadramentoSt,
+                data,
             ),
             MatrizEnquadramentoSt,
-            data,
         )
         rows = (await self.session.execute(stmt)).scalars().all()
         excecoes: dict[tuple[str, str], Regime] = {}
@@ -342,15 +372,21 @@ class MatrizesLoader:
             for it in (itens or []) if (it.codigo_produto or "").strip()
         }
         if empresa_id is not None and codigos:
-            stmt_exc = select(ExcecaoEnquadramentoStProduto).where(
-                ExcecaoEnquadramentoStProduto.empresa_id == empresa_id,
-                ExcecaoEnquadramentoStProduto.codigo_produto.in_(codigos),
-                ExcecaoEnquadramentoStProduto.ativo.is_(True),
-                ExcecaoEnquadramentoStProduto.data_inicio_vigencia <= data,
-                (
-                    ExcecaoEnquadramentoStProduto.data_fim_vigencia.is_(None)
-                    | (ExcecaoEnquadramentoStProduto.data_fim_vigencia >= data)
+            # Mesmo desempate das matrizes: a exceção do produto também vira
+            # dicionário (fornecedor, cProd) → regime, então a leitura precisa
+            # de ordem explícita para a vigência mais recente vencer sempre.
+            stmt_exc = _desempate_vigencia(
+                select(ExcecaoEnquadramentoStProduto).where(
+                    ExcecaoEnquadramentoStProduto.empresa_id == empresa_id,
+                    ExcecaoEnquadramentoStProduto.codigo_produto.in_(codigos),
+                    ExcecaoEnquadramentoStProduto.ativo.is_(True),
+                    ExcecaoEnquadramentoStProduto.data_inicio_vigencia <= data,
+                    (
+                        ExcecaoEnquadramentoStProduto.data_fim_vigencia.is_(None)
+                        | (ExcecaoEnquadramentoStProduto.data_fim_vigencia >= data)
+                    ),
                 ),
+                ExcecaoEnquadramentoStProduto,
             )
             exc_rows = (await self.session.execute(stmt_exc)).scalars().all()
             # Chave composta (fornecedor, código): sem o CNPJ a regra de um
@@ -368,13 +404,16 @@ class MatrizesLoader:
         )
 
     async def _fcp(self, uf, ncms, data) -> _FcpSnapshot:
-        stmt = filtrar_vigencia(
-            select(MatrizFcp).where(
-                MatrizFcp.uf_destino == uf,
-                MatrizFcp.ncm.in_(set(ncms) | {"GERAL"}),
+        stmt = _desempate_vigencia(
+            filtrar_vigencia(
+                select(MatrizFcp).where(
+                    MatrizFcp.uf_destino == uf,
+                    MatrizFcp.ncm.in_(set(ncms) | {"GERAL"}),
+                ),
+                MatrizFcp,
+                data,
             ),
             MatrizFcp,
-            data,
         )
         rows = (await self.session.execute(stmt)).scalars().all()
         return _FcpSnapshot({(r.uf_destino, r.ncm): r.aliq_fcp_st for r in rows})
@@ -392,6 +431,9 @@ class MatrizesLoader:
         curado = bool(await self.session.scalar(
             select(func.count()).select_from(MatrizProtocoloSt).where(*par)
         ))
+        # Único snapshot que NÃO monta dicionário chave→valor: as linhas viram
+        # um `frozenset` de NCM, uma união — o resultado independe da ordem de
+        # leitura, então o desempate de vigência não tem o que decidir aqui.
         stmt = filtrar_vigencia(
             select(MatrizProtocoloSt).where(*par, MatrizProtocoloSt.situacao == "ATIVO"),
             MatrizProtocoloSt,
@@ -409,7 +451,7 @@ class MatrizesLoader:
         # Traz a regra do estado ('GERAL') JUNTO com as linhas dos NCM da nota:
         # o snapshot resolve a precedência 8→6→4→GERAL sem uma segunda ida ao
         # banco (e sem N+1 por item).
-        stmt = (
+        stmt = _desempate_vigencia(
             filtrar_vigencia(
                 select(MatrizAliquota).where(
                     MatrizAliquota.uf_destino == uf,
@@ -417,11 +459,8 @@ class MatrizesLoader:
                 ),
                 MatrizAliquota,
                 data,
-            )
-            # Desempate (ADR-0002): se houver sobreposição indevida na MESMA
-            # chave (uf, ncm), vence a vigência mais recente — como o dicionário
-            # é montado em ordem crescente, a última escrita é a mais nova.
-            .order_by(MatrizAliquota.data_inicio_vigencia.asc())
+            ),
+            MatrizAliquota,
         )
         rows = (await self.session.execute(stmt)).scalars().all()
         return _AliquotaSnapshot({

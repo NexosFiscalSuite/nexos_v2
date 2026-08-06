@@ -138,6 +138,38 @@ Protocolos e estava sendo descartado); o hash de proposta mudou, então rejeiç�
 antigas de MVA voltam uma vez à fila. Cobertura real: **só MG tem MVA de fonte
 oficial automatizada** — ver docs/estado_base_matrizes_st.md.
 
+**MVA aprendida das notas + dívidas fechadas (06/08).** Só MG tem MVA de fonte
+oficial; nas outras 6 UFs a margem é digitada à mão, e cadastro manual empurra
+o usuário de volta ao app oficial. `application/mva_aprendida.py` agrupa o
+`pMVAST` que os fornecedores já declaram e propõe na FILA (nada entra sem
+curadoria): `GET /matrizes/mva-aprendida` é PRÉVIA (não grava, devolve o funil
+completo), `POST` gera as propostas. **A armadilha que define o desenho:** em
+interestadual com emitente do regime normal o `pMVAST` declarado é a MVA
+AJUSTADA, não a original que a matriz guarda — então o v1 aprende SÓ de notas
+de ENTRADA onde o declarado é a original por lei: `uf_emit == uf_dest` (ajuste
+impossível) ou emitente do Simples (CRT 1/4, Conv. 142/2018). Inverter o ajuste
+é fase 2 e exige consenso maior. Travas: ≥3 fornecedores DISTINTOS (volume de
+notas do mesmo fornecedor não conta), valores conflitantes com apoio parecido →
+descarta em vez de escolher, nunca compete com linha vigente, empate → menor
+margem (erra para o lado de cobrar menos). `payload["base_legal"]` sai VAZIO —
+dado aprendido não tem norma e esse campo é impresso nas cartas; a coluna nova
+`matriz_proposta.evidencia` (migração 0036) carrega fornecedores/notas/
+distribuição/período para o curador julgar. `fonte = "notas-do-escritorio"`,
+separada dos crawlers de propósito: `aprovar_lote` filtra por fonte e a carga
+inicial varreria as aprendidas em massa. RODAR A PRÉVIA EM PRODUÇÃO antes de
+expor o botão — é ela que mede a cobertura real do método.
+Dívidas fechadas junto: aba Saúde ganhou o radar de **UF fora do padrão**
+(linha com sigla torta é invisível para o motor — a regra aparece na tela e
+nunca é aplicada; traz `sugestao` quando dá para deduzir, e NÃO acusa o `"*"`
+da MVA); **desempate de vigência agora é explícito** em todos os snapshots
+(`_desempate_vigencia`: vence a `data_inicio_vigencia` mais recente, id
+desempata) — antes dependia da ordem que o banco devolvia, e 3 de 6 testes
+passavam por acidente quando o SQLite varria pelo índice UNIQUE; e o
+`ExcecoesItemPanel` resíduo foi REMOVIDO (a tela viva é `/excecao-item`).
+Nota de realidade: as colunas de UF são `VARCHAR(2)` desde a 0009, então
+"Minas Gerais" nunca esteve gravado — o radar acha caixa errada, sigla
+inexistente e vazio, e o contador tende a ser pequeno.
+
 **Alíquota por NCM + redução de base pela matriz (06/08).** Terceiro furo da
 mesma família da MVA, e o último grande de assertividade de VALOR: a alíquota
 interna era só por UF (produto de cesta básica calculava a 18% em MG — ST a
@@ -202,8 +234,8 @@ propostas UF→MG escopadas por NCM nos dados reais, base legal no estilo
 "Protocolo ICMS 103/12 — Anexo VII, âmbito 2.1"; CHAVE_VIGENCIA do
 protocolo agora inclui ncm — vários escopos por acordo; FCP de MG segue
 manual, fonte própria Lei 6.763/75 art. 12-A). Paginação em
-todas as listas (15–50/página; componente Paginacao). Migrações até 0035.
-Suite: 362 passed, 4 skipped. Deploys de 04-06/08 AGUARDANDO o João
+todas as listas (15–50/página; componente Paginacao). Migrações até 0036.
+Suite: 387 passed, 4 skipped. Deploys de 04-06/08 AGUARDANDO o João
 (sem acesso ao servidor no momento) — um git pull + build + compose aplica
 tudo, migrações rodam sozinhas. Falta da proposta: Fase 6 (pauta/PMPF — com
 MG fora do PMPF, relevância caiu; avaliar por UF).
@@ -218,18 +250,11 @@ MG fora do PMPF, relevância caiu; avaliar por UF).
 - Ofertas feitas e não aprovadas: aceitar .xlsx direto no import de
   empresas; script de reclassificação de notas antigas (fluxo tpNF) com
   reauditoria; backfill de `mod_frete` para notas antigas; estender o
-  diagnóstico automático do balão a outros códigos de erro; item na aba
-  Saúde para "linhas com UF fora do padrão" (o legado gravado por texto
-  livre continua no banco — a leitura da API é leniente de propósito para
-  o curador conseguir achar e corrigir pela tela).
-- Dívidas conhecidas da Exceção do Item (nenhuma é regressão): o
-  `ExcecoesItemPanel` de `MatrizesFiscais.jsx` é RESÍDUO — exportado e
-  importado por ninguém, sobra de antes de a Exceção virar módulo próprio
-  (`/excecao-item`); remover em commit separado. Duas exceções da mesma
-  chave com vigências SOBREPOSTAS resolvem por "última ganha", sem
-  desempate (a UNIQUE só barra a mesma data de início) — é anterior a
-  06/08. `ReprocessService.reprocessar_produto` reaudita por código sem
-  olhar o fornecedor: abrangente demais, nunca de menos.
+  diagnóstico automático do balão a outros códigos de erro.
+- `ReprocessService.reprocessar_produto` reaudita por código de produto sem
+  olhar o fornecedor: abrangente demais, nunca de menos — ajuste futuro.
+  (O resíduo `ExcecoesItemPanel` e o desempate de vigência foram resolvidos
+  em 06/08; o radar de UF fora do padrão está na aba Saúde.)
 - **Extrator de alíquota reduzida** (avaliado em 06/08, não aprovado): dá para
   automatizar PARCIALMENTE. Melhor candidato é o Anexo IV do RICMS/MG (mesma
   infra latin-1 do Anexo VII), restrito aos itens que citam NCM — a maioria

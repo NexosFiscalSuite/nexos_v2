@@ -75,3 +75,107 @@ async def test_frescor_por_matriz_e_resumo_geral(sessao):
     assert geral["pct_verificado_90d"] == 50       # 1 fresca de 2 vigentes
     assert geral["propostas_pendentes"] == 1
     assert geral["ultima_atualizacao"] is not None
+
+    # Base toda com sigla canônica: o radar de UF não acusa ninguém.
+    assert s["ufs_invalidas"]["total"] == 0
+    assert s["ufs_invalidas"]["amostra"] == []
+    assert all(m["ufs_invalidas"] == 0 for m in s["matrizes"])
+
+
+@pytest.mark.asyncio
+async def test_uf_fora_do_padrao_e_sugestao_de_correcao(sessao):
+    """Linha antiga com UF em texto livre é INVISÍVEL para o motor (a busca
+    compara com a sigla de 2 letras do XML). O radar tem de achá-la e, quando
+    dá para resolver sozinho, sugerir a sigla.
+
+    No Postgres as colunas são VARCHAR(2), então o legado real é caixa errada
+    ("mg") e sigla inexistente ("XX"); o nome por extenso está aqui como
+    defesa (outro backend, coluna alargada, carga fora do ORM) — a sugestão
+    sai igual porque quem resolve é o `normalizar_uf`.
+    """
+    sessao.add_all([
+        MatrizEnquadramentoSt(          # nome por extenso → sugere MG
+            uf_destino="Minas Gerais", ncm="40111000", cest="0100500", regime="ST",
+            data_inicio_vigencia=date(2026, 6, 1),
+        ),
+        MatrizFcp(                      # minúscula → sugere SP
+            uf_destino="sp", ncm="GERAL", aliq_fcp_st=Decimal("2.00"),
+            data_inicio_vigencia=date(2026, 6, 1),
+        ),
+        MatrizProtocoloSt(              # lixo → sem sugestão possível
+            uf_origem="XX", uf_destino="MG", numero_acordo="Protocolo ICMS 41/2008",
+            situacao="ATIVO", data_inicio_vigencia=date(2026, 6, 1),
+        ),
+        MatrizMva(                      # os DOIS campos tortos na MESMA linha
+            ncm="40111000", cest="0100500", uf_origem="rj", uf_destino="mg",
+            mva_original=Decimal("40.00"), data_inicio_vigencia=date(2026, 6, 1),
+        ),
+    ])
+    await sessao.flush()
+
+    ufs = (await saude_matrizes(sessao))["ufs_invalidas"]
+
+    # Contagem é de LINHAS (a MVA torta dos dois lados conta uma vez).
+    assert ufs["por_matriz"] == {
+        "enquadramento": 1, "mva": 1, "protocolos": 1, "aliquotas": 0, "fcp": 1,
+    }
+    assert ufs["total"] == 4
+
+    por_chave = {(i["matriz"], i["campo"]): i for i in ufs["amostra"]}
+    assert por_chave[("enquadramento", "uf_destino")]["valor"] == "Minas Gerais"
+    assert por_chave[("enquadramento", "uf_destino")]["sugestao"] == "MG"
+    assert por_chave[("fcp", "uf_destino")]["sugestao"] == "SP"
+    assert por_chave[("protocolos", "uf_origem")]["sugestao"] is None
+    # A amostra é por CAMPO: a linha de MVA aparece duas vezes, com o mesmo id.
+    assert por_chave[("mva", "uf_origem")]["sugestao"] == "RJ"
+    assert por_chave[("mva", "uf_destino")]["sugestao"] == "MG"
+    assert (por_chave[("mva", "uf_origem")]["id"]
+            == por_chave[("mva", "uf_destino")]["id"])
+
+
+@pytest.mark.asyncio
+async def test_curinga_da_mva_e_ncm_geral_nao_sao_acusados(sessao):
+    """Falso positivo aqui destrói a confiança no radar: `uf_origem = "*"` é a
+    regra legítima de "qualquer origem" e `ncm = 'GERAL'` (FCP/Alíquota) nem UF
+    é — nenhum dos dois pode virar acusação. Já o "*" na ORIGEM do protocolo é
+    inválido: lá a busca compara a origem por igualdade."""
+    sessao.add_all([
+        MatrizMva(
+            ncm="40111000", cest="0100500", uf_origem="*", uf_destino="MG",
+            mva_original=Decimal("40.00"), data_inicio_vigencia=date(2026, 6, 1),
+        ),
+        MatrizFcp(
+            uf_destino="MG", ncm="GERAL", aliq_fcp_st=Decimal("2.00"),
+            data_inicio_vigencia=date(2026, 6, 1),
+        ),
+        MatrizAliquota(
+            uf_destino="MG", ncm="GERAL", aliq_modal=Decimal("18.00"),
+            data_inicio_vigencia=date(2026, 6, 1),
+        ),
+        MatrizProtocoloSt(
+            uf_origem="*", uf_destino="MG", numero_acordo="Protocolo ICMS 41/2008",
+            situacao="ATIVO", data_inicio_vigencia=date(2026, 6, 1),
+        ),
+    ])
+    await sessao.flush()
+
+    ufs = (await saude_matrizes(sessao))["ufs_invalidas"]
+
+    assert ufs["por_matriz"]["mva"] == 0
+    assert ufs["por_matriz"]["fcp"] == 0
+    assert ufs["por_matriz"]["aliquotas"] == 0
+    assert ufs["por_matriz"]["protocolos"] == 1
+    assert [i["campo"] for i in ufs["amostra"]] == ["uf_origem"]
+
+
+@pytest.mark.asyncio
+async def test_linha_encerrada_com_uf_torta_fica_fora_do_radar(sessao):
+    """Regra encerrada não é aplicada por ninguém — acusá-la só faria barulho."""
+    sessao.add(MatrizEnquadramentoSt(
+        uf_destino="Minas Gerais", ncm="40111000", cest="0100500", regime="ST",
+        data_inicio_vigencia=date(2020, 1, 1), data_fim_vigencia=date(2021, 1, 1),
+    ))
+    await sessao.flush()
+
+    ufs = (await saude_matrizes(sessao))["ufs_invalidas"]
+    assert ufs["total"] == 0 and ufs["amostra"] == []

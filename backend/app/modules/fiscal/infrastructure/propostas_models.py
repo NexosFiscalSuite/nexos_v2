@@ -72,6 +72,12 @@ class MatrizProposta(Base):
         ForeignKey("fonte_snapshot.id", ondelete="SET NULL"), nullable=True
     )
     hash_proposta: Mapped[str] = mapped_column(String(64), index=True)
+    # Por que o robô está sugerindo ISTO. Fonte oficial se explica sozinha (a
+    # norma está no base_legal), mas proposta APRENDIDA das próprias notas não
+    # tem norma nenhuma: sem a contagem de fornecedores e de notas que
+    # sustentam o valor, o curador aprovaria um número no escuro. Livre por
+    # tipo de proposta; None nas que vêm de crawler.
+    evidencia: Mapped[dict | None] = mapped_column(_JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(10), default=STATUS_PENDENTE)
     motivo_rejeicao: Mapped[str | None] = mapped_column(String(300), nullable=True)
     revisado_por: Mapped[str | None] = mapped_column(String(160), nullable=True)

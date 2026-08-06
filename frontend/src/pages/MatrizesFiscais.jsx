@@ -4,9 +4,6 @@ import Dropdown from '../components/Dropdown'
 import ErroCarga from '../components/ErroCarga'
 import ResumoImportModal from '../components/ResumoImportModal'
 import SelectUf from '../components/SelectUf'
-import SeletorFornecedor, {
-  AjudaFornecedor, formatarDoc, nomeDoFornecedor, useNomesFornecedores,
-} from '../components/SeletorFornecedor'
 import { api, saveBlob } from '../api'
 import { useToast, ToastContainer } from '../hooks/useToast'
 import { UF_QUALQUER } from '../constants/ufs'
@@ -299,8 +296,99 @@ const ABAS = [
   },
 ]
 
+// ── Saúde: linhas com UF fora do padrão ─────────────────────────────────────
+// Os campos de UF eram digitados à mão até a virada para lista fechada. O que
+// ficou gravado antes disso continua no banco: "Minas Gerais", "mg", "XX". O
+// motor procura a regra pela sigla de duas letras que vem no XML, então uma
+// linha dessas aparece na tela, parece cadastrada e NUNCA é aplicada.
+const ROTULO_CAMPO_UF = { uf_origem: 'UF de origem', uf_destino: 'UF de destino' }
+const comoEstaGravado = (v) => (v == null || v === '' ? 'em branco' : `“${v}”`)
+
+const AJUDA_UF_FORA_PADRAO = {
+  titulo: 'Por que uma UF escrita “errada” apaga a regra',
+  texto: (
+    <>
+      Na nota fiscal o estado vem sempre como sigla de duas letras — MG, SP, RJ.
+      É por ela que o motor procura a regra na matriz. Enquanto este campo era
+      digitado à mão, dava para gravar “Minas Gerais”, “mg” ou até “XX”, e essas
+      linhas ficaram no banco.
+      <br /><br />
+      O problema não é estético: a linha continua aparecendo na tela, com cara de
+      cadastro pronto, e o motor simplesmente não a encontra. A nota é auditada
+      como se a regra não existisse — o cálculo sai errado sem ninguém perceber
+      que faltou alguma coisa.
+      <br /><br />
+      A correção é escolher a sigla no seletor e salvar. Quando dá para deduzir
+      qual é (“Minas Gerais” só pode ser MG), a tela já sugere; quando não dá,
+      quem decide é você.
+    </>
+  ),
+}
+
+function UfsForaDoPadrao({ dados, onCorrigir }) {
+  const total = dados?.total || 0
+  if (!total) return null
+  const amostra = dados.amostra || []
+  const limite = dados.limite_amostra || amostra.length
+  return (
+    <div className="card" style={{ padding: 0, marginBottom: 18, borderLeft: '3px solid var(--err-text)' }}>
+      <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-2)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontWeight: 600 }}>Linhas com o estado fora do padrão</span>
+          {badge(`${total.toLocaleString('pt-BR')} ${total === 1 ? 'linha' : 'linhas'}`, 'err')}
+          <BalaoAjuda titulo={AJUDA_UF_FORA_PADRAO.titulo}>{AJUDA_UF_FORA_PADRAO.texto}</BalaoAjuda>
+        </div>
+        <div style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.55, marginTop: 6 }}>
+          Estas regras estão cadastradas, aparecem na tela e o motor não consegue
+          encontrá-las: ele procura o estado pela sigla de duas letras da nota, e
+          aqui está gravada outra coisa. Na prática a nota é calculada como se a
+          regra não existisse — erro silencioso, com cara de resolvido.
+        </div>
+      </div>
+      <div className="tbl-wrap">
+        <table className="tbl">
+          <thead>
+            <tr>
+              <th>Matriz</th><th>Campo</th><th>Como está gravado</th>
+              <th>Sigla certa</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {amostra.map(it => (
+              <tr key={`${it.matriz}-${it.id}-${it.campo}`}>
+                <td style={{ fontWeight: 500, color: 'var(--text-1)' }}>{TIPOS_PROPOSTA[it.matriz] || it.matriz}</td>
+                <td style={{ color: 'var(--text-3)' }}>{ROTULO_CAMPO_UF[it.campo] || it.campo}</td>
+                <td className="mono">{comoEstaGravado(it.valor)}</td>
+                <td>
+                  {it.sugestao
+                    ? badge(it.sugestao, 'ok')
+                    : <span style={{ color: 'var(--text-4)', fontSize: 12 }}>não dá para deduzir — você decide</span>}
+                </td>
+                <td style={{ textAlign: 'right' }}>
+                  <button className="btn btn-secondary btn-sm" style={{ whiteSpace: 'nowrap' }}
+                    title={it.sugestao
+                      ? `Abre a linha na aba ${TIPOS_PROPOSTA[it.matriz] || it.matriz} já com ${it.sugestao} escolhido — você confere e salva`
+                      : `Abre a linha na aba ${TIPOS_PROPOSTA[it.matriz] || it.matriz} para você escolher o estado`}
+                    onClick={() => onCorrigir?.(it)}>
+                    <i className="ti ti-pencil" /> Abrir para corrigir
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ padding: '10px 16px', fontSize: 12, color: 'var(--text-4)', borderTop: '1px solid var(--border-2)' }}>
+        {total > amostra.length
+          ? `Mostrando as ${amostra.length} primeiras de ${total.toLocaleString('pt-BR')} — o teto da amostra é ${limite}. Corrija estas e recarregue a aba para ver as próximas.`
+          : 'Nenhuma correção é feita sozinha: cada linha só muda quando você abre, confere e salva.'}
+      </div>
+    </div>
+  )
+}
+
 // ── Saúde: radar de frescor da base (Fase 2) + pares interestaduais (Fase 3) ──
-function SaudePanel({ onCadastrarPar }) {
+function SaudePanel({ onCadastrarPar, onCorrigirUf }) {
   const { toasts } = useToast()
   const [dados, setDados] = useState(null)
   const [pares, setPares] = useState(null)
@@ -326,6 +414,9 @@ function SaudePanel({ onCadastrarPar }) {
   const g = dados?.geral || {}
   const tomPct = (p) => (p == null ? 'var(--text-3)' : p >= 90 ? 'var(--ok-text)' : p >= 60 ? 'var(--warn-text)' : 'var(--err-text)')
   const dataHora = (s) => (s ? new Date(s).toLocaleDateString('pt-BR') : '—')
+  // Servidor sem o radar de UF (versão anterior) simplesmente não mostra a
+  // coluna — a aba continua inteira em vez de encher a tela de traços.
+  const temRadarUf = dados?.ufs_invalidas != null
 
   return (
     <div>
@@ -352,6 +443,8 @@ function SaudePanel({ onCadastrarPar }) {
         </div>
       </div>
 
+      <UfsForaDoPadrao dados={dados?.ufs_invalidas} onCorrigir={onCorrigirUf} />
+
       <div className="card" style={{ padding: 0 }}>
         <div className="tbl-wrap">
           <table className="tbl">
@@ -361,6 +454,7 @@ function SaudePanel({ onCadastrarPar }) {
                 <th style={{ textAlign: 'right' }}>Regras vigentes</th>
                 <th style={{ textAlign: 'right' }}>Verificadas (90d)</th>
                 <th>Frescor</th>
+                {temRadarUf && <th>Estado fora do padrão</th>}
                 <th>Verificação mais antiga</th>
                 <th>Mais recente</th>
               </tr>
@@ -376,6 +470,13 @@ function SaudePanel({ onCadastrarPar }) {
                       ? <span style={{ color: 'var(--text-4)', fontSize: 12 }}>sem regras</span>
                       : badge(`${m.pct_90d}%`, m.pct_90d >= 90 ? 'ok' : m.pct_90d >= 60 ? 'warn' : 'err')}
                   </td>
+                  {temRadarUf && (
+                    <td>
+                      {m.ufs_invalidas > 0
+                        ? badge(`${Number(m.ufs_invalidas).toLocaleString('pt-BR')} sem efeito`, 'err')
+                        : <span style={{ color: 'var(--text-4)', fontSize: 12 }}>nenhuma</span>}
+                    </td>
+                  )}
                   <td style={{ color: 'var(--text-3)', fontSize: 12 }}>{dataHora(m.verificacao_mais_antiga)}</td>
                   <td style={{ color: 'var(--text-3)', fontSize: 12 }}>{dataHora(m.ultima_atualizacao)}</td>
                 </tr>
@@ -476,6 +577,94 @@ const fmtDiff = (v) => {
   const s = String(v)
   return /^\d{4}-\d{2}-\d{2}$/.test(s) ? dataBr(s) : s
 }
+// ── MVA aprendida das próprias notas ────────────────────────────────────────
+// Só MG publica a margem em fonte oficial. Nas demais UFs a MVA é digitada uma
+// a uma, e quem precisa cadastrar tudo à mão acaba usando o aplicativo oficial
+// em vez desta tela. Saída: o robô junta o percentual de MVA que os
+// fornecedores já declaram nas notas e, quando VÁRIOS fornecedores
+// independentes convergem no mesmo número, sugere na fila de revisão.
+//
+// A diferença que a tela precisa deixar gritante: proposta de fonte oficial
+// vem com a norma no bolso (base legal preenchida); esta NÃO tem norma
+// nenhuma. É um ponto de partida bem embasado, não uma regra publicada.
+const FONTE_APRENDIDA = 'notas-do-escritorio'
+const ehAprendida = (p) => Boolean(p?.evidencia)
+  || String(p?.fonte || '').toLowerCase().startsWith(FONTE_APRENDIDA)
+
+// A evidência é o que permite julgar o número — sem ela o curador aprovaria no
+// escuro. Todas as chaves são opcionais: o painel degrada campo a campo se o
+// servidor mandar menos do que o previsto.
+function lerEvidencia(ev) {
+  if (!ev || typeof ev !== 'object') return null
+  const num = (...ks) => {
+    for (const k of ks) if (ev[k] != null && ev[k] !== '') return Number(ev[k])
+    return null
+  }
+  // ATENÇÃO à ordem das chaves: no contrato do backend a margem de cada faixa
+  // vem em `mva`, e `valor` ali é DINHEIRO (soma dos itens). Ler `valor`
+  // primeiro imprimiria "3000,00%" de margem na tabela — número absurdo numa
+  // tela fiscal, e do tipo que destrói a confiança no resto.
+  const faixa = (d) => ({
+    valor: d.mva ?? d.margem ?? d.valor ?? null,
+    notas: d.notas ?? null,
+    fornecedores: d.fornecedores ?? null,
+  })
+  const dist = Array.isArray(ev.distribuicao)
+    ? ev.distribuicao.map(faixa)
+    : (ev.distribuicao && typeof ev.distribuicao === 'object'
+      ? Object.entries(ev.distribuicao).map(([valor, notas]) => (
+        { valor, notas: Number(notas), fornecedores: null }))
+      : [])
+  const per = ev.periodo && typeof ev.periodo === 'object' ? ev.periodo : {}
+  return {
+    fornecedores: num('fornecedores', 'qtd_fornecedores'),
+    notas: num('notas', 'qtd_notas'),
+    valor: ev.mva ?? ev.valor ?? ev.mva_original ?? null,
+    concordancia: num('concordancia', 'pct_concordancia'),
+    distribuicao: dist,
+    inicio: per.primeira_emissao || per.inicio || per.de || ev.periodo_inicio || null,
+    fim: per.ultima_emissao || per.fim || per.ate || ev.periodo_fim || null,
+  }
+}
+
+// "3 fornecedores diferentes, 17 notas, todas com 42.00%"
+function fraseEvidencia(e) {
+  if (!e) return null
+  const partes = []
+  if (e.fornecedores != null) {
+    partes.push(`${e.fornecedores} ${e.fornecedores === 1 ? 'fornecedor' : 'fornecedores diferentes'}`)
+  }
+  if (e.notas != null) partes.push(`${e.notas} ${e.notas === 1 ? 'nota' : 'notas'}`)
+  if (e.valor != null) {
+    partes.push(e.concordancia != null && e.concordancia < 100
+      ? `${e.concordancia}% delas com ${pct(e.valor)}`
+      : `todas com ${pct(e.valor)}`)
+  }
+  return partes.length ? partes.join(', ') : null
+}
+
+const periodoEvidencia = (e) => (
+  e?.inicio || e?.fim ? `notas emitidas de ${dataBr(e.inicio)} a ${dataBr(e.fim)}` : null
+)
+
+// O que a tela mostra depois de gravar as propostas. Cada linha explica em
+// português por que aquele grupo NÃO virou proposta — o silêncio seria pior.
+const RESUMO_APRENDIDA = [
+  { keys: ['criadas', 'criados'], tone: 'ok', label: 'entraram na fila de revisão',
+    dica: 'aguardando sua aprovação nesta mesma aba' },
+  { keys: ['suprimidas', 'suprimidas_por_rejeicao'], tone: 'info', label: 'não voltaram',
+    dica: 'você já tinha rejeitado essa mesma sugestão antes' },
+  { keys: ['puladas_ja_na_matriz', 'puladas', 'puladas_linha_existente', 'ja_existentes'],
+    tone: 'info', label: 'puladas',
+    dica: 'já existe regra de MVA cadastrada para esse produto e par de estados' },
+  { keys: ['ambiguas', 'descartadas', 'descartadas_ambiguidade'], tone: 'warn', label: 'descartadas',
+    dica: 'os fornecedores declararam margens diferentes — sem convergência, o robô não chuta' },
+]
+const leResumo = (r, keys) => {
+  for (const k of keys) if (r?.[k] != null) return Number(r[k])
+  return null
+}
+
 // Campos em que a proposta difere do vigente (INSERIR: tudo que ela define).
 function mudancasDe(p) {
   const de = p.linha_atual || {}
@@ -679,6 +868,259 @@ function CoberturaPanel() {
   )
 }
 
+// Bloco de evidência: o que sustenta o número sugerido. É ele que transforma
+// "aprovar um percentual" em "aprovar um percentual que 3 fornecedores
+// independentes vêm declarando há meses".
+function BlocoEvidencia({ evidencia, compacto = false }) {
+  const e = lerEvidencia(evidencia)
+  if (!e) return null
+  const frase = fraseEvidencia(e)
+  const periodo = periodoEvidencia(e)
+  if (compacto) {
+    return (
+      <div style={{ fontSize: 11.5, color: 'var(--text-4)', marginTop: 3 }}>
+        <i className="ti ti-bulb" style={{ marginRight: 4 }} />{frase || 'sem detalhe da apuração'}
+      </div>
+    )
+  }
+  return (
+    <div style={{
+      marginTop: 14, padding: '12px 14px', background: 'var(--surface-2)',
+      borderRadius: 'var(--radius)',
+    }}>
+      <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700, color: 'var(--text-4)' }}>
+        De onde saiu este número
+      </div>
+      <div style={{ fontSize: 13.5, fontWeight: 600, marginTop: 6 }}>{frase || 'Apuração sem detalhe informado.'}</div>
+      {periodo && <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 3 }}>{periodo}</div>}
+      {e.distribuicao.length > 1 && (
+        <div className="tbl-wrap" style={{ marginTop: 10 }}>
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Margem declarada</th>
+                <th style={{ textAlign: 'right' }}>Notas</th>
+                <th style={{ textAlign: 'right' }}>Fornecedores</th>
+              </tr>
+            </thead>
+            <tbody>
+              {e.distribuicao.map((d, i) => (
+                <tr key={`${d.valor}-${i}`}>
+                  <td className="tnum" style={{ fontWeight: String(d.valor) === String(e.valor) ? 700 : 400 }}>
+                    {pct(d.valor)}
+                  </td>
+                  <td className="tnum" style={{ textAlign: 'right' }}>{d.notas ?? '—'}</td>
+                  <td className="tnum" style={{ textAlign: 'right' }}>{d.fornecedores ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Aviso fixo de toda proposta aprendida: ela NÃO tem base legal.
+function AvisoSemBaseLegal({ children }) {
+  return (
+    <div style={{
+      border: '1px solid var(--warn-text)', borderRadius: 'var(--radius)',
+      background: 'var(--warn-bg)', color: 'var(--warn-text)',
+      padding: '11px 14px', fontSize: 12.5, lineHeight: 1.6,
+    }}>
+      <strong><i className="ti ti-alert-triangle" style={{ marginRight: 5 }} />
+      Esta sugestão não tem base legal.</strong>{' '}
+      Ela não veio de norma publicada: é a margem que os próprios fornecedores
+      vêm declarando nas notas do escritório. Isso é um bom ponto de partida —
+      não é prova de que a lei do estado diz isso. Quem confirma a norma é você.
+      {children}
+    </div>
+  )
+}
+
+const previaChave = (it) => {
+  const p = it?.payload || it || {}
+  return it?.chave_resumo || [
+    p.uf_destino, p.uf_origem && p.uf_origem !== UF_QUALQUER ? `de ${p.uf_origem}` : null,
+    p.ncm && `NCM ${p.ncm}`, p.cest && `CEST ${p.cest}`,
+  ].filter(Boolean).join(' · ')
+}
+const previaMva = (it) => (it?.payload?.mva_original ?? it?.mva_original ?? null)
+const previaValor = (it) => (it?.valor ?? it?.valor_mercadoria ?? it?.impacto ?? null)
+
+// Gatilho do aprendizado. O fluxo é PRÉVIA → confirmação → resumo, nunca
+// "aperta e grava": o GET não escreve nada, então o curador vê o volume e a
+// qualidade das evidências ANTES de encher a fila de revisão. É a mesma regra
+// do resto do módulo — nada entra sem alguém olhar.
+function AprenderMvaModal({ onFechar, onCriou }) {
+  const [previa, setPrevia] = useState(null)
+  const [page, setPage] = useState(1)
+  const [loading, setLoading] = useState(true)
+  const [erro, setErro] = useState(null)
+  const [gerando, setGerando] = useState(false)
+  const [erroGerar, setErroGerar] = useState(null)
+  const [resumo, setResumo] = useState(null)
+
+  const carregar = useCallback(async () => {
+    setLoading(true)
+    setErro(null)
+    try { setPrevia(await api.previaMvaAprendida({ page, page_size: 15 })) }
+    catch (e) { setErro(e.message) }
+    finally { setLoading(false) }
+  }, [page])
+  useEffect(() => { carregar() }, [carregar])
+
+  const itens = previa?.items || []
+  const total = previa?.total ?? itens.length
+  const totalPaginas = previa?.total_pages ?? Math.max(1, Math.ceil(total / 15))
+
+  async function gerar() {
+    setGerando(true)
+    setErroGerar(null)
+    // Falha do POST NÃO derruba a prévia: o curador continua vendo o que ia ser
+    // proposto e pode tentar de novo.
+    try { setResumo(await api.gerarMvaAprendida({})); onCriou?.() }
+    catch (e) { setErroGerar(e.message) }
+    finally { setGerando(false) }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onFechar}>
+      <div className="modal" style={{ maxWidth: 860 }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Aprender a MVA com as notas já importadas</h2>
+          <button className="btn btn-icon" onClick={onFechar}><i className="ti ti-x" /></button>
+        </div>
+        <div className="modal-body">
+          {resumo ? (
+            <>
+              <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.6, marginTop: 0 }}>
+                Pronto. Veja o que aconteceu com cada grupo — o que não virou
+                proposta tem motivo, e o motivo está aqui:
+              </p>
+              <div className="tbl-wrap">
+                <table className="tbl">
+                  <tbody>
+                    {RESUMO_APRENDIDA.map(l => {
+                      const n = leResumo(resumo, l.keys)
+                      if (n == null) return null
+                      return (
+                        <tr key={l.keys[0]}>
+                          <td className="tnum" style={{ fontWeight: 700, fontSize: 18, width: 90 }}>
+                            {n.toLocaleString('pt-BR')}
+                          </td>
+                          <td>
+                            {badge(l.label, l.tone)}
+                            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 3 }}>{l.dica}</div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {resumo.mensagem && (
+                <p style={{ fontSize: 12.5, color: 'var(--text-3)', marginTop: 12 }}>{resumo.mensagem}</p>
+              )}
+            </>
+          ) : loading ? (
+            <div className="center-loader"><div className="spinner" /></div>
+          ) : erro ? (
+            <ErroCarga mensagem={erro} onRetry={carregar} />
+          ) : (
+            <>
+              <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.6, marginTop: 0 }}>
+                Só Minas Gerais publica a margem em fonte oficial. Nos outros
+                estados, esta é a saída para não digitar tudo à mão: o sistema lê
+                a margem que os fornecedores já informam nas notas e, quando
+                vários deles — sem combinar entre si — chegam ao mesmo número,
+                traz a sugestão para cá.
+              </p>
+              <AvisoSemBaseLegal>
+                {' '}Por isso nada é gravado na matriz agora: o que este botão faz
+                é colocar as sugestões na fila de revisão, uma a uma, para você
+                aprovar ou descartar.
+              </AvisoSemBaseLegal>
+              <p style={{ fontSize: 13, marginTop: 14, marginBottom: 8 }}>
+                <strong className="tnum">{Number(total).toLocaleString('pt-BR')}</strong>
+                {total === 1 ? ' sugestão encontrada' : ' sugestões encontradas'}
+                {total > 0 ? ' — da que mais movimenta dinheiro para a que menos movimenta:' : '.'}
+              </p>
+              {total === 0 ? (
+                <div className="empty-state">
+                  <i className="ti ti-bulb-off" />
+                  <p className="empty-title">Nada a aprender por enquanto</p>
+                  <p className="empty-subtitle">
+                    Não houve convergência suficiente entre fornecedores nas notas já
+                    importadas. Importe mais notas e tente de novo.
+                  </p>
+                </div>
+              ) : (
+                <div className="tbl-wrap">
+                  <table className="tbl">
+                    <thead>
+                      <tr>
+                        <th>Produto e estados</th>
+                        <th style={{ textAlign: 'right' }}>Margem sugerida</th>
+                        <th>Em que isso se apoia</th>
+                        <th style={{ textAlign: 'right' }}>Movimento</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {itens.map((it, i) => (
+                        <tr key={`${previaChave(it)}-${i}`}>
+                          <td className="mono" style={{ fontSize: 12.5 }}>{previaChave(it)}</td>
+                          <td className="tnum" style={{ textAlign: 'right', fontWeight: 700 }}>{pct(previaMva(it))}</td>
+                          <td style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                            {fraseEvidencia(lerEvidencia(it.evidencia)) || '—'}
+                          </td>
+                          <td className="tnum" style={{ textAlign: 'right' }}>
+                            {previaValor(it) == null ? '—' : brl(previaValor(it))}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {totalPaginas > 1 && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 10 }}>
+                  <button className="btn btn-ghost btn-sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>
+                    <i className="ti ti-chevron-left" />
+                  </button>
+                  <span className="tnum" style={{ fontSize: 12.5, color: 'var(--text-3)' }}>
+                    página {page} de {totalPaginas}
+                  </span>
+                  <button className="btn btn-ghost btn-sm" disabled={page === totalPaginas} onClick={() => setPage(p => p + 1)}>
+                    <i className="ti ti-chevron-right" />
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+        <div className="modal-footer">
+          {erroGerar && (
+            <span style={{ marginRight: 'auto', fontSize: 12.5, color: 'var(--err-text)' }}>
+              <i className="ti ti-alert-circle" style={{ marginRight: 5 }} />{erroGerar}
+            </span>
+          )}
+          <button type="button" className="btn btn-ghost" onClick={onFechar}>
+            {resumo ? 'Ver a fila' : 'Cancelar'}
+          </button>
+          {!resumo && !erro && !loading && total > 0 && (
+            <button type="button" className="btn btn-primary" disabled={gerando} onClick={gerar}>
+              <i className={`ti ${gerando ? 'ti-loader-2' : 'ti-inbox'}`} />
+              {gerando ? 'Enviando…' : `Enviar as ${Number(total).toLocaleString('pt-BR')} para a fila`}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function RevisaoPanel({ onMudou }) {
   const { toasts, toast } = useToast()
   const [dados, setDados] = useState({ items: [], total: 0 })
@@ -690,6 +1132,11 @@ function RevisaoPanel({ onMudou }) {
   const [page, setPage] = useState(1)
   const [busy, setBusy] = useState(false)
   const [detalhe, setDetalhe] = useState(null)
+  const [aprender, setAprender] = useState(false)
+  // Trava da proposta aprendida: sem norma por trás, aprovar só depois de o
+  // curador dizer, com todas as letras, que conferiu a lei do estado.
+  const [confirmouNorma, setConfirmouNorma] = useState(false)
+  useEffect(() => { setConfirmouNorma(false) }, [detalhe])
 
   const carregar = useCallback(async () => {
     setLoading(true)
@@ -719,8 +1166,17 @@ function RevisaoPanel({ onMudou }) {
     if (motivo === null) return
     agir(() => api.rejeitarProposta(p.id, motivo), 'Proposta rejeitada — não voltará à fila.')
   }
+  // O lote não sabe separar aprendidas de oficiais (o servidor filtra por
+  // matriz/UF). Se houver aprendida à vista, o aviso é explícito: aprovar tudo
+  // leva junto sugestão sem norma.
+  const temAprendidaNaTela = dados.items.some(ehAprendida)
   const aprovarTudo = () => {
-    if (!confirm(`Aprovar as ${total.toLocaleString('pt-BR')} propostas do filtro atual?`)) return
+    const alerta = temAprendidaNaTela
+      ? '\n\nATENÇÃO: há sugestões aprendidas das notas neste filtro. Elas não têm '
+        + 'base legal e o lote não sabe separá-las. Se quiser conferir a norma uma a '
+        + 'uma, cancele e aprove pela lista.'
+      : ''
+    if (!confirm(`Aprovar as ${total.toLocaleString('pt-BR')} propostas do filtro atual?${alerta}`)) return
     agir(async () => {
       const r = await api.aprovarPropostasLote({ tipo_matriz: tipo || null, uf: uf || null })
       if (r.falhas?.length) {
@@ -757,11 +1213,17 @@ function RevisaoPanel({ onMudou }) {
             </span>
           )}
         </div>
-        {status === 'PENDENTE' && total > 0 && (
-          <button className="btn btn-primary" disabled={busy} onClick={aprovarTudo}>
-            <i className="ti ti-checks" /> Aprovar tudo (filtro atual)
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn btn-secondary" disabled={busy} onClick={() => setAprender(true)}
+            title="Procura, nas notas já importadas, margens em que vários fornecedores convergem">
+            <i className="ti ti-bulb" /> Aprender MVA das notas
           </button>
-        )}
+          {status === 'PENDENTE' && total > 0 && (
+            <button className="btn btn-primary" disabled={busy} onClick={aprovarTudo}>
+              <i className="ti ti-checks" /> Aprovar tudo (filtro atual)
+            </button>
+          )}
+        </div>
       </div>
 
       {dados.items.length === 0 ? (
@@ -788,6 +1250,7 @@ function RevisaoPanel({ onMudou }) {
                 {dados.items.map(p => {
                   const acao = ACOES_PROPOSTA[p.acao] || { label: p.acao, tone: 'info' }
                   const muda = mudancasDe(p)
+                  const aprendida = ehAprendida(p)
                   return (
                     <tr key={p.id} style={{ cursor: 'pointer' }} onClick={() => setDetalhe(p)}>
                       <td>{badge(acao.label, acao.tone)}</td>
@@ -798,15 +1261,25 @@ function RevisaoPanel({ onMudou }) {
                           ? 'Confirme que os valores continuam valendo'
                           : (<>{muda.slice(0, 2).map(m => `${m.campo}: ${fmtDiff(m.de)} → ${fmtDiff(m.para)}`).join(' · ')}
                             {muda.length > 2 ? ` · +${muda.length - 2}` : ''}</>)}
+                        {aprendida && <BlocoEvidencia evidencia={p.evidencia} compacto />}
                       </td>
-                      <td style={{ color: 'var(--text-3)', fontSize: 12 }}>{p.fonte}</td>
+                      <td style={{ color: 'var(--text-3)', fontSize: 12 }}>
+                        {aprendida ? badge('Aprendida das notas · sem base legal', 'warn') : p.fonte}
+                        {aprendida && (
+                          <div style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 3 }}>{p.fonte}</div>
+                        )}
+                      </td>
                       <td style={{ color: 'var(--text-3)', fontSize: 12 }}>{dataCadastro(p)}</td>
                       <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                         {p.status === 'PENDENTE' ? (
                           <>
-                            <button className="btn btn-icon" title="Aprovar" disabled={busy}
-                              onClick={ev => { ev.stopPropagation(); aprovar(p) }}>
-                              <i className="ti ti-check" style={{ color: 'var(--ok-text)' }} />
+                            <button className="btn btn-icon" disabled={busy}
+                              title={aprendida
+                                ? 'Conferir antes de aprovar — sugestão sem base legal'
+                                : 'Aprovar'}
+                              onClick={ev => { ev.stopPropagation(); if (aprendida) setDetalhe(p); else aprovar(p) }}>
+                              <i className={`ti ${aprendida ? 'ti-eye-check' : 'ti-check'}`}
+                                style={{ color: aprendida ? 'var(--warn-text)' : 'var(--ok-text)' }} />
                             </button>
                             <button className="btn btn-icon" title="Rejeitar" disabled={busy}
                               onClick={ev => { ev.stopPropagation(); rejeitar(p) }}>
@@ -862,6 +1335,15 @@ function RevisaoPanel({ onMudou }) {
                     {detalhe.motivo_rejeicao ? ` — “${detalhe.motivo_rejeicao}”` : ''}</>
                 )}
               </p>
+              {ehAprendida(detalhe) && (
+                <div style={{ marginBottom: 14 }}>
+                  <AvisoSemBaseLegal>
+                    {' '}Compare com a norma do estado de destino antes de aprovar. Depois
+                    de aprovada, abra a linha na aba MVA e preencha a Base legal — ela
+                    entra em branco, e é ela que a carta de ST cita.
+                  </AvisoSemBaseLegal>
+                </div>
+              )}
               <div className="tbl-wrap">
                 {detalhe.acao === 'REVALIDAR' ? (
                   <table className="tbl">
@@ -897,11 +1379,33 @@ function RevisaoPanel({ onMudou }) {
                   criando uma nova.
                 </p>
               )}
+              {ehAprendida(detalhe) && (
+                <>
+                  <BlocoEvidencia evidencia={detalhe.evidencia} />
+                  {detalhe.status === 'PENDENTE' && (
+                    <label style={{
+                      display: 'flex', alignItems: 'flex-start', gap: 10, marginTop: 14,
+                      fontSize: 12.5, lineHeight: 1.55, cursor: 'pointer',
+                    }}>
+                      <input type="checkbox" checked={confirmouNorma} style={{ width: 18, height: 18, marginTop: 1 }}
+                        onChange={e => setConfirmouNorma(e.target.checked)} />
+                      <span>
+                        Conferi a norma do estado de destino e confirmo que esta é a
+                        margem que vale hoje para este produto.
+                      </span>
+                    </label>
+                  )}
+                </>
+              )}
             </div>
             {detalhe.status === 'PENDENTE' && (
               <div className="modal-footer">
                 <button className="btn btn-ghost" disabled={busy} onClick={() => rejeitar(detalhe)}>Rejeitar</button>
-                <button className="btn btn-primary" disabled={busy} onClick={() => aprovar(detalhe)}>
+                <button className="btn btn-primary" onClick={() => aprovar(detalhe)}
+                  disabled={busy || (ehAprendida(detalhe) && !confirmouNorma)}
+                  title={ehAprendida(detalhe) && !confirmouNorma
+                    ? 'Marque a confirmação acima: esta sugestão não tem base legal'
+                    : undefined}>
                   {detalhe.acao === 'REVALIDAR' ? 'Confirmar — continua valendo' : 'Aprovar e aplicar'}
                 </button>
               </div>
@@ -909,192 +1413,12 @@ function RevisaoPanel({ onMudou }) {
           </div>
         </div>
       )}
-    </div>
-  )
-}
 
-const FORM_EXCECAO_VAZIO = {
-  empresa_id: '', cnpj_fornecedor: '', codigo_produto: '', descricao_produto: '',
-  data_inicio_vigencia: '', data_fim_vigencia: '',
-  tributado_icms: true, lei_icms: '', ativo: true,
-}
-
-// Como o fornecedor da exceção aparece na listagem: vazio é a regra geral, que
-// vale para as notas de todos os fornecedores.
-function celulaFornecedor(doc) {
-  if (!doc) return badge('Qualquer', 'warn')
-  const nome = nomeDoFornecedor(doc)
-  return (
-    <span>
-      {nome && <span style={{ display: 'block', fontWeight: 600 }}>{nome}</span>}
-      <span className="tnum" style={{ fontSize: 12, color: 'var(--text-3)' }}>{formatarDoc(doc)}</span>
-    </span>
-  )
-}
-
-export function ExcecoesItemPanel() {
-  const { toasts, toast } = useToast()
-  const [empresas, setEmpresas] = useState([])
-  const [lista, setLista] = useState([])
-  const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
-  const [filtros, setFiltros] = useState({ empresa_id: '', codigo: '' })
-  const [loading, setLoading] = useState(true)
-  const [erro, setErro] = useState(null)
-  const [modal, setModal] = useState(false)
-  const [editId, setEditId] = useState(null)
-  const [form, setForm] = useState(FORM_EXCECAO_VAZIO)
-  const [saving, setSaving] = useState(false)
-
-  const carregar = useCallback(async () => {
-    setLoading(true); setErro(null)
-    try {
-      const [r, es] = await Promise.all([
-        api.excecoesItem({ ...filtros, page, page_size: PAGE_SIZE }),
-        empresas.length ? Promise.resolve(empresas) : api.empresas(),
-      ])
-      setLista(r?.items || []); setTotal(r?.total || 0)
-      if (!empresas.length) setEmpresas(es || [])
-    } catch (e) { setErro(e.message) }
-    finally { setLoading(false) }
-  }, [filtros, page, empresas])
-
-  useEffect(() => { carregar() }, [carregar])
-  // Razão social dos fornecedores da página atual (o servidor devolve só o CNPJ).
-  useNomesFornecedores(filtros.empresa_id, lista.map(i => i.cnpj_fornecedor))
-  const totalPaginas = Math.max(1, Math.ceil(total / PAGE_SIZE))
-  const nomes = Object.fromEntries(empresas.map(e => [e.id, e.nome_fantasia || e.razao_social]))
-  const opcoesEmpresas = empresas.map(e => ({
-    value: e.id, label: e.nome_fantasia || e.razao_social,
-  }))
-
-  function nova() {
-    setEditId(null)
-    setForm({ ...FORM_EXCECAO_VAZIO, empresa_id: filtros.empresa_id || '' })
-    setModal(true)
-  }
-  function editar(m) {
-    setEditId(m.id)
-    setForm({
-      empresa_id: m.empresa_id, cnpj_fornecedor: m.cnpj_fornecedor || '',
-      codigo_produto: m.codigo_produto,
-      descricao_produto: m.descricao_produto || '',
-      data_inicio_vigencia: m.data_inicio_vigencia,
-      data_fim_vigencia: m.data_fim_vigencia || '',
-      tributado_icms: Boolean(m.tributado_icms), lei_icms: m.lei_icms || '',
-      ativo: Boolean(m.ativo),
-    })
-    setModal(true)
-  }
-  const setCampo = (k, v) => setForm(f => ({ ...f, [k]: v }))
-
-  async function salvar(e) {
-    e.preventDefault(); setSaving(true)
-    try {
-      const payload = {
-        ...form, data_fim_vigencia: form.data_fim_vigencia || null,
-        descricao_produto: form.descricao_produto || null,
-        // Vazio = qualquer fornecedor; o cadastro guarda "" (nunca null).
-        cnpj_fornecedor: form.cnpj_fornecedor || '',
-        lei_icms: form.lei_icms || null, ncm: null,
-      }
-      if (editId) await api.editarExcecaoItem(editId, payload)
-      else await api.criarExcecaoItem(payload)
-      toast(`Exceção ${editId ? 'atualizada' : 'cadastrada'}.`, 'ok')
-      setModal(false); setEditId(null); await carregar()
-    } catch (e2) { toast(e2.message, 'error') }
-    finally { setSaving(false) }
-  }
-
-  async function remover(m) {
-    if (!confirm(`Remover a exceção do item ${m.codigo_produto}?`)) return
-    try { await api.removerExcecaoItem(m.id); toast('Exceção removida.', 'ok'); await carregar() }
-    catch (e) { toast(e.message, 'error') }
-  }
-
-  return (
-    <div>
-      <ToastContainer toasts={toasts} />
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <div style={{ width: 280 }}>
-            <Dropdown value={filtros.empresa_id} options={opcoesEmpresas}
-              placeholder="Todas as empresas" onChange={v => { setFiltros(f => ({ ...f, empresa_id: v })); setPage(1) }} />
-          </div>
-          <input value={filtros.codigo} placeholder="Pesquisar código do item…"
-            onChange={e => { setFiltros(f => ({ ...f, codigo: e.target.value })); setPage(1) }}
-            style={{ width: 250 }} />
-          {total > 0 && <span className="tnum" style={{ alignSelf: 'center', color: 'var(--text-3)', fontSize: 13 }}>{total.toLocaleString('pt-BR')} exceção(ões)</span>}
-        </div>
-        <button className="btn btn-primary" data-tour="matrizes-excecao-nova" onClick={nova}><i className="ti ti-plus" /> Nova exceção do item</button>
-      </div>
-
-      {loading ? <div className="center-loader"><div className="spinner" /></div>
-        : erro ? <ErroCarga mensagem={erro} onRetry={carregar} />
-          : lista.length === 0 ? (
-            <div className="empty-state">
-              <i className="ti ti-adjustments-exclamation" />
-              <p className="empty-title">Nenhuma exceção do item</p>
-              <p className="empty-subtitle">Cadastre somente os produtos que precisam contrariar o enquadramento geral por NCM/CEST.</p>
-            </div>
-          ) : (
-            <div className="card" style={{ padding: 0 }}><div className="tbl-wrap"><table className="tbl">
-              <thead><tr><th>Empresa</th><th>Fornecedor</th><th>Código Item</th><th>Início</th><th>Fim</th><th>Tributado ICMS</th><th>Lei ICMS</th><th>Ativo</th><th></th></tr></thead>
-              <tbody>{lista.map(m => <tr key={m.id} onClick={() => editar(m)} style={{ cursor: 'pointer' }}>
-                <td>{nomes[m.empresa_id] || '—'}</td>
-                <td>{celulaFornecedor(m.cnpj_fornecedor)}</td>
-                <td className="mono" style={{ fontWeight: 600 }}>{m.codigo_produto}</td>
-                <td>{dataBr(m.data_inicio_vigencia)}</td><td>{dataBr(m.data_fim_vigencia)}</td>
-                <td>{badge(m.tributado_icms ? 'Sim' : 'Não — ST', m.tributado_icms ? 'info' : 'warn')}</td>
-                <td style={{ color: 'var(--text-3)', maxWidth: 320 }}>{m.lei_icms || '—'}</td>
-                <td>{badge(m.ativo ? 'Sim' : 'Não', m.ativo ? 'ok' : 'err')}</td>
-                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                  <button className="btn btn-icon" title="Editar" onClick={e => { e.stopPropagation(); editar(m) }}><i className="ti ti-pencil" /></button>
-                  <button className="btn btn-icon" title="Remover" onClick={e => { e.stopPropagation(); remover(m) }}><i className="ti ti-trash" style={{ color: 'var(--err-text)' }} /></button>
-                </td>
-              </tr>)}</tbody>
-            </table></div>
-            {totalPaginas > 1 && <div style={{ display: 'flex', justifyContent: 'center', gap: 6, padding: 12, borderTop: '1px solid var(--border-2)' }}>
-              <button className="btn btn-sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>←</button>
-              <span className="tnum" style={{ alignSelf: 'center' }}>{page} de {totalPaginas}</span>
-              <button className="btn btn-sm" disabled={page === totalPaginas} onClick={() => setPage(p => p + 1)}>→</button>
-            </div>}
-            </div>
-          )}
-
-      {modal && <div className="modal-overlay" onClick={() => setModal(false)}>
-        <div className="modal" data-tour="matrizes-excecao-modal" onClick={e => e.stopPropagation()}>
-          <div className="modal-header"><h2>{editId ? 'Editar' : 'Cadastro'} · Exceção do Item</h2>
-            <button className="btn btn-icon" data-tour="matrizes-excecao-fechar" onClick={() => setModal(false)}><i className="ti ti-x" /></button></div>
-          <form onSubmit={salvar}>
-            <div className="modal-body"><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-              <div className="field" style={{ gridColumn: '1 / -1' }}><label>Empresa</label>
-                <Dropdown value={form.empresa_id} options={opcoesEmpresas} placeholder="Selecione a empresa…" onChange={v => setCampo('empresa_id', v)} /></div>
-              <div className="field" style={{ gridColumn: '1 / -1' }}>
-                <label>Fornecedor<AjudaFornecedor /></label>
-                <SeletorFornecedor empresaId={form.empresa_id} value={form.cnpj_fornecedor}
-                  onChange={v => setCampo('cnpj_fornecedor', v)} /></div>
-              <div className="field" style={{ gridColumn: '1 / -1' }}><label>Código do item</label>
-                <input required maxLength={60} value={form.codigo_produto} placeholder="Código do item"
-                  onChange={e => setCampo('codigo_produto', e.target.value)} /></div>
-              <div className="field"><label>Data início</label><input required type="date" value={form.data_inicio_vigencia} onChange={e => setCampo('data_inicio_vigencia', e.target.value)} /></div>
-              <div className="field"><label>Data fim</label><input type="date" value={form.data_fim_vigencia} onChange={e => setCampo('data_fim_vigencia', e.target.value)} /></div>
-              <div className="field" style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--border-2)', paddingTop: 14 }}>
-                <div><label style={{ margin: 0 }}>Tributado ICMS</label><div style={{ fontSize: 12, color: 'var(--text-4)', marginTop: 3 }}>Marcado = tributação normal; desmarcado = ICMS-ST</div></div>
-                <input type="checkbox" checked={form.tributado_icms} onChange={e => setCampo('tributado_icms', e.target.checked)} style={{ width: 20, height: 20 }} />
-              </div>
-              <div className="field" style={{ gridColumn: '1 / -1' }}><label>Lei ICMS (opcional)</label>
-                <textarea maxLength={2000} rows={4} value={form.lei_icms} placeholder="Fundamento legal ou justificativa da exceção"
-                  onChange={e => setCampo('lei_icms', e.target.value)} /></div>
-              <div className="field" style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <label style={{ margin: 0 }}>Ativo</label><input type="checkbox" checked={form.ativo} onChange={e => setCampo('ativo', e.target.checked)} style={{ width: 20, height: 20 }} />
-              </div>
-            </div></div>
-            <div className="modal-footer"><button type="button" className="btn btn-ghost" onClick={() => setModal(false)}>Fechar</button>
-              <button type="submit" className="btn btn-primary" disabled={saving || !form.empresa_id}>{saving ? 'Salvando…' : 'Salvar'}</button></div>
-          </form>
-        </div>
-      </div>}
+      {aprender && (
+        <AprenderMvaModal
+          onFechar={() => setAprender(false)}
+          onCriou={() => { carregar(); onMudou?.() }} />
+      )}
     </div>
   )
 }
@@ -1161,7 +1485,26 @@ function CampoInput({ campo, value, onChange, bloqueado }) {
   )
 }
 
-function CrudMatriz({ aba, prefill }) {
+// As matrizes não têm busca por id — a linha a corrigir é procurada nas
+// primeiras páginas da própria listagem. O teto é baixo de propósito: a base de
+// MVA tem dezenas de milhares de linhas e varrer tudo atrás de um id seria pior
+// para o usuário do que avisar que ele precisa filtrar.
+const PAGINAS_BUSCA_FOCO = 10
+async function procurarLinha(aba, id) {
+  for (let p = 1; p <= PAGINAS_BUSCA_FOCO; p++) {
+    let r
+    try { r = await aba.api.list({ page: p, page_size: PAGE_SIZE }) }
+    catch { return null }
+    const itens = r?.items || (Array.isArray(r) ? r : [])
+    const achada = itens.find(m => String(m.id) === String(id))
+    if (achada) return achada
+    const paginas = r?.total_pages ?? Math.ceil((r?.total || 0) / PAGE_SIZE)
+    if (!itens.length || p >= paginas) return null
+  }
+  return null
+}
+
+function CrudMatriz({ aba, prefill, foco }) {
   const { toasts, toast } = useToast()
   const [lista, setLista] = useState([])
   const [total, setTotal] = useState(0)
@@ -1188,6 +1531,35 @@ function CrudMatriz({ aba, prefill }) {
     setForm({ ...vazioDe(aba.campos), ...valido })
     setModal(true)
   }, [prefill, aba])
+
+  // Correção de estado fora do padrão (aba Saúde): abre a linha existente com
+  // a sigla sugerida já escolhida no seletor. NADA é gravado aqui — o curador
+  // confere o resto do cadastro e salva, que é o único jeito de mudar dado
+  // fiscal nesta tela.
+  const [avisoFoco, setAvisoFoco] = useState(null)
+  useEffect(() => {
+    if (!foco) { setAvisoFoco(null); return undefined }
+    let vivo = true
+    setAvisoFoco({ etapa: 'procurando', foco })
+    procurarLinha(aba, foco.id).then(linha => {
+      if (!vivo) return
+      if (!linha) { setAvisoFoco({ etapa: 'nao-achou', foco }); return }
+      const preenchidos = Object.fromEntries(
+        Object.entries(linha).filter(([, v]) => v !== null && v !== undefined)
+      )
+      setEditId(linha.id)
+      setForm({
+        ...vazioDe(aba.campos), ...preenchidos,
+        data_fim_vigencia: linha.data_fim_vigencia || '',
+        // Sem sugestão o campo abre em branco (o valor torto não casa com
+        // nenhuma opção da lista) e o seletor exige a escolha.
+        [foco.campo]: foco.sugestao || '',
+      })
+      setModal(true)
+      setAvisoFoco({ etapa: 'achou', foco })
+    })
+    return () => { vivo = false }
+  }, [foco, aba])
 
   const carregar = useCallback(async () => {
     setLoading(true)
@@ -1296,6 +1668,44 @@ function CrudMatriz({ aba, prefill }) {
         </div>
         <button className="btn btn-primary" onClick={abrirNova}><i className="ti ti-plus" /> Nova regra</button>
       </div>
+
+      {avisoFoco && (
+        <div className="card" style={{
+          marginBottom: 14, padding: '12px 16px', borderLeft: '3px solid var(--primary)',
+          display: 'flex', gap: 14, alignItems: 'flex-start', justifyContent: 'space-between',
+        }}>
+          <div style={{ fontSize: 12.5, lineHeight: 1.6 }}>
+            {avisoFoco.etapa === 'procurando' && (
+              <>Procurando a regra nº <span className="tnum">{avisoFoco.foco.id}</span> nesta matriz…</>
+            )}
+            {avisoFoco.etapa === 'achou' && (
+              <>
+                <strong>Regra nº <span className="tnum">{avisoFoco.foco.id}</span> aberta para correção.</strong>
+                {' '}O campo <strong>{ROTULO_CAMPO_UF[avisoFoco.foco.campo] || avisoFoco.foco.campo}</strong>
+                {' '}estava gravado como <span className="mono">{comoEstaGravado(avisoFoco.foco.valor)}</span>,
+                que o motor não reconhece.
+                {avisoFoco.foco.sugestao
+                  ? <> Já deixamos <strong>{avisoFoco.foco.sugestao}</strong> escolhido: confira o
+                    restante do cadastro e salve para valer.</>
+                  : <> Não dá para deduzir o estado certo — escolha no seletor e salve.</>}
+              </>
+            )}
+            {avisoFoco.etapa === 'nao-achou' && (
+              <>
+                A regra nº <span className="tnum">{avisoFoco.foco.id}</span> não está entre as
+                primeiras <span className="tnum">{(PAGINAS_BUSCA_FOCO * PAGE_SIZE).toLocaleString('pt-BR')}</span>
+                {' '}linhas desta matriz. Use os filtros de NCM/CEST acima para chegar até ela — o
+                campo <strong>{ROTULO_CAMPO_UF[avisoFoco.foco.campo] || avisoFoco.foco.campo}</strong>
+                {' '}está gravado como <span className="mono">{comoEstaGravado(avisoFoco.foco.valor)}</span>
+                {avisoFoco.foco.sugestao ? <> e deveria ser <strong>{avisoFoco.foco.sugestao}</strong>.</> : '.'}
+              </>
+            )}
+          </div>
+          <button className="btn btn-icon" title="Dispensar aviso" onClick={() => setAvisoFoco(null)}>
+            <i className="ti ti-x" />
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="center-loader"><div className="spinner" /></div>
@@ -1440,8 +1850,18 @@ export default function MatrizesFiscais() {
   // o par origem→destino já preenchido (mesmo mecanismo do deep-link).
   const [prefillPar, setPrefillPar] = useState(null)
   const cadastrarPar = useCallback((p) => {
+    setFocoUf(null)
     setPrefillPar({ uf_origem: p.uf_origem, uf_destino: p.uf_destino })
     setTab('protocolos')
+  }, [])
+
+  // "Abrir para corrigir" da aba Saúde: leva à aba da matriz e pede que a linha
+  // seja aberta para edição com a sigla certa. `{ id, matriz, campo, valor, sugestao }`.
+  const [focoUf, setFocoUf] = useState(null)
+  const corrigirUf = useCallback((item) => {
+    setPrefillPar(null)
+    setFocoUf(item)
+    setTab(item.matriz)
   }, [])
 
   // Contador de propostas pendentes (chip da aba Revisão).
@@ -1503,7 +1923,8 @@ export default function MatrizesFiscais() {
       {/* Abas: as fontes que o motor de ICMS-ST consome */}
       <div data-tour="matrizes-abas" style={{ display: 'inline-flex', background: 'var(--surface-2)', borderRadius: 'var(--radius)', padding: 3, marginBottom: 18 }}>
         {ABAS.map(a => (
-          <button key={a.id} data-tour={`matrizes-tab-${a.id}`} onClick={() => { setPrefillPar(null); setTab(a.id) }} className="btn btn-sm"
+          <button key={a.id} data-tour={`matrizes-tab-${a.id}`} className="btn btn-sm"
+            onClick={() => { setPrefillPar(null); setFocoUf(null); setTab(a.id) }}
             style={{ border: 'none', background: tab === a.id ? 'var(--surface)' : 'transparent', color: tab === a.id ? 'var(--text-1)' : 'var(--text-3)', boxShadow: tab === a.id ? 'var(--shadow-sm)' : 'none' }}>
             <i className={`ti ${a.icon}`} /> {a.label}
             {a.id === 'revisao' && pendencias > 0 && (
@@ -1520,10 +1941,12 @@ export default function MatrizesFiscais() {
         {aba.id === 'revisao'
           ? <RevisaoPanel key={`${tab}:${bulkVersion}`} onMudou={atualizarPendencias} />
           : aba.id === 'saude'
-            ? <SaudePanel key={`${tab}:${bulkVersion}`} onCadastrarPar={cadastrarPar} />
+            ? <SaudePanel key={`${tab}:${bulkVersion}`} onCadastrarPar={cadastrarPar}
+                onCorrigirUf={corrigirUf} />
             : aba.custom
               ? <CoberturaPanel key={`${tab}:${bulkVersion}`} />
               : <CrudMatriz key={`${tab}:${bulkVersion}`} aba={aba}
+                  foco={focoUf?.matriz === tab ? focoUf : null}
                   prefill={(tab === 'protocolos' && prefillPar)
                     || (deepLink?.aba === tab ? deepLink.prefill : null)} />}
       </div>
