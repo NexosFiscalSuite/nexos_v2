@@ -6,6 +6,7 @@ serviço re-aplica o De/Para CFOP nos itens existentes e re-roda o StAuditServic
 """
 from __future__ import annotations
 
+import logging
 import re
 from uuid import UUID
 
@@ -15,6 +16,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.cfop_rules.infrastructure.repositories import CfopRegraRepository
 from app.modules.fiscal.application.st_audit_service import StAuditService
 from app.modules.fiscal.infrastructure.models import AuditoriaIcmsSt, Nota, NotaItem
+
+logger = logging.getLogger(__name__)
+
+# Quantas notas com falha o resumo devolve nomeadas. O contador `falhas` é
+# exato; a lista é amostra, para não estourar a resposta num lote grande.
+_MAX_FALHAS_DETALHADAS = 20
 
 
 def _digits(s: str | None) -> str:
@@ -77,17 +84,44 @@ class ReprocessService:
             await self.session.flush()
 
         # 3) Re-audita as notas-alvo; conta as que saíram de NAO_AUDITAVEL.
+        #    UMA nota podre não pode derrubar o lote inteiro. O motor já segue
+        #    esse princípio por item ("input podre vira diagnóstico, nunca
+        #    crash") — aqui ele vale por nota: antes, uma única exceção subia
+        #    como 500, o usuário não via progresso nenhum e não descobria QUAL
+        #    nota quebrou. Agora a falha é isolada, contada e nomeada.
         destravadas = 0
+        falhas = 0
+        falhas_detalhe: list[dict] = []
         for nid, eid in alvo.items():
             tinha_pendente = await self._tem_nao_auditavel(nid)
-            await self.audit.auditar_nota(eid, nid)
+            try:
+                # SAVEPOINT por nota: a falha desfaz só o trabalho DESTA nota.
+                # Um `rollback()` da sessão inteira levaria junto as
+                # reclassificações de CFOP do passo 2, que já estão flushadas —
+                # e sem isolamento nenhum a sessão ficaria suja e todas as
+                # notas seguintes falhariam em cascata por causa de uma só.
+                # `auditar_nota` só faz flush (nunca commit), então aninhar é
+                # seguro.
+                async with self.session.begin_nested():
+                    await self.audit.auditar_nota(eid, nid)
+            except Exception as exc:   # noqa: BLE001 — lote não pode parar
+                logger.exception("Reprocessamento falhou na nota %s", nid)
+                falhas += 1
+                if len(falhas_detalhe) < _MAX_FALHAS_DETALHADAS:
+                    falhas_detalhe.append({
+                        "nota_id": str(nid),
+                        "erro": f"{type(exc).__name__}: {exc}"[:300],
+                    })
+                continue
             if tinha_pendente and not await self._tem_nao_auditavel(nid):
                 destravadas += 1
 
         return {
-            "notas_reprocessadas": len(alvo),
+            "notas_reprocessadas": len(alvo) - falhas,
             "cfop_reclassificados": cfop_reclassificados,
             "notas_destravadas": destravadas,
+            "falhas": falhas,
+            "falhas_detalhe": falhas_detalhe,
         }
 
     async def reprocessar_produto(self, empresa_id: UUID, codigo_produto: str) -> dict:

@@ -56,6 +56,18 @@ export default function CfopRegras() {
           : 'Nenhuma nota pendente para reprocessar.',
         r.notas_reprocessadas ? 'ok' : 'info',
       )
+      // Antes, uma nota problemática derrubava o lote inteiro com erro do
+      // servidor e nada era reprocessado. Agora ela é pulada — mas precisa
+      // aparecer, senão o silêncio faria parecer que tudo passou.
+      if (r.falhas) {
+        const chaves = (r.falhas_detalhe || []).map(f => f.nota_id).slice(0, 3).join(', ')
+        toast(
+          `${r.falhas} nota(s) não puderam ser reprocessadas e foram puladas` +
+          (chaves ? ` — ${chaves}${r.falhas > 3 ? ' e outras' : ''}. ` : '. ') +
+          'As demais foram concluídas normalmente.',
+          'error',
+        )
+      }
     } catch (e) { toast(e.message, 'error') }
     finally { setBulkBusy(false) }
   }
