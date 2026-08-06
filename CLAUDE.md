@@ -138,6 +138,35 @@ Protocolos e estava sendo descartado); o hash de proposta mudou, então rejeiç�
 antigas de MVA voltam uma vez à fila. Cobertura real: **só MG tem MVA de fonte
 oficial automatizada** — ver docs/estado_base_matrizes_st.md.
 
+**Diagnóstico "por que não achamos a MVA" + reprocesso resiliente (06/08).**
+Depois do deploy e da carga do Anexo VII (milhares de linhas), uma nota seguia
+calculando sem margem — e a mensagem só dizia "não há MVA cadastrada", sem
+mostrar o que EXISTE nem por que não casou. `application/mva_diagnostico.py` +
+`GET /matrizes/mva-diagnostico?ncm=&cest=&uf_origem=&uf_destino=&data=`
+respondem com veredicto (`ENCONTRADA` | `SEM_LINHA_NENHUMA` |
+`FORA_DA_VIGENCIA` | `ORIGEM_NAO_COBERTA` | `CEST_NAO_BATE` | `AMBIGUA`),
+explicação para leigo e a lista de TODAS as candidatas (inclusive fora de
+vigência e de outras origens) com o motivo de cada uma. **Usa a busca DO
+MOTOR**, não uma reimplementação: `stmt_mva_do_motor`/`montar_mva_snapshot`
+foram extraídos de `MatrizesLoader._mva` (movimento puro) e o teste
+`test_veredicto_bate_com_o_que_o_motor_responderia` trava a equivalência —
+diagnóstico que discorda do motor é pior que nenhum. Aparece no balão do item
+em Divergências, consultando com a DATA DE EMISSÃO da nota (usar "hoje" diria
+"achei" para uma nota que o motor não calculou).
+**As duas causas que ele existe para distinguir:** (1) `crawler_vigencia_inicio
+= "2026-06-01"` (config.py) — TODA linha do Anexo VII começa em 01/06/2026,
+então nota anterior a junho/2026 não enxerga nenhuma delas; baixar esse piso é
+decisão do João e exige retroagir as linhas já carregadas (há precedente na
+migração 0028). (2) a MVA agora é por UF de origem — fornecedor em estado fora
+do âmbito do item não tem linha, nem curinga.
+Junto: `reprocessar_pendentes` deixou de derrubar o lote inteiro. Uma exceção
+em UMA nota subia como 500, nada era destravado e não se sabia qual nota
+quebrou (não havia teste nenhum cobrindo o caminho). Agora cada nota roda em
+SAVEPOINT — `rollback()` da sessão levaria junto as reclassificações de CFOP já
+flushadas, e sem isolamento a sessão suja derrubaria todas as seguintes em
+cascata. O resumo traz `falhas` + `falhas_detalhe` (até 20 notas nomeadas) e a
+tela avisa quantas foram puladas.
+
 **MVA aprendida das notas + dívidas fechadas (06/08).** Só MG tem MVA de fonte
 oficial; nas outras 6 UFs a margem é digitada à mão, e cadastro manual empurra
 o usuário de volta ao app oficial. `application/mva_aprendida.py` agrupa o
@@ -235,9 +264,9 @@ propostas UF→MG escopadas por NCM nos dados reais, base legal no estilo
 protocolo agora inclui ncm — vários escopos por acordo; FCP de MG segue
 manual, fonte própria Lei 6.763/75 art. 12-A). Paginação em
 todas as listas (15–50/página; componente Paginacao). Migrações até 0036.
-Suite: 387 passed, 4 skipped. Deploys de 04-06/08 AGUARDANDO o João
-(sem acesso ao servidor no momento) — um git pull + build + compose aplica
-tudo, migrações rodam sozinhas. Falta da proposta: Fase 6 (pauta/PMPF — com
+Suite: 407 passed, 4 skipped. O João VOLTOU a ter acesso ao servidor: em
+06/08 ele deployou e rodou o botão da carga do Anexo VII (milhares de linhas
+de MVA entraram, "99+ páginas"). Falta da proposta: Fase 6 (pauta/PMPF — com
 MG fora do PMPF, relevância caiu; avaliar por UF).
 
 ## Pendências e ofertas em aberto

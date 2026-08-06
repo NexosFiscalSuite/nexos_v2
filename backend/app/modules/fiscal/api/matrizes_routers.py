@@ -55,6 +55,7 @@ from app.modules.fiscal.application.mva_aprendida import (
     gerar_propostas_mva_aprendida,
     previa_mva_aprendida,
 )
+from app.modules.fiscal.application.mva_diagnostico import diagnosticar_mva
 from app.modules.fiscal.application.pares_interestaduais import pares_interestaduais
 from app.modules.fiscal.application.reprocess_service import ReprocessService
 from app.modules.fiscal.infrastructure.matrizes_models import (
@@ -494,6 +495,37 @@ async def saude_matrizes_endpoint(
     nos últimos 90 dias, a verificação mais antiga por matriz e as propostas
     aguardando revisão — o que está envelhecendo aparece antes de virar erro."""
     return await saude_matrizes(session)
+
+
+@router.get("/mva-diagnostico")
+async def mva_diagnostico_endpoint(
+    ncm: str = Query(..., description="NCM do item (com ou sem pontuação)"),
+    uf_destino: str = Query(..., description="UF de destino da mercadoria"),
+    cest: str | None = Query(
+        default=None, description="CEST do item; vazio = o XML veio sem a tag"
+    ),
+    uf_origem: str | None = Query(
+        default=None,
+        description="UF do fornecedor. Vazia = só a regra curinga '*' é considerada.",
+    ),
+    data: date | None = Query(
+        default=None, description="Data de emissão da nota (AAAA-MM-DD); vazio = hoje"
+    ),
+    claims: TokenClaims = Depends(get_current_claims),
+    session: AsyncSession = Depends(tenant_session),
+):
+    """Por que o motor achou (ou NÃO achou) a MVA desta chave.
+
+    Roda a MESMA busca do motor (vigência da data de emissão, fallback de NCM
+    8→6→4, origem exata antes do curinga "*") e devolve, além do veredicto,
+    TODAS as linhas do NCM naquele destino — inclusive as fora de vigência —
+    com o motivo de cada uma não ter casado. É o que distingue "a matriz está
+    vazia" de "a matriz está cheia, mas as linhas só valem a partir de tal
+    data" ou "não há linha para o estado do fornecedor"."""
+    return await diagnosticar_mva(
+        session, ncm=ncm, cest=cest, uf_origem=uf_origem,
+        uf_destino=uf_destino, data=data,
+    )
 
 
 @router.get("/pares-interestaduais")

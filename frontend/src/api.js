@@ -170,6 +170,14 @@ export const api = {
     const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
     return request('GET', '/matrizes/mva' + (q ? `?${q}` : ''))
   },
+  // Diagnóstico da MVA: por que o motor NÃO achou margem para um item.
+  // Devolve o veredicto, a explicação em português e as linhas candidatas da
+  // matriz com o motivo de cada uma não ter casado. A `data` é a da EMISSÃO da
+  // nota (é ela que decide a vigência) — nunca a data de hoje.
+  mvaDiagnostico: (params = {}) => {
+    const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
+    return request('GET', '/matrizes/mva-diagnostico' + (q ? `?${q}` : ''))
+  },
   criarMatrizMva: (data) => request('POST', '/matrizes/mva', data),
   editarMatrizMva: (id, data) => request('PATCH', `/matrizes/mva/${id}`, data),
   removerMatrizMva: (id) => request('DELETE', `/matrizes/mva/${id}`),

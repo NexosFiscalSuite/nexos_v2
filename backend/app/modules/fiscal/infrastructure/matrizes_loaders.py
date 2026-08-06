@@ -125,6 +125,43 @@ class _MvaSnapshot:
         return None
 
 
+def stmt_mva_do_motor(uf_orig: str, uf_dest: str, ncms, data: date):
+    """SELECT das linhas de MVA que o MOTOR enxerga para o par/data.
+
+    Extraído de `MatrizesLoader._mva` para virar fonte ÚNICA da consulta: o
+    diagnóstico da tela (`application/mva_diagnostico.py`) precisa responder
+    exatamente o que o motor responderia, e um diagnóstico que discorda do
+    motor é pior do que não ter diagnóstico. Quem muda a busca muda aqui, e
+    os dois lados andam juntos.
+
+    Sem filtro por CEST: o XML pode vir sem a tag (o snapshot resolve o
+    fallback por NCM) — poucas linhas por NCM, custo irrelevante. A origem
+    entra na query com o curinga junto: o snapshot é quem decide a
+    precedência (exata > "*") dentro de cada nível de NCM.
+    """
+    return _desempate_vigencia(
+        filtrar_vigencia(
+            select(MatrizMva).where(
+                MatrizMva.uf_destino == uf_dest,
+                MatrizMva.uf_origem.in_({uf_orig, CURINGA_UF}),
+                MatrizMva.ncm.in_(ncms),
+            ),
+            MatrizMva,
+            data,
+        ),
+        MatrizMva,
+    )
+
+
+def montar_mva_snapshot(rows) -> _MvaSnapshot:
+    """Hidrata o repositório síncrono a partir das linhas de `stmt_mva_do_motor`."""
+    return _MvaSnapshot({
+        (r.ncm, r.cest, _uf(r.uf_origem), r.uf_destino):
+            (r.mva_original, r.id, r.base_legal)
+        for r in rows
+    })
+
+
 @dataclass(frozen=True, slots=True)
 class _EnquadramentoSnapshot:
     """Portão NCM×CEST×UF + as Exceções do Item da empresa.
@@ -324,28 +361,11 @@ class MatrizesLoader:
         )
 
     async def _mva(self, uf_orig, uf, ncms, cests, data) -> _MvaSnapshot:
-        # Sem filtro por CEST: o XML pode vir sem a tag (o snapshot resolve o
-        # fallback por NCM) — poucas linhas por NCM, custo irrelevante.
-        # A origem entra na query com o curinga junto: o snapshot é quem decide
-        # a precedência (exata > "*") dentro de cada nível de NCM.
-        stmt = _desempate_vigencia(
-            filtrar_vigencia(
-                select(MatrizMva).where(
-                    MatrizMva.uf_destino == uf,
-                    MatrizMva.uf_origem.in_({uf_orig, CURINGA_UF}),
-                    MatrizMva.ncm.in_(ncms),
-                ),
-                MatrizMva,
-                data,
-            ),
-            MatrizMva,
-        )
+        # Consulta e hidratação vivem em `stmt_mva_do_motor`/`montar_mva_snapshot`
+        # para que o diagnóstico da tela use LITERALMENTE a mesma busca.
+        stmt = stmt_mva_do_motor(uf_orig, uf, ncms, data)
         rows = (await self.session.execute(stmt)).scalars().all()
-        return _MvaSnapshot({
-            (r.ncm, r.cest, _uf(r.uf_origem), r.uf_destino):
-                (r.mva_original, r.id, r.base_legal)
-            for r in rows
-        })
+        return montar_mva_snapshot(rows)
 
     async def _enquadramento(
         self, uf, ncms, cests, data,

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import Dropdown from '../components/Dropdown'
 import { api, saveBlob } from '../api'
 import ErroCarga from '../components/ErroCarga'
+import DiagnosticoMva from '../components/DiagnosticoMva'
 import { useEmpresa } from '../context/EmpresaContext'
 import { useCompetencia } from '../context/CompetenciaContext'
 import { useToast, ToastContainer } from '../hooks/useToast'
@@ -113,6 +114,22 @@ function linkMatriz(item) {
     return q({ aba: 'protocolos', uf_origem: item.uf_origem, uf_destino: item.uf_destino })
   return null
 }
+// Parâmetros do diagnóstico "por que não achamos a margem" para o item que
+// caiu sem MVA. A DATA é a de EMISSÃO da nota (`data_emissao`, ISO do XML) —
+// é ela que decide a vigência da linha da matriz; a data de hoje mostraria
+// uma matriz que não é a que valia quando a nota foi emitida.
+function consultaMva(item) {
+  if (!(item.codigo_erro || '').includes('ERRO_MVA_NAO_ENCONTRADA')) return null
+  if (!item.ncm || !item.uf_destino) return null
+  return {
+    ncm: item.ncm,
+    cest: item.cest || '',
+    uf_origem: item.uf_origem || '',
+    uf_destino: item.uf_destino,
+    data: item.data_emissao || '',
+  }
+}
+
 const brl = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const pct = (v) => (v == null ? '—' : `${Number(v).toFixed(2)}%`)
 
@@ -760,10 +777,12 @@ const RotuloSt = ({ children }) => (
 // A conduta do analista como selo destacado; o ⓘ abre o balão com a
 // explicação técnica do motor (padrão do balão da classificação — clique
 // abre, clique fora fecha). Nada de tooltip escondido no hover.
-function AcaoSugerida({ acao, destinoMatriz, onIrMatriz, onSemAcordo, verificar, diagnostico, onVerMemoria, ressalva, onImportarCte, onSemCte, seloTour }) {
+function AcaoSugerida({ acao, destinoMatriz, onIrMatriz, onSemAcordo, verificar, diagnostico, onVerMemoria, ressalva, onImportarCte, onSemCte, seloTour, consultaMva }) {
   const [aberto, setAberto] = useState(false)
   const [pos, setPos] = useState(null)
   const ref = useRef(null)
+  // Com o diagnóstico da margem o balão ganha uma tabela — precisa de largura.
+  const largura = consultaMva ? 560 : 440
 
   useEffect(() => {
     if (!aberto) return
@@ -778,7 +797,7 @@ function AcaoSugerida({ acao, destinoMatriz, onIrMatriz, onSemAcordo, verificar,
       const r = ref.current.getBoundingClientRect()
       setPos({
         top: Math.min(r.bottom + 6, window.innerHeight - 200),
-        left: Math.min(r.left, window.innerWidth - 420),
+        left: Math.min(Math.max(r.left, 12), Math.max(12, window.innerWidth - (largura + 20))),
       })
     }
     setAberto(a => !a)
@@ -798,9 +817,10 @@ function AcaoSugerida({ acao, destinoMatriz, onIrMatriz, onSemAcordo, verificar,
         </button>
         {aberto && pos && (
           <div className="balao-classif" style={{
-            position: 'fixed', top: pos.top, left: pos.left, zIndex: 2000, width: 440,
+            position: 'fixed', top: pos.top, left: pos.left, zIndex: 2000, width: largura,
             background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
             boxShadow: '0 10px 30px rgba(0,0,0,.18)', padding: '13px 15px', textAlign: 'left',
+            maxHeight: 'min(72vh, 620px)', overflowY: 'auto',
           }}>
             <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 6, color: 'var(--text-1)' }}>
               Por que este item foi apontado
@@ -826,6 +846,8 @@ function AcaoSugerida({ acao, destinoMatriz, onIrMatriz, onSemAcordo, verificar,
                 </ol>
               </div>
             )}
+
+            {consultaMva && <DiagnosticoMva consulta={consultaMva} />}
 
             {ressalva && (
               <div style={{ marginTop: 8, background: 'var(--warn-bg)', color: 'var(--warn-text)', borderRadius: 8, padding: '8px 11px', fontSize: 12, lineHeight: 1.55 }}>
@@ -971,6 +993,7 @@ function FragmentoNota({ nota, aberto, onToggle, onMemoria, catalogo, onSemAcord
                   ? () => onSemAcordo(it) : null}
                 verificar={comoVerificar(it.codigo_erro)}
                 diagnostico={diagnosticoAutomatico(it)}
+                consultaMva={consultaMva(it)}
                 onVerMemoria={it.memoria ? () => onMemoria(it) : null}
                 onImportarCte={(it.codigo_erro || '').includes('ERRO_FRETE_PENDENTE_CTE')
                   ? () => navigate('/upload') : null}
