@@ -259,3 +259,13 @@ def test_export_de_lacunas_sai_no_layout_do_import_da_mva():
     from app.modules.fiscal.application.cobertura_service import COLUNAS_CSV_MVA
 
     assert list(COLUNAS_CSV_MVA) == MATRIZES["mva"].colunas
+
+
+def test_rota_de_carga_inicial_registrada():
+    """O worker da carga existia desde a Fase 5, mas sem gatilho: só rodava por
+    linha de comando no servidor — por isso a base chegou vazia em producao."""
+    from app.modules.fiscal.api.matrizes_routers import router
+
+    rota = next((r for r in router.routes if r.path == "/matrizes/carga-inicial"), None)
+    assert rota is not None
+    assert "POST" in rota.methods

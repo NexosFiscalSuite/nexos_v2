@@ -263,6 +263,10 @@ export const api = {
       { fallback: 'mva_lacunas.csv' })
   },
 
+  // Carga inicial: robô lê o Anexo VII do RICMS/MG e enche as matrizes de uma
+  // vez (idempotente — nunca sobrescreve linha existente).
+  cargaInicialMatrizes: () => request('POST', '/matrizes/carga-inicial'),
+
   // Bulk (planilha CSV) — export = template/base; import = upsert por chave
   exportarMatriz: (tipo) => downloadBlob(`/matrizes/${tipo}/export`, { fallback: `matriz_${tipo}.csv` }),
   importarMatriz: (tipo, file) => {

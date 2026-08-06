@@ -461,6 +461,38 @@ async def pares_interestaduais_endpoint(
     return await pares_interestaduais(session, limite=limite)
 
 
+@router.post("/carga-inicial", status_code=status.HTTP_202_ACCEPTED)
+async def disparar_carga_inicial(
+    claims: TokenClaims = Depends(require_curador),
+    session: AsyncSession = Depends(tenant_session),
+):
+    """Enche a base de uma vez: alíquotas das 7 UFs + TODO o Anexo VII de MG
+    (MVA e Protocolos), aprovando o lote em nome do robô.
+
+    O worker `fiscal.carga_inicial_matrizes` já existia, mas só podia ser
+    chamado por linha de comando no servidor — na prática nunca rodou, e é por
+    isso que a matriz de MVA chegou vazia em produção e o motor calculava pelo
+    valor da operação. Aqui ele ganha um gatilho pela tela.
+
+    Idempotente: linha que já existe (inclusive curadoria manual) NUNCA é
+    sobrescrita, então rodar de novo é seguro."""
+    from app.modules.fiscal.crawlers.workers import carga_inicial_matrizes
+
+    await AuditService(session).registrar(
+        tenant_id=claims.tid, user_id=claims.sub, acao="matrizes.carga_inicial",
+        entidade="matriz_mva", detalhe={"origem": "tela"},
+    )
+    carga_inicial_matrizes.delay()
+    return {
+        "status": "enfileirada",
+        "mensagem": (
+            "Carga iniciada. O robô lê o Anexo VII do RICMS/MG e preenche as "
+            "matrizes — leva alguns minutos. Acompanhe pela aba Cobertura: as "
+            "lacunas de MVA vão diminuindo conforme a base enche."
+        ),
+    }
+
+
 @router.get("/cobertura")
 async def cobertura_matrizes(
     empresa_id: UUID | None = Query(default=None, description="Limita a uma empresa"),

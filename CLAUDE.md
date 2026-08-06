@@ -180,11 +180,15 @@ MG fora do PMPF, relevância caiu; avaliar por UF).
   e propor na fila quando vários convergirem, com a contagem de notas que
   sustentam o valor. É a resposta de fundo ao "se tiver que cadastrar na mão,
   o usuário prefere o app oficial". Nada entraria sem curadoria.
-- Operacional (lado do João): limpar `NEXOS_MATRIZ_CURADORES` no .env do
-  servidor; conferir grupos dos supervisores após o deploy do `3720b18`
-  (supervisor sem grupo não vê empresa nenhuma); **depois de carregar as
-  lacunas de MVA, ligar `NEXOS_ST_MVA_FAIL_CLOSED=true`** — enquanto estiver
-  off, item sem MVA cadastrada segue calculado pelo valor da operação.
+- Operacional (lado do João), NA ORDEM: **(1) botão "Carregar base de MG
+  (Anexo VII)" na aba Cobertura** — o worker `fiscal.carga_inicial_matrizes`
+  existia desde a Fase 5 mas NÃO tinha gatilho (só linha de comando no
+  servidor, que o João não acessa), então nunca rodou e a matriz de MVA
+  chegou vazia em produção; é a causa dos ST calculados a menor;
+  (2) carregar as lacunas das demais UFs pelo CSV; (3) só então ligar
+  `NEXOS_ST_MVA_FAIL_CLOSED=true`. Também: limpar `NEXOS_MATRIZ_CURADORES`
+  no .env; conferir grupos dos supervisores após o deploy do `3720b18`
+  (supervisor sem grupo não vê empresa nenhuma).
 
 ## graphify
 

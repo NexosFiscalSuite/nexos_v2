@@ -476,6 +476,7 @@ function CoberturaPanel() {
   const [page, setPage] = useState(1)
   const [lacunas, setLacunas] = useState(null)
   const [baixando, setBaixando] = useState(false)
+  const [carregandoBase, setCarregandoBase] = useState(false)
 
   const carregar = useCallback(async () => {
     setLoading(true)
@@ -511,6 +512,16 @@ function CoberturaPanel() {
     }
     catch (e) { toast(e.message, 'error') }
     finally { setBaixando(false) }
+  }
+
+  async function carregarBaseMg() {
+    setCarregandoBase(true)
+    try {
+      const r = await api.cargaInicialMatrizes()
+      toast(r?.mensagem || 'Carga iniciada.', 'ok')
+    }
+    catch (e) { toast(e.message, 'error') }
+    finally { setCarregandoBase(false) }
   }
 
   if (loading) return <div className="center-loader"><div className="spinner" /></div>
@@ -551,16 +562,24 @@ function CoberturaPanel() {
             </div>
             <div style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.55 }}>
               São <span className="tnum">{brl(lacunas.valor)}</span> em mercadoria sem margem
-              cadastrada para o par de estados. Baixe a lista — ela já vem no formato do
-              “Importar planilha”, ordenada pelo que pesa mais: basta preencher a coluna da
-              margem com a fonte oficial e subir de volta.
+              cadastrada para o par de estados — sem ela, o ST sai calculado só sobre o valor
+              da operação, abaixo do devido. Para MG, o robô preenche sozinho a partir do
+              Anexo VII do RICMS. Nas demais UFs não há fonte automatizada: baixe a lista,
+              que já vem no formato do “Importar planilha” e ordenada pelo que pesa mais.
             </div>
           </div>
-          <button className="btn" onClick={baixarLacunas} disabled={baixando}
-            style={{ whiteSpace: 'nowrap' }}>
-            <i className={`ti ${baixando ? 'ti-loader-2' : 'ti-file-download'}`} />
-            {baixando ? 'Gerando…' : 'Baixar lacunas de MVA'}
-          </button>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn btn-primary" onClick={carregarBaseMg} disabled={carregandoBase}
+              style={{ whiteSpace: 'nowrap' }}>
+              <i className={`ti ${carregandoBase ? 'ti-loader-2' : 'ti-download'}`} />
+              {carregandoBase ? 'Iniciando…' : 'Carregar base de MG (Anexo VII)'}
+            </button>
+            <button className="btn" onClick={baixarLacunas} disabled={baixando}
+              style={{ whiteSpace: 'nowrap' }}>
+              <i className={`ti ${baixando ? 'ti-loader-2' : 'ti-file-download'}`} />
+              {baixando ? 'Gerando…' : 'Baixar lacunas'}
+            </button>
+          </div>
         </div>
       )}
 
