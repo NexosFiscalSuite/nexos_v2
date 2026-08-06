@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Dropdown from '../components/Dropdown'
 import Paginacao from '../components/Paginacao'
+import SelectUf from '../components/SelectUf'
 import { api } from '../api'
 import { useEmpresa } from '../context/EmpresaContext'
 import { useToast, ToastContainer } from '../hooks/useToast'
@@ -194,9 +195,11 @@ export default function Cadastros() {
                   <div className="field"><label>Nome fantasia</label><input value={form.nome_fantasia || ''} onChange={set('nome_fantasia')} /></div>
                   <div className="field"><label>Inscrição estadual</label><input value={form.inscricao_estadual || ''} onChange={set('inscricao_estadual')} /></div>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 1fr', gap: 14 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
                   <div className="field"><label>Município</label><input value={form.municipio || ''} onChange={set('municipio')} /></div>
-                  <div className="field"><label>UF</label><input value={form.uf || ''} onChange={set('uf')} maxLength={2} /></div>
+                  <div className="field"><label>UF</label>
+                    <SelectUf value={form.uf} placeholder="Não informada"
+                      onChange={v => setForm(f => ({ ...f, uf: v }))} /></div>
                   <div className="field">
                     <label>Regime Tributário</label>
                     <Dropdown value={form.regime || ''} onChange={v => setForm(f => ({ ...f, regime: v }))} options={REGIME_OPTS} placeholder="Selecione…" />

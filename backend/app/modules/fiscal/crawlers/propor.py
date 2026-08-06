@@ -34,6 +34,7 @@ from app.modules.fiscal.infrastructure.propostas_models import (
     MatrizProposta,
 )
 from app.modules.fiscal.infrastructure.vigencia import filtrar_vigencia
+from app.shared.domain.uf import CURINGA_UF
 
 from .base import CestRecord
 from .sefaz_mg_mva import MvaRecord
@@ -44,9 +45,14 @@ BASE_LEGAL_AUTO = "Convênio ICMS 142/2018 (auto/CONFAZ)"
 BASE_LEGAL_AUTO_MVA = "RICMS/MG 2023, Anexo VII"
 
 
-def _base_legal_mva(r: MvaRecord) -> str:
+def _base_legal_mva(r: MvaRecord, uf_origem: str = CURINGA_UF) -> str:
     sufixo = f", âmbito {r.ambitos[0]}" if r.ambitos else ", Parte 2"
-    return f"{BASE_LEGAL_AUTO_MVA}{sufixo} (auto/SEFAZ-MG)"[:120]
+    origem = "" if uf_origem == CURINGA_UF else f" · origem {uf_origem}"
+    return f"{BASE_LEGAL_AUTO_MVA}{sufixo}{origem} (auto/SEFAZ-MG)"[:120]
+
+
+def _origem_legivel(uf_origem: str) -> str:
+    return "qualquer origem" if uf_origem == CURINGA_UF else uf_origem
 
 
 def hash_proposta(tipo: str, payload: dict) -> str:
@@ -183,19 +189,30 @@ async def propor_mva(
 ) -> dict:
     """Diff das MVAs do anexo contra a matriz vigente da UF → propostas.
 
-    Regras (espelham o enquadramento): chave (NCM, CEST) sem linha → INSERIR
-    com a vigência-piso; linha do PRÓPRIO robô com MVA diferente →
-    NOVA_VIGENCIA a partir de `vigencia_mudanca` (1º do mês da detecção — o
-    anexo não publica a data exata da mudança por item; o curador rejeita e
-    lança na mão se souber a data legal); curadoria manual NUNCA é tocada;
-    par com MVAs CONFLITANTES na própria fonte fica de fora (ambíguo,
-    fail-closed). Rejeição suprime re-proposta por hash."""
+    A chave é (NCM, CEST, **UF de origem**, UF de destino): a mesma da
+    `MatrizMva.CHAVE_VIGENCIA`. A origem sai de `MvaRecord.origens()` — o
+    âmbito do anexo resolvido pela legenda (`resolver_origens`); linha sem
+    âmbito legível vira uma proposta com CURINGA_UF ("qualquer origem"),
+    o comportamento anterior a esta fase.
+
+    Regras (espelham o enquadramento): chave sem linha → INSERIR com a
+    vigência-piso; linha do PRÓPRIO robô com MVA diferente → NOVA_VIGENCIA a
+    partir de `vigencia_mudanca` (1º do mês da detecção — o anexo não publica
+    a data exata da mudança por item; o curador rejeita e lança na mão se
+    souber a data legal); curadoria manual NUNCA é tocada; chave com MVAs
+    CONFLITANTES na própria fonte fica de fora (ambíguo, fail-closed).
+    Rejeição suprime re-proposta por hash — e como o `uf_origem` entra no
+    payload, o hash mudou nesta fase: rejeições antigas (origem-cegas) não
+    suprimem as propostas novas, que são outra afirmação (margem X para a
+    origem Y). É uma re-oferta única, e nada entra sem aprovação."""
     uf = uf.upper()
 
     stmt = filtrar_vigencia(
         select(MatrizMva).where(MatrizMva.uf_destino == uf), MatrizMva, date.today()
     )
-    atuais = {(r.ncm, r.cest): r for r in (await session.execute(stmt)).scalars()}
+    atuais = {
+        (r.ncm, r.cest, r.uf_origem): r for r in (await session.execute(stmt)).scalars()
+    }
 
     vistos = set((await session.execute(
         select(MatrizProposta.hash_proposta).where(
@@ -204,38 +221,38 @@ async def propor_mva(
         )
     )).scalars())
 
-    # Dedup da fonte com detecção de conflito: mesmo par com MVAs distintas
-    # (capítulos/âmbitos diferentes) é ambíguo — não vira proposta.
-    por_par: dict[tuple[str, str], set[Decimal]] = {}
-    exemplo: dict[tuple[str, str], MvaRecord] = {}
+    # Dedup da fonte com detecção de conflito: mesma chave com MVAs distintas
+    # (capítulos/âmbitos diferentes) é ambígua — não vira proposta. Com a
+    # origem na chave, duas margens de ORIGENS diferentes deixam de brigar:
+    # deixam de ser "conflito" e viram duas linhas legítimas.
+    por_chave: dict[tuple[str, str, str], set[Decimal]] = {}
+    exemplo: dict[tuple[str, str, str], MvaRecord] = {}
     for r in registros:
-        chave = (r.ncm, r.cest)
-        por_par.setdefault(chave, set()).add(r.mva)
-        exemplo.setdefault(chave, r)
+        for uf_origem in r.origens():
+            chave = (r.ncm, r.cest, uf_origem)
+            por_chave.setdefault(chave, set()).add(r.mva)
+            exemplo.setdefault(chave, r)
 
     criadas = suprimidas = inalteradas = ambiguos = 0
-    for chave, mvas in por_par.items():
+    for chave, mvas in por_chave.items():
         if len(mvas) > 1:
             ambiguos += 1
             continue
         r = exemplo[chave]
+        uf_origem = chave[2]
         atual = atuais.get(chave)
         eh_auto = bool(atual is not None and (atual.base_legal or "").startswith(BASE_LEGAL_AUTO_MVA))
+        base = {
+            "ncm": r.ncm, "cest": r.cest,
+            "uf_origem": uf_origem, "uf_destino": uf,
+            "mva_original": str(r.mva), "base_legal": _base_legal_mva(r, uf_origem),
+            "data_fim_vigencia": None,
+        }
         if atual is None:
-            payload = {
-                "ncm": r.ncm, "cest": r.cest, "uf_destino": uf,
-                "mva_original": str(r.mva), "base_legal": _base_legal_mva(r),
-                "data_inicio_vigencia": vigencia_inicio.isoformat(),
-                "data_fim_vigencia": None,
-            }
+            payload = {**base, "data_inicio_vigencia": vigencia_inicio.isoformat()}
             acao, linha_id, congelada = ACAO_INSERIR, None, None
         elif eh_auto and atual.mva_original != r.mva:
-            payload = {
-                "ncm": r.ncm, "cest": r.cest, "uf_destino": uf,
-                "mva_original": str(r.mva), "base_legal": _base_legal_mva(r),
-                "data_inicio_vigencia": vigencia_mudanca.isoformat(),
-                "data_fim_vigencia": None,
-            }
+            payload = {**base, "data_inicio_vigencia": vigencia_mudanca.isoformat()}
             acao, linha_id, congelada = ACAO_NOVA_VIGENCIA, atual.id, _congelar_mva(atual)
         else:
             inalteradas += 1                     # igual, ou curadoria manual
@@ -248,7 +265,9 @@ async def propor_mva(
         vistos.add(h)
         session.add(MatrizProposta(
             tipo_matriz="mva", acao=acao,
-            chave_resumo=f"{uf} · NCM {r.ncm} · CEST {r.cest}",
+            chave_resumo=(
+                f"{_origem_legivel(uf_origem)} → {uf} · NCM {r.ncm} · CEST {r.cest}"
+            )[:200],
             payload=payload, linha_atual_id=linha_id, linha_atual=congelada,
             fonte=fonte, fonte_snapshot_id=snapshot_id, hash_proposta=h,
         ))
@@ -256,7 +275,8 @@ async def propor_mva(
 
     await session.flush()
     return {
-        "uf": uf, "lidos": len(registros), "pares": len(por_par),
+        "uf": uf, "lidos": len(registros), "pares": len(por_chave),
+        "com_origem": sum(1 for c in por_chave if c[2] != CURINGA_UF),
         "propostas": criadas, "suprimidas": suprimidas,
         "sem_mudanca": inalteradas, "ambiguos": ambiguos,
     }

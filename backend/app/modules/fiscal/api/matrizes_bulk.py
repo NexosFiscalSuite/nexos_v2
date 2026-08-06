@@ -35,8 +35,11 @@ _NORM = lambda o: o.normalizado()   # noqa: E731 — os schemas de matriz têm n
 
 # Cada matriz: model + schema (reuso do CRUD) + chave de upsert (com vigência, ADR-0002).
 MATRIZES: dict[str, BulkSpec] = {
+    # A coluna uf_origem entra sozinha no template (as colunas vêm do schema) e,
+    # vazia na planilha, cai no default "*". Ela PRECISA estar na chave: sem
+    # isso, MG←SP e MG←qualquer origem se sobrescreveriam no upsert.
     "mva": BulkSpec(MatrizMva, MatrizMvaCreate,
-                    ("ncm", "cest", "uf_destino", "data_inicio_vigencia"), _NORM),
+                    ("ncm", "cest", "uf_origem", "uf_destino", "data_inicio_vigencia"), _NORM),
     "enquadramento": BulkSpec(MatrizEnquadramentoSt, MatrizEnquadramentoCreate,
                               ("uf_destino", "ncm", "cest", "data_inicio_vigencia"), _NORM),
     "fcp": BulkSpec(MatrizFcp, MatrizFcpCreate,

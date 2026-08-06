@@ -16,12 +16,17 @@ from app.modules.fiscal.crawlers.propor import (
     propor_mva,
     propor_protocolos_mg,
 )
-from app.modules.fiscal.crawlers.sefaz_mg_mva import MvaRecord, SefazMgMvaExtractor
+from app.modules.fiscal.crawlers.sefaz_mg_mva import (
+    MvaRecord,
+    SefazMgMvaExtractor,
+    resolver_origens,
+)
 from app.modules.fiscal.infrastructure.matrizes_models import (
     MatrizMva,
     MatrizProtocoloSt,
 )
 from app.modules.fiscal.infrastructure.propostas_models import MatrizProposta
+from app.shared.domain.uf import CURINGA_UF
 
 # Amostra no formato real do Anexo VII (Parte 2): célula de layout vazia à
 # frente, cabeçalho, item com 2 NCM, item SEM margem ('-') e uma tabela sem a
@@ -69,6 +74,29 @@ def test_parse_ambitos_legenda_oficial():
     assert amb["16.2"] == []            # só interno: nenhum par interestadual
 
 
+def test_parse_internos_marca_os_ambitos_que_valem_dentro_de_mg():
+    """'Interno e nas seguintes UF' e 'Interno.' são ambos internos — é isso
+    que dá origem à linha de MVA da operação MG→MG."""
+    internos = SefazMgMvaExtractor().parse_internos(_HTML.encode("latin-1"))
+    assert internos == frozenset({"16.1", "16.2"})
+
+
+def test_resolver_origens_traduz_o_ambito_em_uf_de_origem():
+    """O âmbito diz EM QUE OPERAÇÕES a margem publicada vale: interna (MG) e
+    entradas das UFs com acordo, menos as exceções do item. Código de âmbito
+    que a legenda não define não vira palpite — cai no curinga."""
+    raw = _HTML.encode("latin-1")
+    ex = SefazMgMvaExtractor()
+    regs = resolver_origens(ex.parse(raw), ex.parse_ambitos(raw), ex.parse_internos(raw))
+    por_cest = {r.cest: r for r in regs}
+
+    # 16.1 = interno + SP + RO; o item traz "Exceção: Rondônia" → RO sai.
+    assert por_cest["1600100"].ufs_origem == ("MG", "SP")
+    # Âmbito 1.1 não está na legenda desta amostra: sem origem resolvida.
+    assert por_cest["0100100"].ufs_origem == ()
+    assert por_cest["0100100"].origens() == (CURINGA_UF,)
+
+
 # ── Diff → propostas ─────────────────────────────────────────────────────────
 PISO = date(2026, 6, 1)
 MUDANCA = date(2026, 8, 1)
@@ -103,6 +131,50 @@ async def test_par_novo_vira_inserir_com_piso(sessao):
     assert linha.mva_original == Decimal("42.00")
     assert linha.data_inicio_vigencia == PISO
     assert linha.base_legal.startswith(BASE_LEGAL_AUTO_MVA)
+
+
+@pytest.mark.asyncio
+async def test_uma_proposta_por_uf_de_origem_do_ambito(sessao):
+    """Cada origem do âmbito vira uma linha própria de MVA (mesmo padrão dos
+    protocolos): a margem publicada deixa de valer para o Brasil inteiro."""
+    regs = [MvaRecord("1600100", "40111000", Decimal("42"),
+                      ambitos=("16.1",), ufs_origem=("MG", "SP"))]
+    r = await _propor(sessao, regs)
+    assert r["propostas"] == 2 and r["com_origem"] == 2
+
+    props = (await sessao.execute(
+        select(MatrizProposta).order_by(MatrizProposta.id)
+    )).scalars().all()
+    assert {p.payload["uf_origem"] for p in props} == {"MG", "SP"}
+    assert all(p.payload["uf_destino"] == "MG" for p in props)
+
+    # As duas aprovam sem conflito de vigência: uf_origem está na CHAVE_VIGENCIA.
+    for p in props:
+        await PropostasService(sessao).aprovar(p.id, revisor="ana@sol.com")
+    linhas = (await sessao.execute(select(MatrizMva))).scalars().all()
+    assert {(x.uf_origem, x.uf_destino) for x in linhas} == {("MG", "MG"), ("SP", "MG")}
+
+    # Rodada seguinte: já curado, nada volta para a fila.
+    r2 = await _propor(sessao, regs)
+    assert r2["propostas"] == 0 and r2["sem_mudanca"] == 2
+
+
+@pytest.mark.asyncio
+async def test_margens_diferentes_por_origem_deixam_de_ser_ambiguas(sessao):
+    """Antes da origem na chave, duas margens do mesmo par eram conflito e o
+    item ficava SEM MVA nenhuma. Com a origem, são duas regras legítimas."""
+    r = await _propor(sessao, [
+        MvaRecord("1600100", "40111000", Decimal("42"), ufs_origem=("MG",)),
+        MvaRecord("1600100", "40111000", Decimal("45"), ufs_origem=("SP",)),
+    ])
+    assert r["ambiguos"] == 0 and r["propostas"] == 2
+
+    # …mas o conflito DENTRO da mesma origem continua fail-closed.
+    r2 = await _propor(sessao, [
+        MvaRecord("1600200", "40112000", Decimal("42"), ufs_origem=("SP",)),
+        MvaRecord("1600200", "40112000", Decimal("45"), ufs_origem=("SP",)),
+    ])
+    assert r2["ambiguos"] == 1 and r2["propostas"] == 0
 
 
 @pytest.mark.asyncio

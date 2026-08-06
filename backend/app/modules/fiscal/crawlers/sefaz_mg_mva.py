@@ -6,13 +6,19 @@ APLICAÇÃO | MVA (%). Desde a Portaria SUTRI 1.518/2025 (01/11/2025) o PMPF
 foi extinto em MG — a MVA do anexo é a base da ST. O parse é tolerante:
 linha sem CEST de 7 dígitos ou sem MVA numérica fica de fora (itens ainda
 sem margem publicada não viram palpite — fail-closed).
+
+A coluna ÂMBITO é lida duas vezes, para dois fins diferentes:
+`parse_ambitos` (código → UFs com acordo) alimenta a matriz de Protocolos, e
+`resolver_origens` usa o mesmo âmbito — mais `parse_internos` — para dizer em
+que operações a margem vale, ou seja, a UF de ORIGEM de cada linha de MVA.
 """
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal, InvalidOperation
 
+from app.shared.domain.uf import CURINGA_UF, UF_NOMES
 from app.shared.domain.value_objects import only_digits
 
 from .base import Extractor, TabelasHtml, separar_ncms
@@ -27,18 +33,12 @@ _UF_ACORDO = re.compile(
 )
 _EXCECAO = re.compile(r"Exce[çc]\w*:?\s*([^)]*)", re.IGNORECASE)
 
-# Nome por extenso → sigla (como o Anexo VII escreve as UFs).
-UF_SIGLAS = {
-    "Acre": "AC", "Alagoas": "AL", "Amapá": "AP", "Amazonas": "AM",
-    "Bahia": "BA", "Ceará": "CE", "Distrito Federal": "DF",
-    "Espírito Santo": "ES", "Goiás": "GO", "Maranhão": "MA",
-    "Mato Grosso": "MT", "Mato Grosso do Sul": "MS", "Minas Gerais": "MG",
-    "Pará": "PA", "Paraíba": "PB", "Paraná": "PR", "Pernambuco": "PE",
-    "Piauí": "PI", "Rio de Janeiro": "RJ", "Rio Grande do Norte": "RN",
-    "Rio Grande do Sul": "RS", "Rondônia": "RO", "Roraima": "RR",
-    "Santa Catarina": "SC", "São Paulo": "SP", "Sergipe": "SE",
-    "Tocantins": "TO",
-}
+#: Nome por extenso → sigla (como o Anexo VII escreve as UFs). Derivado da
+#: fonte única de UF do sistema — nunca uma segunda tabela de siglas.
+UF_SIGLAS = {nome: sigla for sigla, nome in UF_NOMES.items()}
+
+#: UF de destino do anexo: é o RICMS de MG.
+UF_ANEXO = "MG"
 
 
 def _ufs_no_texto(trecho: str) -> list[str]:
@@ -72,6 +72,14 @@ class MvaRecord:
     ambito: str = ""                      # célula bruta (ex.: "16.1 (Exceção: Rondônia)")
     ambitos: tuple[str, ...] = ()         # códigos citados (ex.: ("2.1", "2.2"))
     excecoes: tuple[str, ...] = ()        # siglas de UF excluídas do item
+    # UFs de ORIGEM em que a margem se aplica, resolvidas pela legenda de
+    # âmbito (`resolver_origens`). Vazio = âmbito não resolvido → a proposta
+    # sai com CURINGA_UF ("qualquer origem"), como antes desta fase.
+    ufs_origem: tuple[str, ...] = ()
+
+    def origens(self) -> tuple[str, ...]:
+        """Origens da proposta: as resolvidas, ou o curinga quando não deu."""
+        return self.ufs_origem or (CURINGA_UF,)
 
 
 def _mva_da_celula(celula: str) -> Decimal | None:
@@ -135,6 +143,24 @@ class SefazMgMvaExtractor(Extractor):
                     ))
         return registros
 
+    @staticmethod
+    def _texto_plano(raw: bytes) -> str:
+        """Página sem tags e sem quebra de linha — a legenda é lida por regex."""
+        texto = re.sub(r"<[^>]+>", "|", _decodificar(raw))
+        return re.sub(r"\s+", " ", texto)
+
+    def parse_internos(self, raw: bytes) -> frozenset[str]:
+        """Códigos de âmbito cuja definição começa por 'Interno' — ou seja, a ST
+        (e a margem publicada) também vale na operação DENTRO de MG.
+
+        Existe separado de `parse_ambitos` porque aquele responde "quais UFs de
+        FORA": o âmbito 'Interno.' puro tem lista vazia lá, mas aqui aparece —
+        é o que dá origem à linha de MVA interna (MG→MG)."""
+        texto = self._texto_plano(raw)
+        return frozenset(
+            m.group(1) for m in re.finditer(r"(\d{1,2}\.\d{1,2})\s+Interno", texto)
+        )
+
     def parse_ambitos(self, raw: bytes) -> dict[str, list[tuple[str, str]]]:
         """Legenda oficial do 'Âmbito de Aplicação': código → [(UF, acordo)].
 
@@ -145,8 +171,7 @@ class SefazMgMvaExtractor(Extractor):
         Limitação documentada: notas de rodapé por item ('* Relativamente ao
         item…') não são interpretadas — a proposta carrega o código do âmbito
         e o curador confere na fonte."""
-        texto = re.sub(r"<[^>]+>", "|", _decodificar(raw))
-        texto = re.sub(r"\s+", " ", texto)
+        texto = self._texto_plano(raw)
 
         # Início de cada definição: código seguido de Interno/Inaplicabilidade.
         inicios = [
@@ -178,3 +203,41 @@ class SefazMgMvaExtractor(Extractor):
                 if par not in destino:
                     destino.append(par)
         return ambitos
+
+
+def resolver_origens(
+    registros: list[MvaRecord],
+    ambitos: dict[str, list[tuple[str, str]]],
+    internos: frozenset[str] | set[str] = frozenset(),
+    *,
+    uf_destino: str = UF_ANEXO,
+) -> list[MvaRecord]:
+    """Carimba em cada linha as UFs de ORIGEM em que a margem publicada vale.
+
+    A coluna "Âmbito de Aplicação" é o que o anexo diz sobre O ALCANCE da ST do
+    item: "Interno e nas seguintes unidades da Federação: …". Traduzindo para a
+    matriz: a MVA daquela linha vale na operação interna (origem = MG) e nas
+    entradas vindas das UFs listadas — e em mais nenhuma. É por isso que o
+    âmbito é a UF de origem: não estamos criando margem nova, estamos dizendo
+    em que operações a margem PUBLICADA se aplica.
+
+    Sem inventar nada:
+    - código de âmbito desconhecido (legenda não lida) → origem fica vazia e a
+      proposta sai com CURINGA_UF, exatamente como antes desta fase;
+    - "Exceção: <UF>" na célula do item remove aquela origem;
+    - código só de inaplicabilidade não acrescenta origem.
+    """
+    resolvidos: list[MvaRecord] = []
+    for r in registros:
+        origens: list[str] = []
+        for codigo in r.ambitos:
+            if codigo in internos and uf_destino not in origens:
+                origens.append(uf_destino)          # operação interna do estado
+            for uf_origem, _acordo in ambitos.get(codigo, ()):
+                if uf_origem not in origens:
+                    origens.append(uf_origem)
+        origens = [uf for uf in origens if uf not in r.excecoes]
+        resolvidos.append(
+            r if not origens else replace(r, ufs_origem=tuple(origens))
+        )
+    return resolvidos

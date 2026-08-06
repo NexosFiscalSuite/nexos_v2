@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Dropdown from '../components/Dropdown'
 import ResumoImportModal from '../components/ResumoImportModal'
+import SelectUf from '../components/SelectUf'
 import { api, saveBlob } from '../api'
 import { useEmpresa } from '../context/EmpresaContext'
 import { useToast, ToastContainer } from '../hooks/useToast'
@@ -398,7 +399,8 @@ export default function Empresas() {
                   </div>
                   <div className="field">
                     <label>UF</label>
-                    <input value={form.uf} onChange={set('uf')} maxLength={2} />
+                    <SelectUf value={form.uf} placeholder="Não informada"
+                      onChange={v => setForm(f => ({ ...f, uf: v }))} />
                   </div>
                 </div>
               </div>

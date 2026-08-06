@@ -60,9 +60,15 @@ class ErroST(_Erro, Enum):
     )
     MVA_NAO_ENCONTRADA = (
         "ERRO_MVA_NAO_ENCONTRADA",
-        "Base por MVA (modBCST=4) mas não há MVA cadastrada na matriz para "
-        "NCM/CEST/UF na data — auditoria não confiável, não calculada.",
-        "Cadastrar a MVA (com vigência) na matriz e reauditar.",
+        "Produto enquadrado em ST sem NENHUMA MVA cadastrada na matriz para o "
+        "NCM/CEST no par de UFs ORIGEM→DESTINO da nota, na data de emissão. A "
+        "MVA muda conforme o estado remetente (e a interna difere da "
+        "interestadual), então o motor não aproveita a MVA de outro par nem "
+        "assume 0% — não calculada (fail-closed).",
+        "Cadastrar a MVA do par origem→destino (ou uma regra de origem '*', "
+        "válida para qualquer remetente) com vigência na matriz e reauditar. "
+        "Se a base for legitimamente o valor da operação, cadastrar a linha com "
+        "MVA 0,00 e a base legal — aí o motor calcula sem MVA, por decisão sua.",
     )
     ALIQUOTA_NAO_ENCONTRADA = (
         "ERRO_ALIQUOTA_NAO_ENCONTRADA",

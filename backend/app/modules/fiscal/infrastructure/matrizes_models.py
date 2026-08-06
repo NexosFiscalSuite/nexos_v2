@@ -18,6 +18,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
 from app.modules.fiscal.infrastructure.vigencia import VigenciaTemporal
+from app.shared.domain.uf import CURINGA_UF
 
 _PCT = Numeric(5, 2)
 
@@ -43,21 +44,35 @@ class UltimaVerificacao:
 
 
 class MatrizMva(Base, VigenciaTemporal, CriadoEm, UltimaVerificacao):
-    """MVA Original por NCM+CEST+UF destino (alimenta o MvaRepository)."""
+    """MVA Original por NCM+CEST+UF origem→destino (alimenta o MvaRepository).
+
+    A MVA NÃO depende só do destino: o mesmo produto entrando em MG tem MVA
+    diferente conforme o acordo do estado remetente, e a MVA interna (origem ==
+    destino) costuma diferir da interestadual. Sem `uf_origem` o motor aplicava
+    uma MVA de outro par e o valor saía errado — por isso a coluna é parte da
+    CHAVE_VIGENCIA.
+
+    `uf_origem = "*"` (CURINGA_UF) é a regra que vale para qualquer origem. A
+    busca prefere a origem EXATA e só cai no curinga se não houver linha
+    específica — assim uma regra geral não sequestra o par curado.
+    """
 
     __tablename__ = "matriz_mva"
     __table_args__ = (
         UniqueConstraint(
-            "ncm", "cest", "uf_destino", "data_inicio_vigencia", name="uq_mva_vigencia"
+            "ncm", "cest", "uf_origem", "uf_destino", "data_inicio_vigencia",
+            name="uq_mva_vigencia",
         ),
-        Index("ix_mva_busca", "uf_destino", "ncm", "cest"),
+        Index("ix_mva_busca", "uf_destino", "uf_origem", "ncm", "cest"),
     )
     # Chave de identidade da regra: períodos de vigência não podem se sobrepor.
-    CHAVE_VIGENCIA: ClassVar[tuple[str, ...]] = ("ncm", "cest", "uf_destino")
+    CHAVE_VIGENCIA: ClassVar[tuple[str, ...]] = ("ncm", "cest", "uf_origem", "uf_destino")
 
     id: Mapped[int] = mapped_column(primary_key=True)
     ncm: Mapped[str] = mapped_column(String(8))      # 8/6/4 dígitos (fallback)
     cest: Mapped[str] = mapped_column(String(7))
+    uf_origem: Mapped[str] = mapped_column(String(2), default=CURINGA_UF,
+                                           server_default=CURINGA_UF)
     uf_destino: Mapped[str] = mapped_column(String(2))
     mva_original: Mapped[Decimal] = mapped_column(_PCT)
     base_legal: Mapped[str | None] = mapped_column(String(120), nullable=True)

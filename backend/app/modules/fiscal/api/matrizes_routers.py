@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.responses import Response
 
 from app.core.database import Base
 from app.core.exceptions import ConflictError, NotFoundError
@@ -43,6 +44,8 @@ from app.modules.fiscal.api.matrizes_schemas import (
     MatrizProtocoloCreate,
     MatrizProtocoloResponse,
     MatrizProtocoloUpdate,
+    UfOpcao,
+    ufs_disponiveis,
 )
 from app.modules.fiscal.application.cobertura_service import CoberturaService
 from app.modules.fiscal.application.matrizes_saude import saude_matrizes
@@ -57,6 +60,7 @@ from app.modules.fiscal.infrastructure.matrizes_models import (
 )
 from app.modules.fiscal.infrastructure.models import ExcecaoEnquadramentoStProduto
 from app.modules.fiscal.infrastructure.vigencia import sobreposicao_existente
+from app.shared.domain.uf import normalizar_uf
 from app.shared.domain.value_objects import only_digits
 
 router = APIRouter(prefix="/matrizes", tags=["Matrizes Fiscais"])
@@ -257,6 +261,10 @@ def _registrar_crud(
         uf: str | None = Query(default=None, description="Filtra por UF destino"),
         ncm: str | None = Query(default=None, description="Filtra por NCM (prefixo)"),
         cest: str | None = Query(default=None, description="Filtra por CEST (prefixo)"),
+        uf_origem: str | None = Query(
+            default=None,
+            description="Filtra por UF de origem ('*' = a regra que vale para qualquer origem)",
+        ),
         page: int = Query(default=1, ge=1),
         page_size: int = Query(default=50, ge=1, le=50),
         claims: TokenClaims = Depends(get_current_claims),
@@ -264,7 +272,7 @@ def _registrar_crud(
     ):
         stmt = select(modelo)
         if filtrar is not None:
-            stmt = filtrar(stmt, uf, ncm, cest)
+            stmt = filtrar(stmt, uf, ncm, cest, uf_origem)
         total = await session.scalar(
             select(func.count()).select_from(stmt.order_by(None).subquery())
         ) or 0
@@ -334,12 +342,22 @@ def _registrar_crud(
         )
 
 
+def _sigla_do_filtro(valor: str) -> str:
+    """Sigla para comparar na consulta. Aceita 'mg'/'Minas Gerais' (o usuário
+    digita como quer); o que não é UF passa cru — a lista sai vazia em vez de
+    estourar um 400 num deep-link antigo."""
+    return normalizar_uf(valor, permitir_curinga=True) or valor.strip().upper()
+
+
 def _ordenar(modelo, *cols):
-    """Filtros combináveis (UF + NCM + CEST, por prefixo) + ordenação, fechados
-    sobre o modelo da matriz. CEST só filtra onde a coluna existe (MVA/Enq.)."""
-    def _f(stmt, uf, ncm, cest):
+    """Filtros combináveis (UF destino/origem + NCM + CEST, por prefixo) +
+    ordenação, fechados sobre o modelo da matriz. CEST só filtra onde a coluna
+    existe (MVA/Enq.); UF de origem, só onde a matriz tem o par (MVA)."""
+    def _f(stmt, uf, ncm, cest, uf_origem=None):
         if uf:
-            stmt = stmt.where(modelo.uf_destino == uf.upper())
+            stmt = stmt.where(modelo.uf_destino == _sigla_do_filtro(uf))
+        if uf_origem and hasattr(modelo, "uf_origem"):
+            stmt = stmt.where(modelo.uf_origem == _sigla_do_filtro(uf_origem))
         if ncm:
             stmt = stmt.where(modelo.ncm.like(f"{only_digits(ncm)}%"))
         if cest and hasattr(modelo, "cest"):
@@ -351,8 +369,12 @@ def _ordenar(modelo, *cols):
 _registrar_crud(
     "mva", MatrizMva, MatrizMvaCreate, MatrizMvaUpdate, MatrizMvaResponse,
     entidade="matriz_mva",
-    detalhe=lambda m: {"ncm": m.ncm, "cest": m.cest, "uf": m.uf_destino},
-    filtrar=_ordenar(MatrizMva, MatrizMva.uf_destino, MatrizMva.ncm, MatrizMva.cest),
+    detalhe=lambda m: {"ncm": m.ncm, "cest": m.cest, "uf": m.uf_destino,
+                       "origem": m.uf_origem},
+    filtrar=_ordenar(
+        MatrizMva, MatrizMva.uf_destino, MatrizMva.uf_origem,
+        MatrizMva.ncm, MatrizMva.cest,
+    ),
 )
 _registrar_crud(
     "enquadramento", MatrizEnquadramentoSt, MatrizEnquadramentoCreate,
@@ -370,12 +392,14 @@ _registrar_crud(
     detalhe=lambda m: {"uf": m.uf_destino, "ncm": m.ncm, "fcp_st": str(m.aliq_fcp_st)},
     filtrar=_ordenar(MatrizFcp, MatrizFcp.uf_destino, MatrizFcp.ncm),
 )
-def _filtrar_protocolos(stmt, uf, ncm, cest):
+def _filtrar_protocolos(stmt, uf, ncm, cest, uf_origem=None):
     """Protocolo: NCM vazio = acordo do PAR INTEIRO (vale p/ qualquer NCM) —
     filtrar por NCM precisa MANTER essas linhas, senão a tela esconderia um
     acordo que se aplica ao produto pesquisado."""
     if uf:
-        stmt = stmt.where(MatrizProtocoloSt.uf_destino == uf.upper())
+        stmt = stmt.where(MatrizProtocoloSt.uf_destino == _sigla_do_filtro(uf))
+    if uf_origem:
+        stmt = stmt.where(MatrizProtocoloSt.uf_origem == _sigla_do_filtro(uf_origem))
     if ncm:
         stmt = stmt.where(or_(
             MatrizProtocoloSt.ncm.is_(None),
@@ -393,11 +417,25 @@ _registrar_crud(
 )
 
 
-def _filtrar_aliquota(stmt, uf, ncm, cest):
-    """Alíquota não tem NCM (chave é só a UF) — o filtro genérico não serve."""
+def _filtrar_aliquota(stmt, uf, ncm, cest, uf_origem=None):
+    """Alíquota não tem NCM nem origem (a chave é só a UF de destino) — o filtro
+    genérico não serve."""
     if uf:
-        stmt = stmt.where(MatrizAliquota.uf_destino == uf.upper())
+        stmt = stmt.where(MatrizAliquota.uf_destino == _sigla_do_filtro(uf))
     return stmt.order_by(MatrizAliquota.uf_destino, MatrizAliquota.data_inicio_vigencia.desc())
+
+
+@router.get("/ufs", response_model=list[UfOpcao])
+async def listar_ufs(claims: TokenClaims = Depends(get_current_claims)):
+    """Fonte ÚNICA das UFs para as telas — os dropdowns de origem e destino
+    saem daqui em vez de cada tela manter a sua listinha.
+
+    Devolve as 27 UFs (26 estados + DF) em ordem alfabética de sigla:
+    `[{"sigla": "AC", "nome": "Acre"}, ...]`. O curinga "*" (regra que vale para
+    qualquer origem) NÃO entra na lista: quem oferece essa opção é o campo de
+    origem da MVA, e só ele.
+    """
+    return ufs_disponiveis()
 
 
 @router.get("/saude")
@@ -440,6 +478,56 @@ async def cobertura_matrizes(
     return await CoberturaService(session).cobertura(
         empresa_id=empresa_id, uf=uf, ano=ano, mes=mes,
         page=page, page_size=page_size,
+    )
+
+
+@router.get("/lacunas-mva")
+async def lacunas_mva(
+    empresa_id: UUID | None = Query(default=None, description="Limita a uma empresa"),
+    uf: str | None = Query(default=None, description="UF de destino"),
+    ano: str | None = Query(default=None, description="Competência: ano (AAAA)"),
+    mes: str | None = Query(default=None, description="Competência: mês (MM)"),
+    incluir_sem_enquadramento: bool = Query(
+        default=False, description="Inclui itens cujo regime ainda não foi cadastrado"
+    ),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=100),
+    claims: TokenClaims = Depends(get_current_claims),
+    session: AsyncSession = Depends(tenant_session),
+):
+    """O que falta de MVA para as notas JÁ importadas, por origem→destino.
+
+    Enquanto a Cobertura olha as matrizes em geral, esta lista é só a fila da
+    MVA, ordenada por dinheiro em jogo — é ela que diz o que carregar antes de
+    ligar o fail-closed (NEXOS_ST_MVA_FAIL_CLOSED)."""
+    return await CoberturaService(session).lacunas_mva(
+        empresa_id=empresa_id, uf=uf, ano=ano, mes=mes,
+        incluir_sem_enquadramento=incluir_sem_enquadramento,
+        page=page, page_size=page_size,
+    )
+
+
+@router.get("/lacunas-mva/export")
+async def lacunas_mva_export(
+    empresa_id: UUID | None = Query(default=None),
+    uf: str | None = Query(default=None),
+    ano: str | None = Query(default=None),
+    mes: str | None = Query(default=None),
+    incluir_sem_enquadramento: bool = Query(default=False),
+    claims: TokenClaims = Depends(get_current_claims),
+    session: AsyncSession = Depends(tenant_session),
+):
+    """A mesma fila no layout do "Importar planilha" da MVA: baixa, preenche a
+    coluna da margem com a fonte oficial e sobe de volta. `mva_original` sai em
+    branco de propósito — o sistema aponta a lacuna, nunca chuta o número."""
+    csv_text = await CoberturaService(session).lacunas_mva_csv(
+        empresa_id=empresa_id, uf=uf, ano=ano, mes=mes,
+        incluir_sem_enquadramento=incluir_sem_enquadramento,
+    )
+    return Response(
+        content="﻿" + csv_text,              # BOM → Excel abre com acentos
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="mva_lacunas.csv"'},
     )
 
 

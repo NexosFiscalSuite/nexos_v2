@@ -72,6 +72,13 @@ class StAuditEngine:
     aliquota_repo: AliquotaRepository = field(default_factory=AliquotasReferencia)
     protocolo_repo: ProtocoloRepository = field(default_factory=_AssumeProtocolo)
     aliquotas: AliquotaResolver = AliquotaResolver()
+    # Gate de rollout (injetado pela composição — o domínio não lê env):
+    # False (padrão) = comportamento histórico, item ST sem linha de MVA e sem
+    # modBCST=4 segue calculado pelo valor da operação.
+    # True = fail-closed pleno: sem linha de MVA para NCM/CEST/origem→destino o
+    # item vira NAO_AUDITAVEL com MVA_NAO_ENCONTRADA, qualquer que seja o
+    # modBCST. Liga quando a base de MVA por par de UFs estiver carregada.
+    mva_fail_closed: bool = False
 
     def auditar_item(self, item: ItemFiscal, operacao: Operacao) -> ResultadoAuditoria:
         # 1. Portão de enquadramento — só auditamos itens que SÃO ST.
@@ -127,10 +134,17 @@ class StAuditEngine:
         base_strategy = base_strategy_for(item.mod_bc_st)
         if base_strategy is None and item.mod_bc_st is None:
             mva_previa = self.mva_repo.buscar(
-                item.ncm, item.cest, operacao.uf_dest, operacao.data
+                item.ncm, item.cest, operacao.uf_emit, operacao.uf_dest, operacao.data
             )
-            tem_mva_previa = mva_previa is not None and mva_previa.mva_original > ZERO
-            base_strategy = BaseMva() if tem_mva_previa else BaseValorOperacao()
+            # Quem decide é a EXISTÊNCIA da linha curada, não o valor: linha com
+            # MVA > 0 → base MVA; linha com 0,00 → base pelo valor da operação
+            # POR DECISÃO da matriz; SEM linha → a trava do passo 4 resolve
+            # (fail-closed quando ligado), aqui só escolhemos um caminho neutro.
+            base_strategy = (
+                BaseMva()
+                if mva_previa is not None and mva_previa.mva_original > ZERO
+                else BaseValorOperacao()
+            )
         if base_strategy is None:
             return self._nao_auditavel(
                 item, ErroST.MODBCST_NAO_SUPORTADO,
@@ -157,16 +171,31 @@ class StAuditEngine:
         #    não o modBCST do XML (que o emitente pode ter errado). Sem isso, uma
         #    nota com modBCST=6 (valor da operação) num produto base-MVA seria
         #    calculada a menor SILENCIOSAMENTE.
-        mva_info = self.mva_repo.buscar(item.ncm, item.cest, operacao.uf_dest, operacao.data)
-        tem_mva = mva_info is not None and mva_info.mva_original > ZERO
+        #    "Tem MVA" = EXISTE LINHA curada na matriz — não "valor > 0". Uma MVA
+        #    cadastrada como 0,00 é DECISÃO (produto cuja base é o valor da
+        #    operação por norma); a ausência de linha é FALTA DE DADO. Confundir
+        #    as duas coisas era o 0% silencioso.
+        mva_info = self.mva_repo.buscar(
+            item.ncm, item.cest, operacao.uf_emit, operacao.uf_dest, operacao.data
+        )
+        tem_linha_mva = mva_info is not None
+        usa_mva = tem_linha_mva and mva_info.mva_original > ZERO
         exige_mva = base_strategy.espera_mva   # XML declarou modBCST=4
 
-        if exige_mva and not tem_mva:
-            # TRAVA DE SEGURANÇA: base por MVA mas a matriz não tem MVA → não
-            # inventa um cálculo com MVA 0; classifica como não auditável.
-            return self._nao_auditavel(item, ErroST.MVA_NAO_ENCONTRADA)
+        if not tem_linha_mva and (exige_mva or self.mva_fail_closed):
+            # TRAVA DE SEGURANÇA: sem linha na matriz para NCM/CEST/origem→destino
+            # o motor não inventa MVA 0. Sempre ativa quando o XML declarou base
+            # por MVA (modBCST=4); com o gate ligado, ativa para QUALQUER modBCST.
+            return self._nao_auditavel(
+                item, ErroST.MVA_NAO_ENCONTRADA,
+                observacao=self._sem_mva_observacao(item, operacao),
+            )
 
-        if tem_mva:
+        # Registrado na memória quando a base sai pelo valor da operação por
+        # DECISÃO da matriz (linha curada com 0,00) — nunca por omissão.
+        base_por_matriz: str | None = None
+
+        if usa_mva:
             mva = calcular_mva(
                 mva_original=mva_info.mva_original,
                 alq_inter=alq_inter,
@@ -183,11 +212,19 @@ class StAuditEngine:
             elif not mva.ajustada and item.p_mva_st > mva_original + TOLERANCIA_MVA_PCT:
                 erros.append(ErroST.MVA_AJUSTADA_INDEVIDA)
         else:
-            # Sem MVA na matriz e modBCST≠4 → base = valor da operação (modBCST 6
-            # legítimo, NT 2020.005).
+            # Base = valor da operação (NT 2020.005). Dois caminhos chegam aqui:
+            #  - linha curada com MVA 0,00 → a MATRIZ decidiu (caminho legítimo);
+            #  - sem linha e gate desligado → comportamento histórico preservado.
             mva = None
             mva_original = mva_aplicada = ZERO
-            base_integral = base_strategy.base_integral(item, mva_aplicada)
+            base_integral = BaseValorOperacao().base_integral(item, mva_aplicada)
+            if tem_linha_mva:
+                norma = f" ({mva_info.base_legal})" if mva_info.base_legal else ""
+                base_por_matriz = (
+                    "Base pelo VALOR DA OPERAÇÃO por decisão da matriz: MVA "
+                    f"cadastrada 0,00 para {item.ncm} em "
+                    f"{mva_info.uf_origem_casada or '*'}→{operacao.uf_dest}{norma}."
+                )
             if item.p_mva_st > ZERO:
                 erros.append(ErroST.MVA_AJUSTADA_INDEVIDA)
 
@@ -236,7 +273,7 @@ class StAuditEngine:
             mva_original=mva_original,
             mva_aplicada=mva_aplicada,
             mva_foi_ajustada=bool(mva and mva.ajustada),
-            motivo_nao_ajuste=mva.motivo_nao_ajuste if mva else None,
+            motivo_nao_ajuste=(mva.motivo_nao_ajuste if mva else base_por_matriz),
             alq_inter=alq_inter,
             alq_intra=alq_intra_modal,
             base_st_calculada=centavos(base_st_calc),
@@ -248,11 +285,14 @@ class StAuditEngine:
             fcp_st_deducao=centavos(item.v_fcp),
             fcp_st_calculado=centavos(fcp_st_calc),
             engine_version=ENGINE_VERSION,
-            mva_matriz_id=(mva_info.matriz_id if tem_mva else None),
+            # Rastreabilidade da LINHA usada — inclusive quando ela traz 0,00
+            # (a decisão de base por valor da operação também tem dono e norma).
+            mva_matriz_id=(mva_info.matriz_id if tem_linha_mva else None),
             aliquota_matriz_id=aliq_uf.matriz_id,
             tem_protocolo=tem_protocolo,
             protocolo_fonte=protocolo_fonte,
-            mva_base_legal=(getattr(mva_info, "base_legal", None) if tem_mva else None),
+            mva_base_legal=(mva_info.base_legal if tem_linha_mva else None),
+            mva_uf_origem=(mva_info.uf_origem_casada if tem_linha_mva else None),
             aliquota_base_legal=getattr(aliq_uf, "base_legal", None),
             custo_produto=centavos(item.v_prod),
             custo_frete=centavos(item.v_frete),
@@ -412,6 +452,21 @@ class StAuditEngine:
         return ResultadoAuditoria(
             numero_item=item.numero_item, status=StatusAuditoria.OK,
             memoria=memoria, observacao=obs,
+        )
+
+    @staticmethod
+    def _sem_mva_observacao(item: ItemFiscal, operacao: Operacao) -> str:
+        """Diz exatamente QUAL chave falta na matriz — a pendência vira tarefa."""
+        alvo = f"NCM {item.ncm or '—'}"
+        if item.cest:
+            alvo += f" · CEST {item.cest}"
+        return (
+            f"{alvo} · {operacao.uf_emit or '—'}→{operacao.uf_dest or '—'}: sem MVA "
+            f"cadastrada para este par de UFs em {operacao.data:%d/%m/%Y}. A MVA muda "
+            "conforme o estado de origem, então o motor não usa a de outro par nem "
+            "assume 0%. Cadastre a MVA do par (ou uma regra de origem '*') nas "
+            "Matrizes Fiscais e reauditar destrava. Se a base for mesmo o valor da "
+            "operação, cadastre a linha com MVA 0,00 e a base legal."
         )
 
     @staticmethod

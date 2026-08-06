@@ -160,6 +160,11 @@ export const api = {
   criarEmpresa: (data) => request('POST', '/empresas', data),
   editarEmpresa: (id, data) => request('PATCH', `/empresas/${id}`, data),
 
+  // Lista oficial das 27 UFs (sigla + nome) — alimenta os seletores de UF das
+  // matrizes. O front tem fallback local em constants/ufs.js, então uma falha
+  // aqui não derruba a tela.
+  matrizesUfs: () => request('GET', '/matrizes/ufs'),
+
   // Matrizes Fiscais (MVA) — regras globais do motor de ST
   matrizesMva: (params = {}) => {
     const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
@@ -243,6 +248,19 @@ export const api = {
   coberturaMatrizes: (params = {}) => {
     const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
     return request('GET', '/matrizes/cobertura' + (q ? `?${q}` : ''))
+  },
+
+  // Lacunas de MVA: o que falta cadastrar para as notas JÁ importadas, por
+  // origem→destino e ordenado por dinheiro. O export sai no MESMO layout do
+  // "Importar planilha" da MVA — baixa, preenche só a margem, sobe de volta.
+  lacunasMva: (params = {}) => {
+    const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
+    return request('GET', '/matrizes/lacunas-mva' + (q ? `?${q}` : ''))
+  },
+  exportarLacunasMva: (params = {}) => {
+    const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
+    return downloadBlob('/matrizes/lacunas-mva/export' + (q ? `?${q}` : ''),
+      { fallback: 'mva_lacunas.csv' })
   },
 
   // Bulk (planilha CSV) — export = template/base; import = upsert por chave

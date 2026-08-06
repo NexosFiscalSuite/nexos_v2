@@ -189,3 +189,44 @@ async def test_sobreposicao_de_vigencia_e_erro_de_carga(sessao_async):
          "data_fim_vigencia": date(2025, 12, 31)},
         excluir_id=linha.id,
     ) is None
+
+
+async def test_mva_da_mesma_data_convive_com_origens_diferentes(sessao_async):
+    """A MVA varia com o estado REMETENTE: o mesmo pneu entrando em MG tem uma
+    MVA vindo de SP e outra pela regra geral. Como uf_origem faz parte da chave
+    de identidade, as duas linhas valem ao mesmo tempo — não é erro de carga."""
+    geral = MatrizMva(
+        ncm="40111000", cest="0100500", uf_origem="*", uf_destino="MG",
+        mva_original=Decimal("42.00"), data_inicio_vigencia=date(2026, 1, 1),
+    )
+    sessao_async.add(geral)
+    await sessao_async.flush()
+
+    base = {"ncm": "40111000", "cest": "0100500", "uf_destino": "MG",
+            "data_inicio_vigencia": date(2026, 1, 1), "data_fim_vigencia": None}
+
+    # Origem específica × regra geral: chaves distintas, sem conflito.
+    assert await sobreposicao_existente(
+        sessao_async, MatrizMva, {**base, "uf_origem": "SP"}
+    ) is None
+    # A origem interna (MG→MG) também é uma regra à parte.
+    assert await sobreposicao_existente(
+        sessao_async, MatrizMva, {**base, "uf_origem": "MG"}
+    ) is None
+
+    # MESMA origem com vigência sobreposta continua sendo erro de carga.
+    conflito = await sobreposicao_existente(
+        sessao_async, MatrizMva, {**base, "uf_origem": "*"}
+    )
+    assert conflito is not None and conflito.id == geral.id
+
+    # E, gravada a de SP, ela passa a conflitar consigo mesma (mas não com a geral).
+    sessao_async.add(MatrizMva(
+        ncm="40111000", cest="0100500", uf_origem="SP", uf_destino="MG",
+        mva_original=Decimal("53.00"), data_inicio_vigencia=date(2026, 1, 1),
+    ))
+    await sessao_async.flush()
+    conflito_sp = await sobreposicao_existente(
+        sessao_async, MatrizMva, {**base, "uf_origem": "SP"}
+    )
+    assert conflito_sp is not None and conflito_sp.uf_origem == "SP"

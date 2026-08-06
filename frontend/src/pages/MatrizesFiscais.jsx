@@ -2,8 +2,10 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import Dropdown from '../components/Dropdown'
 import ErroCarga from '../components/ErroCarga'
 import ResumoImportModal from '../components/ResumoImportModal'
+import SelectUf from '../components/SelectUf'
 import { api, saveBlob } from '../api'
 import { useToast, ToastContainer } from '../hooks/useToast'
+import { UF_QUALQUER } from '../constants/ufs'
 
 const pct = (v) => (v == null || v === '' ? '—' : `${Number(v).toFixed(2)}%`)
 const dataBr = (s) => (s ? s.split('-').reverse().join('/') : '—')
@@ -37,6 +39,87 @@ const badge = (txt, tone = 'info') => (
   }}>{txt}</span>
 )
 
+// Como a UF de origem aparece na listagem: "*" é regra geral, não um estado.
+const badgeOrigem = (uf) => badge(
+  !uf || uf === UF_QUALQUER ? 'Qualquer' : uf,
+  'warn',
+)
+
+// Balão de ajuda CLICÁVEL (padrão .balao-classif do projeto — nunca tooltip de
+// hover): abre no clique e fecha clicando fora ou de novo no gatilho.
+function BalaoAjuda({ titulo, children }) {
+  const [aberto, setAberto] = useState(false)
+  const [pos, setPos] = useState(null)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!aberto) return
+    const fechar = (e) => { if (!e.target.closest('.balao-classif')) setAberto(false) }
+    document.addEventListener('mousedown', fechar)
+    return () => document.removeEventListener('mousedown', fechar)
+  }, [aberto])
+
+  function alternar(e) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!aberto && ref.current) {
+      const r = ref.current.getBoundingClientRect()
+      setPos({
+        top: Math.min(r.bottom + 6, window.innerHeight - 240),
+        left: Math.min(Math.max(r.left - 140, 12), window.innerWidth - 372),
+      })
+    }
+    setAberto(a => !a)
+  }
+
+  return (
+    <span className="balao-classif" style={{ position: 'relative' }}>
+      <button ref={ref} type="button" onClick={alternar} title="Clique para entender"
+        style={{
+          border: 'none', background: 'transparent', padding: 0, marginLeft: 5,
+          cursor: 'pointer', color: 'var(--primary)', lineHeight: 1, verticalAlign: 'middle',
+        }}>
+        <i className="ti ti-help-circle-filled" style={{ fontSize: 14 }} />
+      </button>
+      {aberto && pos && (
+        <div className="balao-classif" style={{
+          position: 'fixed', top: pos.top, left: pos.left, zIndex: 2000, width: 360,
+          background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
+          boxShadow: '0 10px 30px rgba(0,0,0,.18)', padding: '13px 15px',
+          textAlign: 'left', fontWeight: 400, textTransform: 'none', letterSpacing: 0,
+        }}>
+          <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 6 }}>{titulo}</div>
+          <div style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.6 }}>{children}</div>
+        </div>
+      )}
+    </span>
+  )
+}
+
+// Ajuda do campo "UF de origem" da MVA — a MVA muda conforme o estado de onde
+// a mercadoria sai, então a tela precisa explicar o que o coringa significa.
+const AJUDA_UF_ORIGEM = {
+  titulo: 'Origem da mercadoria: regra geral ou regra do par',
+  texto: (
+    <>
+      A MVA pode variar conforme o estado de onde a mercadoria sai.
+      Deixe em <strong>“Qualquer origem”</strong> quando a mesma margem valer
+      para todos os fornecedores, venham de onde vierem — é a regra geral e o
+      padrão da tela. Escolha um estado quando aquela origem tiver margem
+      própria: aí vale só para o par origem → destino, e essa regra específica
+      tem preferência sobre a geral.
+    </>
+  ),
+}
+
+// Linha de apoio abaixo do seletor: diz, em texto corrido, o que a escolha
+// atual significa — o balão fica para quem quiser o detalhe.
+const dicaUfOrigem = (v) => {
+  if (!v) return 'Escolha a origem da mercadoria — ou “Qualquer origem”, que é a regra geral.'
+  if (v === UF_QUALQUER) return 'Regra geral: vale para mercadoria vinda de qualquer estado. É o padrão.'
+  return `Regra específica: vale só quando a mercadoria sai de ${v}, e tem preferência sobre a regra geral.`
+}
+
 // ── Campos comuns de vigência (todas as matrizes herdam) ──
 const VIGENCIA_CAMPOS = [
   { key: 'data_inicio_vigencia', label: 'Início da vigência', type: 'date', required: true },
@@ -47,12 +130,13 @@ const ABAS = [
   {
     id: 'mva', label: 'MVA', icon: 'ti-percentage',
     api: { list: api.matrizesMva, create: api.criarMatrizMva, update: api.editarMatrizMva, remove: api.removerMatrizMva },
-    descricao: 'MVA Original por NCM + CEST + UF de destino — a margem que o motor aplica na base da ST',
-    empty: { icon: 'ti-percentage', title: 'Nenhuma matriz de MVA', sub: 'Cadastre a MVA Original por NCM, CEST e UF para o motor calcular a base de ST.' },
+    descricao: 'MVA Original por NCM + CEST + UF de origem → UF de destino — a margem que o motor aplica na base da ST',
+    empty: { icon: 'ti-percentage', title: 'Nenhuma matriz de MVA', sub: 'Cadastre a MVA Original por NCM, CEST e UF de destino. A origem pode ficar em “Qualquer origem” quando a margem vale para todos os fornecedores.' },
     colunas: [
       { key: 'ncm', label: 'NCM', mono: true },
       { key: 'cest', label: 'CEST', mono: true },
-      { key: 'uf_destino', label: 'UF', render: (m) => badge(m.uf_destino) },
+      { key: 'uf_origem', label: 'UF Origem', render: (m) => badgeOrigem(m.uf_origem) },
+      { key: 'uf_destino', label: 'UF Destino', render: (m) => badge(m.uf_destino) },
       { key: 'mva_original', label: 'MVA Original', align: 'right', strong: true, render: (m) => pct(m.mva_original) },
       { key: 'base_legal', label: 'Base Legal', muted: true },
       { key: 'vigencia', label: 'Vigência', muted: true, small: true, render: vigencia },
@@ -61,7 +145,12 @@ const ABAS = [
     campos: [
       { key: 'ncm', label: 'NCM', required: true, placeholder: '40111000' },
       { key: 'cest', label: 'CEST', required: true, placeholder: '0107500' },
-      { key: 'uf_destino', label: 'UF destino', uf: true, required: true, placeholder: 'MG' },
+      // A MVA varia com o estado remetente: sem a origem, a mesma margem era
+      // aplicada a todo fornecedor e o cálculo saía errado nos pares que têm
+      // margem própria. Padrão "*" = vale para qualquer origem.
+      { key: 'uf_origem', label: 'UF de origem', uf: true, coringa: true, required: true,
+        padrao: UF_QUALQUER, ajuda: AJUDA_UF_ORIGEM, dica: dicaUfOrigem },
+      { key: 'uf_destino', label: 'UF de destino', uf: true, required: true },
       { key: 'mva_original', label: 'MVA Original (%)', type: 'number', required: true, placeholder: '42.00' },
       { key: 'base_legal', label: 'Base Legal', full: true, placeholder: 'Decreto 48.589/2023' },
       ...VIGENCIA_CAMPOS,
@@ -85,7 +174,7 @@ const ABAS = [
     campos: [
       { key: 'ncm', label: 'NCM', required: true, placeholder: '40111000' },
       { key: 'cest', label: 'CEST', required: true, placeholder: '0107500' },
-      { key: 'uf_destino', label: 'UF destino', uf: true, required: true, placeholder: 'MG' },
+      { key: 'uf_destino', label: 'UF destino', uf: true, required: true },
       { key: 'regime', label: 'Regime', type: 'select', options: REGIME_OPTS, required: true },
       { key: 'segmento', label: 'Segmento', placeholder: 'Autopeças' },
       { key: 'base_legal', label: 'Base Legal', placeholder: 'Protocolo ICMS 41/2008' },
@@ -107,7 +196,7 @@ const ABAS = [
       { key: 'created_at', label: 'Cadastro', muted: true, small: true, render: dataCadastro },
     ],
     campos: [
-      { key: 'uf_destino', label: 'UF', uf: true, required: true, placeholder: 'MG' },
+      { key: 'uf_destino', label: 'UF', uf: true, required: true },
       { key: 'ncm', label: 'NCM (ou GERAL)', placeholder: 'GERAL' },
       { key: 'aliq_fcp_st', label: 'Alíquota FCP-ST (%)', type: 'number', required: true, placeholder: '2.00' },
       { key: 'aliq_fcp_interno', label: 'FCP interno (%)', type: 'number', placeholder: '2.00' },
@@ -129,7 +218,7 @@ const ABAS = [
       { key: 'created_at', label: 'Cadastro', muted: true, small: true, render: dataCadastro },
     ],
     campos: [
-      { key: 'uf_destino', label: 'UF destino', uf: true, required: true, placeholder: 'MG' },
+      { key: 'uf_destino', label: 'UF destino', uf: true, required: true },
       { key: 'aliq_modal', label: 'Alíquota modal (%)', type: 'number', required: true, placeholder: '18.00' },
       { key: 'aliq_fcp_integrado', label: 'FCP integrado (%)', type: 'number', placeholder: '0.00' },
       { key: 'base_legal', label: 'Base Legal', full: true, placeholder: 'Lei 9.776/2025 (AL)' },
@@ -155,8 +244,8 @@ const ABAS = [
       { key: 'created_at', label: 'Cadastro', muted: true, small: true, render: dataCadastro },
     ],
     campos: [
-      { key: 'uf_origem', label: 'UF Origem', uf: true, required: true, placeholder: 'SP' },
-      { key: 'uf_destino', label: 'UF Destino', uf: true, required: true, placeholder: 'MG' },
+      { key: 'uf_origem', label: 'UF Origem', uf: true, required: true },
+      { key: 'uf_destino', label: 'UF Destino', uf: true, required: true },
       { key: 'numero_acordo', label: 'Acordo', required: true, placeholder: 'Protocolo ICMS 41/2008' },
       { key: 'situacao', label: 'Situação', type: 'select', required: true, options: [
         { value: 'ATIVO', label: 'ATIVO — acordo vigente (ativa a ST)' },
@@ -379,12 +468,14 @@ const STATUS_COBERTURA = {
 }
 
 function CoberturaPanel() {
-  const { toasts } = useToast()
+  const { toasts, toast } = useToast()
   const [dados, setDados] = useState(null)
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState(null)
   const [filtroUf, setFiltroUf] = useState('')
   const [page, setPage] = useState(1)
+  const [lacunas, setLacunas] = useState(null)
+  const [baixando, setBaixando] = useState(false)
 
   const carregar = useCallback(async () => {
     setLoading(true)
@@ -400,6 +491,28 @@ function CoberturaPanel() {
 
   useEffect(() => { carregar() }, [carregar])
 
+  // Resumo das lacunas de MVA — o número que diz quanto falta carregar antes
+  // de o motor poder recusar cálculo sem margem cadastrada. Falha aqui não
+  // derruba a Cobertura: é informação adicional, não a tela.
+  useEffect(() => {
+    let vivo = true
+    api.lacunasMva({ uf: filtroUf || undefined, page_size: 1 })
+      .then(r => { if (vivo) setLacunas(r?.resumo || null) })
+      .catch(() => { if (vivo) setLacunas(null) })
+    return () => { vivo = false }
+  }, [filtroUf])
+
+  async function baixarLacunas() {
+    setBaixando(true)
+    try {
+      const { blob, filename } = await api.exportarLacunasMva({ uf: filtroUf || undefined })
+      saveBlob(blob, filename)
+      toast('Planilha baixada. Preencha a coluna da margem e suba em “Importar planilha”.', 'ok')
+    }
+    catch (e) { toast(e.message, 'error') }
+    finally { setBaixando(false) }
+  }
+
   if (loading) return <div className="center-loader"><div className="spinner" /></div>
   if (erro) return <ErroCarga mensagem={erro} onRetry={carregar} />
   const resumo = dados?.resumo || {}
@@ -413,8 +526,8 @@ function CoberturaPanel() {
     <div>
       <ToastContainer toasts={toasts} />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
-        <input value={filtroUf} onChange={e => { setFiltroUf(e.target.value.toUpperCase()); setPage(1) }} maxLength={2}
-          placeholder="Filtrar por UF…" style={{ width: 160 }} />
+        <SelectUf todas value={filtroUf} style={{ width: 210 }}
+          onChange={v => { setFiltroUf(v); setPage(1) }} />
         <div style={{ display: 'flex', gap: 18, alignItems: 'baseline' }}>
           <span style={{ color: 'var(--text-3)', fontSize: 13 }}>
             {total.toLocaleString('pt-BR')} grupos · {brl(resumo.valor_total)}
@@ -424,6 +537,32 @@ function CoberturaPanel() {
           </span>
         </div>
       </div>
+
+      {lacunas?.lacunas > 0 && (
+        <div className="card" style={{
+          marginBottom: 14, padding: '14px 16px', display: 'flex', gap: 16,
+          alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap',
+          borderLeft: '3px solid var(--primary)',
+        }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 3 }}>
+              Faltam <span className="tnum">{lacunas.lacunas.toLocaleString('pt-BR')}</span> margens
+              de MVA para as notas já importadas
+            </div>
+            <div style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.55 }}>
+              São <span className="tnum">{brl(lacunas.valor)}</span> em mercadoria sem margem
+              cadastrada para o par de estados. Baixe a lista — ela já vem no formato do
+              “Importar planilha”, ordenada pelo que pesa mais: basta preencher a coluna da
+              margem com a fonte oficial e subir de volta.
+            </div>
+          </div>
+          <button className="btn" onClick={baixarLacunas} disabled={baixando}
+            style={{ whiteSpace: 'nowrap' }}>
+            <i className={`ti ${baixando ? 'ti-loader-2' : 'ti-file-download'}`} />
+            {baixando ? 'Gerando…' : 'Baixar lacunas de MVA'}
+          </button>
+        </div>
+      )}
 
       {grupos.length === 0 ? (
         <div className="empty-state">
@@ -564,8 +703,7 @@ function RevisaoPanel({ onMudou }) {
               ...Object.entries(TIPOS_PROPOSTA).map(([value, label]) => ({ value, label })),
             ]} />
           </div>
-          <input value={uf} onChange={e => setUf(e.target.value.toUpperCase())} maxLength={2}
-            placeholder="UF…" style={{ width: 90 }} />
+          <SelectUf todas value={uf} onChange={setUf} style={{ width: 200 }} />
           {total > 0 && (
             <span className="tnum" style={{ color: 'var(--text-3)', fontSize: 13 }}>
               {total.toLocaleString('pt-BR')} {total === 1 ? 'proposta' : 'propostas'}
@@ -891,11 +1029,20 @@ export function ExcecoesItemPanel() {
   )
 }
 
+// Formulário em branco: `padrao` deixa um campo já preenchido (a UF de origem
+// da MVA nasce em "*", que é a regra geral).
 function vazioDe(campos) {
-  return Object.fromEntries(campos.map(c => [c.key, c.type === 'select' ? (c.options[0]?.value || '') : '']))
+  return Object.fromEntries(campos.map(c => [
+    c.key,
+    c.padrao !== undefined ? c.padrao : (c.type === 'select' ? (c.options[0]?.value || '') : ''),
+  ]))
 }
 
 function CampoInput({ campo, value, onChange }) {
+  // UF vira lista fechada em TODAS as abas por este único caminho — nada de
+  // texto livre virando "Minas Gerais"/"mg" dentro da matriz.
+  if (campo.uf)
+    return <SelectUf value={value} onChange={onChange} required={campo.required} coringa={campo.coringa} />
   if (campo.type === 'select')
     return <Dropdown value={value} onChange={onChange} options={campo.options} placeholder="Selecione…" />
   if (campo.type === 'date')
@@ -903,8 +1050,8 @@ function CampoInput({ campo, value, onChange }) {
   if (campo.type === 'number')
     return <input type="number" step="0.01" min="0" value={value} onChange={e => onChange(e.target.value)} placeholder={campo.placeholder} required={campo.required} />
   return (
-    <input value={value} maxLength={campo.uf ? 2 : undefined} placeholder={campo.placeholder} required={campo.required}
-      onChange={e => onChange(campo.uf ? e.target.value.toUpperCase() : e.target.value)} />
+    <input value={value} placeholder={campo.placeholder} required={campo.required}
+      onChange={e => onChange(e.target.value)} />
   )
 }
 
@@ -973,7 +1120,16 @@ function CrudMatriz({ aba, prefill }) {
   const temCest = aba.colunas.some(c => c.key === 'cest')
 
   function abrirNova() { setEditId(null); setForm(vazioDe(aba.campos)); setModal(true) }
-  function abrirEdicao(m) { setEditId(m.id); setForm({ ...vazioDe(aba.campos), ...m, data_fim_vigencia: m.data_fim_vigencia || '' }); setModal(true) }
+  function abrirEdicao(m) {
+    // Campo nulo vindo do servidor (linha de MVA antiga, sem uf_origem) não
+    // pode apagar o padrão — senão a regra geral abre como campo em branco.
+    const preenchidos = Object.fromEntries(
+      Object.entries(m).filter(([, v]) => v !== null && v !== undefined)
+    )
+    setEditId(m.id)
+    setForm({ ...vazioDe(aba.campos), ...preenchidos, data_fim_vigencia: m.data_fim_vigencia || '' })
+    setModal(true)
+  }
 
   async function salvar(e) {
     e.preventDefault()
@@ -1000,8 +1156,8 @@ function CrudMatriz({ aba, prefill }) {
       <ToastContainer toasts={toasts} />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <input value={filtros.uf} onChange={setFiltro('uf')} maxLength={2}
-            placeholder="UF…" style={{ width: 90 }} />
+          <SelectUf todas value={filtros.uf} style={{ width: 200 }}
+            onChange={v => setFiltros(f => ({ ...f, uf: v }))} />
           {temNcm && (
             <input value={filtros.ncm} onChange={setFiltro('ncm', true)} maxLength={8}
               placeholder="NCM (prefixo)…" style={{ width: 150 }} />
@@ -1096,8 +1252,18 @@ function CrudMatriz({ aba, prefill }) {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                   {aba.campos.map(campo => (
                     <div className="field" key={campo.key} style={campo.full ? { gridColumn: '1 / -1' } : undefined}>
-                      <label>{campo.label}</label>
+                      <label>
+                        {campo.label}
+                        {campo.ajuda && (
+                          <BalaoAjuda titulo={campo.ajuda.titulo}>{campo.ajuda.texto}</BalaoAjuda>
+                        )}
+                      </label>
                       <CampoInput campo={campo} value={form[campo.key]} onChange={setCampo(campo.key)} />
+                      {campo.dica && (
+                        <div style={{ fontSize: 11.5, color: 'var(--text-4)', marginTop: 4, lineHeight: 1.5 }}>
+                          {typeof campo.dica === 'function' ? campo.dica(form[campo.key]) : campo.dica}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

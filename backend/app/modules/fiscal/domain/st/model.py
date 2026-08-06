@@ -126,6 +126,10 @@ class MemoriaCalculo:
     # cita-se a norma no laudo/carta em vez de só o id interno da matriz.
     mva_base_legal: str | None = None
     aliquota_base_legal: str | None = None
+    # UF de origem da LINHA de MVA que casou ("*" = regra geral). Sem isto a
+    # carta diria só "MVA 42%", sem revelar que a margem veio da regra de SP —
+    # e é justamente a origem que diferencia duas MVAs do mesmo NCM.
+    mva_uf_origem: str | None = None
 
     # Composição do CUSTO que formou a base (Seção 4.1): a resposta do "como
     # verificar o rateio de frete/IPI" fica NA memória — conta aberta na tela.

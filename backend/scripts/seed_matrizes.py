@@ -26,6 +26,7 @@ from app.modules.fiscal.infrastructure.matrizes_models import (  # noqa: E402
     MatrizMva,
     MatrizProtocoloSt,
 )
+from app.shared.domain.uf import CURINGA_UF  # noqa: E402
 
 _INICIO = date(2024, 1, 1)   # vigência genérica no passado
 _FIM = None                  # aberta
@@ -71,12 +72,14 @@ def linhas_aliquotas() -> list:
 def linhas_seed() -> list:
     """Instâncias novas das matrizes (NCMs do Vault + laboratórios)."""
     mva = [
-        # (ncm, cest, uf, mva, base_legal)
-        ("87082919", "0107500", "MG", "71.78", "Autopeça (lab #2)"),
-        ("40111000", "0100500", "MG", "42.00", "Pneu (lab #1)"),
-        ("40111000", "1600100", "MG", "42.00", "Pneu — CEST segmento 16 (saída)"),
-        ("22084000", "0202200", "MG", "50.00", "Cachaça (lab #5)"),
-        ("85122011", "0100100", "MG", "40.00", "Iluminação (exemplo Vault)"),
+        # (ncm, cest, uf_origem, uf_destino, mva, base_legal)
+        # `uf_origem = CURINGA_UF` explícito: estas linhas de laboratório valem
+        # para qualquer origem — o seed não afirma escopo por par de UF.
+        ("87082919", "0107500", CURINGA_UF, "MG", "71.78", "Autopeça (lab #2)"),
+        ("40111000", "0100500", CURINGA_UF, "MG", "42.00", "Pneu (lab #1)"),
+        ("40111000", "1600100", CURINGA_UF, "MG", "42.00", "Pneu — CEST segmento 16 (saída)"),
+        ("22084000", "0202200", CURINGA_UF, "MG", "50.00", "Cachaça (lab #5)"),
+        ("85122011", "0100100", CURINGA_UF, "MG", "40.00", "Iluminação (exemplo Vault)"),
     ]
     enquadramento = [
         # (uf, ncm, cest, regime, segmento)
@@ -95,9 +98,10 @@ def linhas_seed() -> list:
         ("SP", "MG", "Protocolo ICMS 41/2008 (autopeças)"),
     ]
     linhas: list = []
-    for ncm, cest, uf, val, ato in mva:
+    for ncm, cest, uf_o, uf_d, val, ato in mva:
         linhas.append(MatrizMva(
-            ncm=ncm, cest=cest, uf_destino=uf, mva_original=Decimal(val),
+            ncm=ncm, cest=cest, uf_origem=uf_o, uf_destino=uf_d,
+            mva_original=Decimal(val),
             base_legal=ato, data_inicio_vigencia=_INICIO, data_fim_vigencia=_FIM,
         ))
     for uf, ncm, cest, regime, seg in enquadramento:

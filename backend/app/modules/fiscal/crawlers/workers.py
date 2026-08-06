@@ -28,7 +28,10 @@ from app.modules.fiscal.crawlers.propor import (
     registrar_snapshot,
 )
 from app.modules.fiscal.crawlers.reconferencia import propor_reconferencia
-from app.modules.fiscal.crawlers.sefaz_mg_mva import SefazMgMvaExtractor
+from app.modules.fiscal.crawlers.sefaz_mg_mva import (
+    SefazMgMvaExtractor,
+    resolver_origens,
+)
 from app.modules.fiscal.infrastructure.propostas_models import FonteSnapshot
 
 logger = logging.getLogger(__name__)
@@ -75,7 +78,18 @@ async def _sync_mva() -> dict:
     extrator = SefazMgMvaExtractor()
     bruto = extrator.fetch()
     registros = extrator.parse(bruto)
-    logger.info("MVA/SEFAZ-MG: %d registros de %s", len(registros), extrator.fonte)
+
+    # A legenda de âmbito é lida ANTES de propor: ela diz em que operações a
+    # margem publicada vale (interna + UFs com acordo) — ou seja, a UF de
+    # ORIGEM de cada linha de MVA. Sem isso tudo cairia no curinga e o motor
+    # aplicaria a margem de um par a outro.
+    ambitos = extrator.parse_ambitos(bruto)
+    registros = resolver_origens(registros, ambitos, extrator.parse_internos(bruto))
+    com_origem = sum(1 for r in registros if r.ufs_origem)
+    logger.info(
+        "MVA/SEFAZ-MG: %d registros de %s (%d com origem resolvida pelo âmbito)",
+        len(registros), extrator.fonte, com_origem,
+    )
 
     async with worker_global_session() as s:
         _mudou, snapshot_id = await registrar_snapshot(
@@ -97,7 +111,6 @@ async def _sync_mva() -> dict:
 
     # Protocolos da legenda de âmbito (mesma fonte, mesma rodada): cada UF do
     # âmbito vira acordo UF→MG escopado pelo NCM do item.
-    ambitos = extrator.parse_ambitos(bruto)
     async with worker_global_session() as s:
         resumo_prt = await propor_protocolos_mg(
             s, registros, ambitos, vigencia_inicio=piso,

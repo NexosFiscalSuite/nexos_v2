@@ -112,7 +112,31 @@ os comandos de deploy.
 6. Curadoria de matrizes: usuário normal pode criar/editar;
    `NEXOS_MATRIZ_CURADORES` é freio OPCIONAL (env limpa = todos liberados).
 
-## Estado atual (05/08/2026)
+## Estado atual (06/08/2026)
+
+**MVA por par origem→destino (06/08, urgente — o app oficial da Receita estava
+mais assertivo que a ferramenta nos testes do João).** Três defeitos corrigidos
+juntos: (1) `matriz_mva` só tinha UF de destino, então o motor aplicava a MVA de
+outro par — ganhou `uf_origem` (migração 0033; `"*"` = qualquer origem, todo o
+legado virou curinga), com busca que prefere a origem EXATA e só cai no curinga
+dentro de cada nível de NCM (8→6→4); (2) sem MVA na base o motor assumia 0% em
+silêncio quando o modBCST era 6 ou ausente — agora `tem_mva` = EXISTE LINHA (uma
+MVA curada em 0,00 é decisão, não ausência) e a falta vira `MVA_NAO_ENCONTRADA`,
+**atrás da env `NEXOS_ST_MVA_FAIL_CLOSED` (padrão OFF — ligar só depois de
+carregar a base, senão quase todo item fora de MG vira não auditável)**; a trava
+histórica do modBCST=4 segue sempre ativa; (3) UF era texto livre nas 5 matrizes
+— fonte única em `app/shared/domain/uf.py` (`normalizar_uf` aceita "mg"/"Minas
+Gerais", recusa o resto), dropdown em todo o front (`components/SelectUf.jsx`) e
+validação nos schemas. Curinga `"*"` vale só na MVA: o protocolo compara origem
+por igualdade, sem fallback. A memória de cálculo passou a gravar
+`mva_uf_origem`. Relatório de **lacunas de MVA** (`GET /matrizes/lacunas-mva`
++ `/export`, botão na aba Cobertura): o que falta para as notas JÁ importadas,
+por origem→destino e ordenado por dinheiro, exportado no MESMO layout do
+"Importar planilha" — baixa, preenche só a margem, sobe. O crawler do Anexo VII
+passou a extrair a UF de origem da legenda de âmbito (o dado já era lido para os
+Protocolos e estava sendo descartado); o hash de proposta mudou, então rejeições
+antigas de MVA voltam uma vez à fila. Cobertura real: **só MG tem MVA de fonte
+oficial automatizada** — ver docs/estado_base_matrizes_st.md.
 
 Automação das matrizes (proposta em docs/proposta_automacao_matrizes_st.md):
 Fases 1–5 entregues — crawler CONFAZ NCM×CEST (7 UFs: MG,PR,SP,DF,RS,RJ,GO;
@@ -131,8 +155,8 @@ propostas UF→MG escopadas por NCM nos dados reais, base legal no estilo
 "Protocolo ICMS 103/12 — Anexo VII, âmbito 2.1"; CHAVE_VIGENCIA do
 protocolo agora inclui ncm — vários escopos por acordo; FCP de MG segue
 manual, fonte própria Lei 6.763/75 art. 12-A). Paginação em
-todas as listas (15–50/página; componente Paginacao). Migrações até 0030.
-Suite: 181 passed, 4 skipped. Deploys de 04-05/08 AGUARDANDO o João
+todas as listas (15–50/página; componente Paginacao). Migrações até 0033.
+Suite: 307 passed, 4 skipped. Deploys de 04-06/08 AGUARDANDO o João
 (sem acesso ao servidor no momento) — um git pull + build + compose aplica
 tudo, migrações rodam sozinhas. Falta da proposta: Fase 6 (pauta/PMPF — com
 MG fora do PMPF, relevância caiu; avaliar por UF).
@@ -147,10 +171,20 @@ MG fora do PMPF, relevância caiu; avaliar por UF).
 - Ofertas feitas e não aprovadas: aceitar .xlsx direto no import de
   empresas; script de reclassificação de notas antigas (fluxo tpNF) com
   reauditoria; backfill de `mod_frete` para notas antigas; estender o
-  diagnóstico automático do balão a outros códigos de erro.
+  diagnóstico automático do balão a outros códigos de erro; item na aba
+  Saúde para "linhas com UF fora do padrão" (o legado gravado por texto
+  livre continua no banco — a leitura da API é leniente de propósito para
+  o curador conseguir achar e corrigir pela tela).
+- **MVA aprendida das notas** (proposta em 06/08, não aprovada): juntar o
+  `pMVAST` que os fornecedores já mandam, agrupar por NCM/CEST/origem→destino
+  e propor na fila quando vários convergirem, com a contagem de notas que
+  sustentam o valor. É a resposta de fundo ao "se tiver que cadastrar na mão,
+  o usuário prefere o app oficial". Nada entraria sem curadoria.
 - Operacional (lado do João): limpar `NEXOS_MATRIZ_CURADORES` no .env do
   servidor; conferir grupos dos supervisores após o deploy do `3720b18`
-  (supervisor sem grupo não vê empresa nenhuma).
+  (supervisor sem grupo não vê empresa nenhuma); **depois de carregar as
+  lacunas de MVA, ligar `NEXOS_ST_MVA_FAIL_CLOSED=true`** — enquanto estiver
+  off, item sem MVA cadastrada segue calculado pelo valor da operação.
 
 ## graphify
 

@@ -45,11 +45,48 @@ entra com revisão humana).
   demanda das notas — não semeado por ser específico demais para automatizar
   com segurança.
 
+## Planilha de MVA — colunas (com `uf_origem`)
+
+O import/export da matriz de MVA tem **oito** colunas, nesta ordem:
+
+```
+ncm;cest;uf_origem;uf_destino;mva_original;base_legal;data_inicio_vigencia;data_fim_vigencia
+```
+
+- **`uf_origem`** — de onde a mercadoria vem. Vazia ou `*` significa "vale para
+  QUALQUER origem"; uma sigla (`SP`) restringe a margem àquele par. A busca do
+  motor prefere a origem exata e só cai no `*` quando não há linha específica,
+  então uma regra geral nunca sequestra um par curado.
+- **`mva_original`** — número publicado pela norma. Nunca preencha por
+  estimativa: sem margem oficial, é melhor a linha faltar (o motor acusa) do
+  que existir errada (a carta sai errada).
+- Arquivo antigo, sem a coluna `uf_origem`, continua carregando: todas as
+  linhas entram como `*`. Pela linha de comando o script avisa antes de gravar.
+
+Carga pelo servidor:
+
+```bash
+docker compose -f docker-compose.prod.yml exec api \
+  python scripts/carga_matrizes.py mva cargas/2026-06-supervisores/mva_mg_PREENCHER.csv
+```
+
+## Atalho: baixar a lista de lacunas já pronta para preencher
+
+Em vez de montar a planilha na mão, use o **relatório de lacunas de MVA**: ele
+lista os pares NCM×CEST×(origem→destino) que as notas importadas realmente
+usam e a matriz não cobre, ordenados pelo valor em jogo, e exporta no layout
+acima com `mva_original` **vazia**. O fluxo é: baixar → preencher só a coluna
+da margem (consultando a norma da UF) → subir pelo Importar planilha.
+
 ## O que AINDA é manual (próximas fases da proposta)
 
-- **MVA** por NCM×CEST×UF — atos estaduais (MG: Portarias SUTRI; SP: CAT/SRE).
-- **Protocolos/Convênios** dos 42 pares entre as 7 UFs — Fase 3 da proposta
-  (crawler do índice CONFAZ); até lá, curadoria manual por par usado.
+- **MVA** por NCM×CEST×UF fora de MG — atos estaduais (SP: Portarias CAT/SRE;
+  PR, RJ, RS, GO, DF: anexos próprios). MG já vem do Anexo VII do RICMS/2023
+  pelo crawler mensal. Panorama por UF em
+  [`../estado_base_matrizes_st.md`](../estado_base_matrizes_st.md).
+- **Protocolos/Convênios** dos pares que **não** terminam em MG — os UF→MG
+  saem da legenda de âmbito do Anexo VII; o resto é curadoria manual por par
+  usado, com o radar semanal do índice CONFAZ avisando quando algo muda.
 
 ## Fontes consultadas (04/08/2026)
 

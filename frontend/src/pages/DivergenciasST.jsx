@@ -100,7 +100,11 @@ function linkMatriz(item) {
     Object.entries(params).filter(([, v]) => v)
   ).toString()
   if (cod.includes('ERRO_MVA_NAO_ENCONTRADA'))
-    return q({ aba: 'mva', ncm: item.ncm, cest: item.cest, uf_destino: item.uf_destino })
+    // Leva a origem junto: a MVA muda conforme o estado remetente, então abrir
+    // o modal em "Qualquer origem" cadastraria uma regra geral no lugar da
+    // regra do par que gerou a divergência.
+    return q({ aba: 'mva', ncm: item.ncm, cest: item.cest,
+               uf_origem: item.uf_origem, uf_destino: item.uf_destino })
   if (cod.includes('ERRO_ALIQUOTA_NAO_ENCONTRADA'))
     return q({ aba: 'aliquotas', uf_destino: item.uf_destino })
   if (cod.includes('ERRO_ENQUADRAMENTO_NAO_CADASTRADO'))

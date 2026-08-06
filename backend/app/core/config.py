@@ -67,6 +67,17 @@ class Settings(BaseSettings):
     # globais. Vazio = qualquer ADMIN (comportamento histórico).
     matriz_curadores: str = ""
 
+    # Motor de ST --------------------------------------------------------------
+    # Fail-closed da MVA: quando LIGADO, item enquadrado em ST sem NENHUMA linha
+    # de MVA na matriz (NCM/CEST/origem→destino, na data) vira NAO_AUDITAVEL com
+    # ERRO_MVA_NAO_ENCONTRADA, qualquer que seja o modBCST — em vez de calcular
+    # a base pelo valor da operação assumindo MVA 0% em silêncio.
+    # DESLIGADO por padrão: só faz sentido depois que a base de MVA por par de
+    # UFs estiver carregada, senão a maioria das notas vira pendência de uma vez.
+    # A trava histórica do modBCST=4 (XML declarou base por MVA e a matriz não
+    # tem a linha) continua SEMPRE ativa, independente desta chave.
+    st_mva_fail_closed: bool = False
+
     # Alertas operacionais ------------------------------------------------------
     # Webhook (POST JSON) notificado quando um job assíncrono falha — ntfy.sh,
     # Slack/Teams incoming webhook etc. Vazio = só log CRITICAL.

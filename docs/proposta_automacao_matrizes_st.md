@@ -1,6 +1,14 @@
 # Proposta técnica — Automação da base de dados do motor de ICMS-ST
 
-**Data:** 04/08/2026 · **Status:** proposta para aprovação (nenhum código alterado)
+**Data:** 04/08/2026 · **Status:** Fases 1–5 entregues (ver abaixo)
+
+> **Onde a base está HOJE (06/08/2026):**
+> [`estado_base_matrizes_st.md`](estado_base_matrizes_st.md) — cobertura real
+> por UF e por matriz, o que é automático × manual, e o que falta para "base
+> completa". Resumo de uma linha: **só MG tem MVA extraída de fonte oficial**;
+> nas outras 6 UFs do escritório a MVA depende de carga manual, e o relatório
+> de lacunas é o que transforma isso em fila de trabalho em vez de descoberta
+> item a item.
 
 ---
 

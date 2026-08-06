@@ -10,6 +10,8 @@ import re
 from datetime import date
 from decimal import Decimal
 
+from app.shared.domain.uf import CURINGA_UF
+
 from .enums import Regime
 from .money import ZERO, D
 from .ports import MvaInfo
@@ -20,26 +22,57 @@ def _limpar(codigo: str) -> str:
     return re.sub(r"\D", "", codigo or "")
 
 
-class MvaEmMemoria:
-    """MvaRepository seed. Chave (ncm_limpo, cest_limpo, uf); fallback 8→6→4."""
+def _uf(valor: str) -> str:
+    """Sigla em caixa alta preservando o curinga '*' (qualquer origem)."""
+    bruto = (valor or "").strip()
+    return CURINGA_UF if bruto == CURINGA_UF else bruto.upper()
 
-    def __init__(self, dados: dict[tuple[str, str, str], str] | None = None):
-        # (ncm, cest, uf) -> MVA original (%). Exemplos da MATRIZ_MVA_Por_Segmento.
-        base = {
+
+class MvaEmMemoria:
+    """MvaRepository seed. Chave (ncm, cest, uf_origem, uf_destino); fallback 8→6→4.
+
+    Aceita chave de 4 elementos `(ncm, cest, uf_origem, uf_destino)` e também a
+    forma histórica de 3 `(ncm, cest, uf_destino)`, que vira uma regra CURINGA de
+    origem (`"*"`) — assim os gabaritos/laboratórios antigos seguem válidos.
+    """
+
+    def __init__(
+        self,
+        dados: dict[tuple[str, ...], str] | None = None,
+    ):
+        # (ncm, cest, [uf_origem,] uf_destino) -> MVA original (%).
+        # Exemplos da MATRIZ_MVA_Por_Segmento (todos como regra curinga).
+        base: dict[tuple[str, ...], str] = {
             ("85122011", "0100100", "MG"): "40.00",
             ("8512", "0100100", "SP"): "36.50",
             ("33049910", "2001600", "RJ"): "52.00",
         }
         if dados:
             base.update(dados)
-        self._dados = {(_limpar(n), _limpar(c), uf.upper()): D(v) for (n, c, uf), v in base.items()}
+        self._dados: dict[tuple[str, str, str, str], Decimal] = {}
+        for chave, valor in base.items():
+            if len(chave) == 4:
+                n, c, orig, dest = chave
+            else:
+                n, c, dest = chave
+                orig = CURINGA_UF
+            self._dados[(_limpar(n), _limpar(c), _uf(orig), _uf(dest))] = D(valor)
 
-    def buscar(self, ncm: str, cest: str, uf_dest: str, data: date) -> MvaInfo | None:
-        ncm_l, cest_l, uf = _limpar(ncm), _limpar(cest), uf_dest.upper()
+    def buscar(
+        self, ncm: str, cest: str, uf_orig: str, uf_dest: str, data: date
+    ) -> MvaInfo | None:
+        """Origem EXATA antes do curinga, DENTRO de cada nível de NCM (8→6→4)."""
+        ncm_l, cest_l = _limpar(ncm), _limpar(cest)
+        orig, dest = _uf(uf_orig), _uf(uf_dest)
+        origens = (orig,) if orig == CURINGA_UF else (orig, CURINGA_UF)
         for chave_ncm in (ncm_l, ncm_l[:6], ncm_l[:4]):
-            mva = self._dados.get((chave_ncm, cest_l, uf))
-            if mva is not None:
-                return MvaInfo(mva_original=mva, ncm_casado=chave_ncm)
+            for chave_orig in origens:
+                mva = self._dados.get((chave_ncm, cest_l, chave_orig, dest))
+                if mva is not None:
+                    return MvaInfo(
+                        mva_original=mva, ncm_casado=chave_ncm,
+                        uf_origem_casada=chave_orig,
+                    )
         return None
 
 

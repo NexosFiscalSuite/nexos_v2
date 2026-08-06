@@ -20,12 +20,29 @@ class MvaInfo:
     ncm_casado: str          # qual nível do NCM bateu (diagnóstico do fallback)
     matriz_id: int | None = None   # linha da matriz usada (rastreabilidade na memória)
     base_legal: str | None = None  # norma da MVA (vai à memória e às cartas)
+    # UF de origem da LINHA que casou ("*" = regra curinga, válida p/ qualquer
+    # remetente). Vai à memória/carta: "de onde veio a MVA que aplicamos".
+    uf_origem_casada: str | None = None
 
 
 class MvaRepository(Protocol):
-    """MATRIZ_MVA_Por_Segmento — chave NCM+CEST+UF, com fallback 8→6→4 dígitos."""
+    """MATRIZ_MVA_Por_Segmento — chave NCM+CEST+UF origem→destino, fallback 8→6→4.
 
-    def buscar(self, ncm: str, cest: str, uf_dest: str, data: date) -> MvaInfo | None: ...
+    A MVA NÃO depende só do destino: o acordo do estado REMETENTE muda a margem,
+    e a interna (origem == destino) difere da interestadual. Precedência da
+    busca: para cada nível de NCM (8→6→4), tenta a origem EXATA e só então o
+    curinga `"*"` — especificidade da origem ganha DENTRO do nível de NCM, para
+    que uma regra geral nunca sequestre um par curado.
+
+    `None` = NENHUMA linha na matriz para a chave na data. O motor NÃO assume
+    MVA zero: vira ERRO_MVA_NAO_ENCONTRADA (fail-closed). Uma linha cadastrada
+    com MVA `0,00` é o contrário disso — é a DECISÃO curada de que a base é o
+    valor da operação, e vem como MvaInfo com `mva_original == 0`.
+    """
+
+    def buscar(
+        self, ncm: str, cest: str, uf_orig: str, uf_dest: str, data: date
+    ) -> MvaInfo | None: ...
 
 
 @dataclass(frozen=True, slots=True)

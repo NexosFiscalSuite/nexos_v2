@@ -14,6 +14,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.modules.fiscal.application.frete_service import agregar_frete, ratear_frete
 from app.modules.fiscal.domain.st import (
     Crt,
@@ -132,6 +133,9 @@ class StAuditService:
             fcp_repo=matrizes.fcp,
             protocolo_repo=matrizes.protocolo,
             aliquota_repo=matrizes.aliquota,   # vigente na data (nunca a referência fixa)
+            # Gate de rollout do fail-closed de MVA (NEXOS_ST_MVA_FAIL_CLOSED).
+            # Fica AQUI, na composição: o motor é puro e não conhece config.
+            mva_fail_closed=get_settings().st_mva_fail_closed,
         )
         resultados = engine.auditar_nota(itens_fiscais, operacao)
 

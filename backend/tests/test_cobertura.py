@@ -37,10 +37,10 @@ async def sessao():
     await engine.dispose()
 
 
-def _nota(tenant, empresa, uf: str, chave: str) -> Nota:
+def _nota(tenant, empresa, uf: str, chave: str, uf_emit: str | None = None) -> Nota:
     return Nota(
         id=uuid4(), tenant_id=tenant, empresa_id=empresa, chave_acesso=chave,
-        tipo="NFe", fluxo="entrada", modelo="55", uf_dest=uf,
+        tipo="NFe", fluxo="entrada", modelo="55", uf_dest=uf, uf_emit=uf_emit,
         data_emissao="2026-06-01", ano="2026", mes="06",
     )
 
@@ -119,6 +119,112 @@ async def test_cobertura_respeita_vigencia_e_filtro_uf(sessao):
     assert status["40111000"] == "ST_SEM_MVA"
 
 
+async def _cenario_lacunas(sessao: AsyncSession):
+    """MG comprando de SP e de MG:
+      · pneu  — MVA curinga na matriz → coberto venha de onde vier;
+      · autopeça — MVA só para origem SP → a compra INTERNA (MG) é lacuna;
+      · cachaça — ST sem MVA nenhuma → lacuna;
+      · fralda — TN (não consome MVA) → fora da fila;
+      · NCM órfão — sem enquadramento → só contado no resumo."""
+    tenant, empresa = uuid4(), uuid4()
+    sessao.add_all([
+        MatrizAliquota(uf_destino="MG", aliq_modal=Decimal("18.00"),
+                       data_inicio_vigencia=_INICIO),
+        MatrizEnquadramentoSt(uf_destino="MG", ncm="40111000", cest="0100500",
+                              regime="ST", data_inicio_vigencia=_INICIO),
+        MatrizMva(ncm="40111000", cest="0100500", uf_origem="*", uf_destino="MG",
+                  mva_original=Decimal("42.00"), data_inicio_vigencia=_INICIO),
+        MatrizEnquadramentoSt(uf_destino="MG", ncm="87082919", cest="0107500",
+                              regime="ST", data_inicio_vigencia=_INICIO),
+        MatrizMva(ncm="87082919", cest="0107500", uf_origem="SP", uf_destino="MG",
+                  mva_original=Decimal("71.78"), data_inicio_vigencia=_INICIO),
+        MatrizEnquadramentoSt(uf_destino="MG", ncm="22084000", cest="0202200",
+                              regime="ST", data_inicio_vigencia=_INICIO),
+        MatrizEnquadramentoSt(uf_destino="MG", ncm="48181000", cest="",
+                              regime="TN", data_inicio_vigencia=_INICIO),
+    ])
+    de_sp = _nota(tenant, empresa, "MG", "1" * 44, uf_emit="SP")
+    de_mg = _nota(tenant, empresa, "MG", "2" * 44, uf_emit="MG")
+    sessao.add_all([
+        de_sp, de_mg,
+        _item(tenant, de_sp, 1, "40111000", "0100500", "1000"),   # coberto (curinga)
+        _item(tenant, de_sp, 2, "87082919", "0107500", "2000"),   # coberto (origem SP)
+        _item(tenant, de_sp, 3, "22084000", "0202200", "5000"),   # LACUNA SP→MG
+        _item(tenant, de_mg, 1, "87082919", "0107500", "9000"),   # LACUNA MG→MG
+        _item(tenant, de_mg, 2, "48181000", "", "7000"),          # TN: fora
+        _item(tenant, de_mg, 3, "99999999", "9999999", "8000"),   # sem enquadramento
+    ])
+    await sessao.flush()
+    return empresa
+
+
+async def test_lacunas_mva_lista_o_par_origem_destino_por_impacto(sessao):
+    await _cenario_lacunas(sessao)
+
+    r = await CoberturaService(sessao).lacunas_mva()
+
+    chaves = [(g["uf_origem"], g["uf_destino"], g["ncm"], g["valor"]) for g in r["lacunas"]]
+    assert chaves == [
+        ("MG", "MG", "87082919", 9000.0),    # interna: a MVA cadastrada é só de SP
+        ("SP", "MG", "22084000", 5000.0),    # nenhuma MVA para o par
+    ]
+    assert all(g["motivo"] == "SEM_MVA" and g["regime"] == "ST" for g in r["lacunas"])
+
+    # TN e itens cobertos ficam fora; o sem-enquadramento só é CONTADO.
+    assert r["total"] == 2
+    assert r["resumo"]["valor"] == 14000.0
+    assert r["resumo"]["cobertos"] == {"grupos": 2, "valor": 3000.0}
+    assert r["resumo"]["sem_enquadramento"] == {"grupos": 1, "valor": 8000.0}
+    assert r["resumo"]["por_uf"]["MG"] == {"lacunas": 2, "itens": 2, "valor": 14000.0}
+    # 14000 dos 17000 avaliados (só ST/ST_ENTRADA) estão sem MVA.
+    assert r["resumo"]["pct_valor_sem_mva"] == 82.4
+
+
+async def test_lacunas_mva_incluindo_o_que_nem_tem_enquadramento(sessao):
+    await _cenario_lacunas(sessao)
+
+    r = await CoberturaService(sessao).lacunas_mva(incluir_sem_enquadramento=True)
+
+    orfao = next(g for g in r["lacunas"] if g["ncm"] == "99999999")
+    assert orfao["motivo"] == "SEM_ENQUADRAMENTO" and orfao["regime"] is None
+    assert r["lacunas"][0]["valor"] == 9000.0        # ordem por dinheiro continua
+
+
+async def test_lacunas_mva_saem_no_layout_do_importador_sem_valor_preenchido(sessao):
+    """O CSV baixado sobe de volta pelo Importar planilha: o usuário preenche
+    SÓ a coluna de MVA. Nenhuma margem é sugerida pelo sistema."""
+    await _cenario_lacunas(sessao)
+
+    csv_txt = await CoberturaService(sessao).lacunas_mva_csv()
+
+    linhas = csv_txt.strip().split("\n")
+    assert linhas[0] == (
+        "ncm;cest;uf_origem;uf_destino;mva_original;base_legal;"
+        "data_inicio_vigencia;data_fim_vigencia"
+    )
+    assert linhas[1] == "87082919;0107500;MG;MG;;;2026-06-01;"
+    assert linhas[2] == "22084000;0202200;SP;MG;;;2026-06-01;"
+    assert len(linhas) == 3
+
+
+async def test_lacunas_mva_sem_uf_de_emitente_so_e_coberta_por_regra_geral(sessao):
+    """Nota sem UF do emitente entra como curinga: uma MVA específica de SP não
+    a cobre (não se sabe de onde veio) — a lacuna aparece, fail-closed."""
+    tenant, empresa = uuid4(), uuid4()
+    sessao.add_all([
+        MatrizEnquadramentoSt(uf_destino="MG", ncm="87082919", cest="0107500",
+                              regime="ST", data_inicio_vigencia=_INICIO),
+        MatrizMva(ncm="87082919", cest="0107500", uf_origem="SP", uf_destino="MG",
+                  mva_original=Decimal("71.78"), data_inicio_vigencia=_INICIO),
+    ])
+    sem_emit = _nota(tenant, empresa, "MG", "3" * 44)
+    sessao.add_all([sem_emit, _item(tenant, sem_emit, 1, "87082919", "0107500", "400")])
+    await sessao.flush()
+
+    r = await CoberturaService(sessao).lacunas_mva()
+    assert [g["uf_origem"] for g in r["lacunas"]] == ["*"]
+
+
 async def test_cobertura_pagina_sem_truncar_o_resumo(sessao):
     await _cenario(sessao)
 
@@ -134,3 +240,22 @@ async def test_cobertura_pagina_sem_truncar_o_resumo(sessao):
     # Cards e percentuais continuam representando toda a carteira, não só a página.
     assert primeira["resumo"]["grupos"] == 4
     assert primeira["resumo"]["valor_total"] == 17000.0
+
+
+# ── Contrato de rota com o front ─────────────────────────────────────────────
+def test_rotas_de_lacunas_mva_registradas():
+    """Sem elas o relatório de lacunas é código morto: a tela não o alcança."""
+    from app.modules.fiscal.api.matrizes_routers import router
+
+    caminhos = {r.path for r in router.routes}
+    assert "/matrizes/lacunas-mva" in caminhos
+    assert "/matrizes/lacunas-mva/export" in caminhos
+
+
+def test_export_de_lacunas_sai_no_layout_do_import_da_mva():
+    """O CSV baixado tem que subir de volta sem o usuário mexer em coluna: as
+    colunas são as MESMAS que o bulk da MVA espera, na mesma ordem."""
+    from app.modules.fiscal.api.matrizes_bulk import MATRIZES
+    from app.modules.fiscal.application.cobertura_service import COLUNAS_CSV_MVA
+
+    assert list(COLUNAS_CSV_MVA) == MATRIZES["mva"].colunas

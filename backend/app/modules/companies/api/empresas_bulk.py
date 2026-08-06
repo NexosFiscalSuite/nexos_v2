@@ -6,7 +6,6 @@ Linha inválida vira erro relatado (linha + motivo) — não derruba o lote.
 """
 from __future__ import annotations
 
-import unicodedata
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -14,31 +13,8 @@ from pydantic import BaseModel, Field, field_validator
 from app.core.exceptions import DomainError
 from app.modules.companies.infrastructure.models import Empresa
 from app.shared.bulk_csv import BulkSpec
+from app.shared.domain.uf import normalizar_uf
 from app.shared.domain.value_objects import DocumentoFiscal
-
-_UFS = {
-    "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS",
-    "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC",
-    "SP", "SE", "TO",
-}
-_NOME_UF = {
-    "acre": "AC", "alagoas": "AL", "amapa": "AP", "amazonas": "AM",
-    "bahia": "BA", "ceara": "CE", "distrito federal": "DF",
-    "espirito santo": "ES", "goias": "GO", "maranhao": "MA",
-    "mato grosso": "MT", "mato grosso do sul": "MS", "minas gerais": "MG",
-    "para": "PA", "paraiba": "PB", "parana": "PR", "pernambuco": "PE",
-    "piaui": "PI", "rio de janeiro": "RJ", "rio grande do norte": "RN",
-    "rio grande do sul": "RS", "rondonia": "RO", "roraima": "RR",
-    "santa catarina": "SC", "sao paulo": "SP", "sergipe": "SE",
-    "tocantins": "TO",
-}
-
-
-def _sem_acentos(s: str) -> str:
-    return "".join(
-        ch for ch in unicodedata.normalize("NFD", s)
-        if unicodedata.category(ch) != "Mn"
-    )
 
 
 class EmpresaLinha(BaseModel):
@@ -73,17 +49,15 @@ class EmpresaLinha(BaseModel):
     @classmethod
     def _uf_normalizada(cls, v: str | None) -> str | None:
         """Planilha do mundo real traz "Minas Gerais", "mg", "MG " — converte
-        tudo para a sigla; só reclama quando não dá para reconhecer."""
+        tudo para a sigla; só reclama quando não dá para reconhecer. A tabela de
+        UFs é a compartilhada (app.shared.domain.uf), a mesma das matrizes."""
         if v is None or not v.strip():
-            return None
+            return None                       # UF em branco é opcional aqui
         bruto = v.strip()
-        sigla = bruto.upper()
-        if len(sigla) == 2 and sigla in _UFS:
-            return sigla
-        nome = _sem_acentos(bruto.lower())
-        if nome in _NOME_UF:
-            return _NOME_UF[nome]
-        raise ValueError(f"UF '{bruto}' não reconhecida — use a sigla (ex.: MG)")
+        sigla = normalizar_uf(bruto)
+        if sigla is None:
+            raise ValueError(f"UF '{bruto}' não reconhecida — use a sigla (ex.: MG)")
+        return sigla
 
 
 def spec_empresas(tenant_id: UUID) -> BulkSpec:

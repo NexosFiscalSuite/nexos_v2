@@ -27,7 +27,14 @@ from app.modules.fiscal.infrastructure.matrizes_models import (
 )
 from app.modules.fiscal.infrastructure.models import ExcecaoEnquadramentoStProduto
 from app.modules.fiscal.infrastructure.vigencia import filtrar_vigencia
+from app.shared.domain.uf import CURINGA_UF
 from app.shared.domain.value_objects import only_digits
+
+
+def _uf(valor: str | None) -> str:
+    """Sigla em caixa alta preservando o curinga '*' (regra de qualquer origem)."""
+    bruto = (valor or "").strip()
+    return CURINGA_UF if bruto == CURINGA_UF else bruto.upper()
 
 
 def _candidatos_ncm(ncm: str) -> list[str]:
@@ -45,30 +52,52 @@ def _candidatos_ncm(ncm: str) -> list[str]:
 # --------------------------------------------------------------------------- #
 @dataclass(frozen=True, slots=True)
 class _MvaSnapshot:
-    # (ncm, cest, uf) -> (MVA, id da linha, base legal)
-    dados: dict[tuple[str, str, str], tuple[Decimal, int, str | None]]
+    """MVA vigente por NCM+CEST+UF ORIGEM→DESTINO.
 
-    def buscar(self, ncm: str, cest: str, uf_dest: str, data: date) -> MvaInfo | None:
-        cest_l, uf = only_digits(cest), uf_dest.upper()
+    Precedência: o NCM é o laço EXTERNO (8→6→4) e, dentro dele, a origem EXATA
+    vence o curinga `"*"`. Assim uma regra genérica ("vale para qualquer
+    remetente") nunca sequestra o par curado UF→UF, e um NCM de 8 dígitos com
+    regra curinga ganha de um NCM de 6 dígitos com origem específica — o
+    produto é mais determinante que o remetente.
+    """
+
+    # (ncm, cest, uf_origem, uf_destino) -> (MVA, id da linha, base legal)
+    dados: dict[tuple[str, str, str, str], tuple[Decimal, int, str | None]]
+
+    def buscar(
+        self, ncm: str, cest: str, uf_orig: str, uf_dest: str, data: date
+    ) -> MvaInfo | None:
+        cest_l = only_digits(cest)
+        orig, dest = _uf(uf_orig), _uf(uf_dest)
+        origens = (orig,) if orig == CURINGA_UF else (orig, CURINGA_UF)
         for c in _candidatos_ncm(ncm):
-            par = self.dados.get((c, cest_l, uf))
-            if par is not None:
-                mva, linha_id, base_legal = par
-                return MvaInfo(mva_original=mva, ncm_casado=c,
-                               matriz_id=linha_id, base_legal=base_legal)
+            for o in origens:
+                par = self.dados.get((c, cest_l, o, dest))
+                if par is not None:
+                    mva, linha_id, base_legal = par
+                    return MvaInfo(mva_original=mva, ncm_casado=c,
+                                   matriz_id=linha_id, base_legal=base_legal,
+                                   uf_origem_casada=o)
         if not cest_l:
             # XML sem a tag CEST (típico de emitente que nem tratou o item como
             # ST): casa pelo NCM. MVA única no NCM → usa; MVAs distintas por
             # CEST → ambíguo, fail-closed (None trava com o erro de MVA).
+            # A origem exata é resolvida ANTES do curinga também aqui — e um
+            # empate ambíguo na origem exata trava, não escorrega pro curinga.
             for c in _candidatos_ncm(ncm):
-                pares = [v for (n, _ce, u), v in self.dados.items() if n == c and u == uf]
-                if pares:
-                    mvas = {p[0] for p in pares}
-                    if len(mvas) == 1:
-                        mva, linha_id, base_legal = pares[0]
-                        return MvaInfo(mva_original=mva, ncm_casado=c,
-                                       matriz_id=linha_id, base_legal=base_legal)
-                    return None
+                for o in origens:
+                    pares = [
+                        v for (n, _ce, uo, ud), v in self.dados.items()
+                        if n == c and uo == o and ud == dest
+                    ]
+                    if pares:
+                        mvas = {p[0] for p in pares}
+                        if len(mvas) == 1:
+                            mva, linha_id, base_legal = pares[0]
+                            return MvaInfo(mva_original=mva, ncm_casado=c,
+                                           matriz_id=linha_id, base_legal=base_legal,
+                                           uf_origem_casada=o)
+                        return None
         return None
 
 
@@ -205,6 +234,7 @@ class MatrizesLoader:
         empresa_id: UUID | None = None,
     ) -> MatrizesHidratadas:
         uf, data = operacao.uf_dest.upper(), operacao.data
+        uf_orig = operacao.uf_emit.upper()
         ncms: set[str] = set()
         cests: set[str] = set()
         for it in itens:
@@ -212,7 +242,7 @@ class MatrizesLoader:
             cests.add(only_digits(it.cest))
 
         return MatrizesHidratadas(
-            mva=await self._mva(uf, ncms, cests, data),
+            mva=await self._mva(uf_orig, uf, ncms, cests, data),
             enquadramento=await self._enquadramento(
                 uf, ncms, cests, data, empresa_id, itens
             ),
@@ -221,12 +251,15 @@ class MatrizesLoader:
             aliquota=await self._aliquota(uf, data),
         )
 
-    async def _mva(self, uf, ncms, cests, data) -> _MvaSnapshot:
+    async def _mva(self, uf_orig, uf, ncms, cests, data) -> _MvaSnapshot:
         # Sem filtro por CEST: o XML pode vir sem a tag (o snapshot resolve o
         # fallback por NCM) — poucas linhas por NCM, custo irrelevante.
+        # A origem entra na query com o curinga junto: o snapshot é quem decide
+        # a precedência (exata > "*") dentro de cada nível de NCM.
         stmt = filtrar_vigencia(
             select(MatrizMva).where(
                 MatrizMva.uf_destino == uf,
+                MatrizMva.uf_origem.in_({uf_orig, CURINGA_UF}),
                 MatrizMva.ncm.in_(ncms),
             ),
             MatrizMva,
@@ -234,7 +267,8 @@ class MatrizesLoader:
         )
         rows = (await self.session.execute(stmt)).scalars().all()
         return _MvaSnapshot({
-            (r.ncm, r.cest, r.uf_destino): (r.mva_original, r.id, r.base_legal)
+            (r.ncm, r.cest, _uf(r.uf_origem), r.uf_destino):
+                (r.mva_original, r.id, r.base_legal)
             for r in rows
         })
 
