@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.fiscal.domain.st.enums import Regime
 from app.modules.fiscal.domain.st.model import ItemFiscal, Operacao
-from app.modules.fiscal.domain.st.ports import AliquotaUf, MvaInfo
+from app.modules.fiscal.domain.st.ports import NCM_GERAL, AliquotaUf, MvaInfo
 from app.modules.fiscal.infrastructure.matrizes_models import (
     MatrizAliquota,
     MatrizEnquadramentoSt,
@@ -239,10 +239,22 @@ class _ProtocoloSnapshot:
 
 @dataclass(frozen=True, slots=True)
 class _AliquotaSnapshot:
-    dados: dict[str, AliquotaUf]                 # UF -> alíquota vigente na data
+    """Tributação interna vigente por UF **e NCM** (alíquota + redução de base).
 
-    def buscar(self, uf_dest: str, data: date) -> AliquotaUf | None:
-        return self.dados.get(uf_dest.upper())
+    Chave no estilo do `_FcpSnapshot` — `(uf, ncm|'GERAL')` —, mas com o
+    fallback 8→6→4→GERAL da MVA e do protocolo: a linha do produto vence a
+    regra do estado, e a GERAL responde por todo NCM sem curadoria própria.
+    """
+
+    dados: dict[tuple[str, str], AliquotaUf]     # (uf, ncm|'GERAL') -> vigente
+
+    def buscar(self, ncm: str, uf_dest: str, data: date) -> AliquotaUf | None:
+        uf = (uf_dest or "").strip().upper()
+        for chave in (*_candidatos_ncm(ncm), NCM_GERAL):
+            aliq = self.dados.get((uf, chave))
+            if aliq is not None:
+                return aliq
+        return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -284,7 +296,7 @@ class MatrizesLoader:
             ),
             fcp=await self._fcp(uf, ncms, data),
             protocolo=await self._protocolo(operacao.uf_emit.upper(), uf, data),
-            aliquota=await self._aliquota(uf, data),
+            aliquota=await self._aliquota(uf, ncms, data),
         )
 
     async def _mva(self, uf_orig, uf, ncms, cests, data) -> _MvaSnapshot:
@@ -393,22 +405,30 @@ class MatrizesLoader:
             ),
         )
 
-    async def _aliquota(self, uf: str, data) -> _AliquotaSnapshot:
+    async def _aliquota(self, uf: str, ncms: set[str], data) -> _AliquotaSnapshot:
+        # Traz a regra do estado ('GERAL') JUNTO com as linhas dos NCM da nota:
+        # o snapshot resolve a precedência 8→6→4→GERAL sem uma segunda ida ao
+        # banco (e sem N+1 por item).
         stmt = (
             filtrar_vigencia(
-                select(MatrizAliquota).where(MatrizAliquota.uf_destino == uf),
+                select(MatrizAliquota).where(
+                    MatrizAliquota.uf_destino == uf,
+                    MatrizAliquota.ncm.in_(set(ncms) | {NCM_GERAL}),
+                ),
                 MatrizAliquota,
                 data,
             )
-            # Desempate (ADR-0002): se houver sobreposição indevida, vence a
-            # vigência mais recente — a validação de carga é quem impede o caso.
-            .order_by(MatrizAliquota.data_inicio_vigencia.desc())
-            .limit(1)
+            # Desempate (ADR-0002): se houver sobreposição indevida na MESMA
+            # chave (uf, ncm), vence a vigência mais recente — como o dicionário
+            # é montado em ordem crescente, a última escrita é a mais nova.
+            .order_by(MatrizAliquota.data_inicio_vigencia.asc())
         )
-        row = (await self.session.execute(stmt)).scalars().first()
-        if row is None:
-            return _AliquotaSnapshot({})
-        return _AliquotaSnapshot({row.uf_destino: AliquotaUf(
-            modal=row.aliq_modal, fcp_integrado=row.aliq_fcp_integrado,
-            matriz_id=row.id, base_legal=row.base_legal,
-        )})
+        rows = (await self.session.execute(stmt)).scalars().all()
+        return _AliquotaSnapshot({
+            (r.uf_destino.upper(), r.ncm): AliquotaUf(
+                modal=r.aliq_modal, fcp_integrado=r.aliq_fcp_integrado,
+                matriz_id=r.id, base_legal=r.base_legal,
+                ncm_casado=r.ncm, p_red_bc_st=r.p_red_bc_st,
+            )
+            for r in rows
+        })

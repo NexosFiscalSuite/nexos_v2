@@ -7,10 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.database import Base
 from app.modules.fiscal.api.matrizes_bulk import MATRIZES
-from app.modules.fiscal.infrastructure.matrizes_models import MatrizMva
+from app.modules.fiscal.infrastructure.matrizes_models import MatrizAliquota, MatrizMva
 from app.shared.bulk_csv import exportar_csv, importar_csv
 
 _MVA = MATRIZES["mva"]
+_ALIQ = MATRIZES["aliquotas"]
 
 # A MVA depende do par origem→destino: o cabeçalho do template ganhou uf_origem.
 _CAB = ("ncm;cest;uf_origem;uf_destino;mva_original;base_legal;"
@@ -133,3 +134,126 @@ async def test_import_rejeita_vigencia_sobreposta(sessao):
     assert r3["atualizados"] == 1
     assert r3["inseridos"] == 1
     assert r3["erros"] == []
+
+
+# ── Alíquotas: a do estado ("GERAL") × a do produto (por NCM) ────────────────
+_CAB_ALIQ = ("uf_destino;ncm;aliq_modal;aliq_fcp_integrado;p_red_bc_st;"
+             "base_legal;data_inicio_vigencia;data_fim_vigencia")
+
+
+@pytest_asyncio.fixture
+async def sessao_aliq():
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all, tables=[MatrizAliquota.__table__])
+    async with async_sessionmaker(engine, class_=AsyncSession)() as s:
+        yield s
+    await engine.dispose()
+
+
+async def _aliquotas(sessao):
+    """{ncm: (modal, redução)} — o retrato da matriz depois do import."""
+    return {
+        n: (m, p) for n, m, p in (await sessao.execute(select(
+            MatrizAliquota.ncm, MatrizAliquota.aliq_modal, MatrizAliquota.p_red_bc_st
+        ))).all()
+    }
+
+
+async def test_template_de_aliquotas_traz_ncm_e_reducao(sessao_aliq):
+    csv = await exportar_csv(sessao_aliq, _ALIQ)
+    assert csv.strip().splitlines() == [_CAB_ALIQ]
+
+
+async def test_aliquota_do_estado_e_do_produto_convivem(sessao_aliq):
+    """Remédio a 12% em MG não anula os 18% do estado: são duas linhas, mesma
+    UF e mesma vigência. Sem o NCM na chave, uma sobrescreveria a outra."""
+    r = await importar_csv(sessao_aliq, _ALIQ, _CAB_ALIQ.encode() + b"\n"
+        + b"MG;GERAL;18.00;0;0;RICMS/MG art. 42;2026-01-01;\n"
+        + b"MG;30049099;12.00;0;0;Medicamento;2026-01-01;\n"
+        + b"MG;1006.30.21;12,00;0;0;Arroz (cesta basica);2026-01-01;\n")
+    assert r["inseridos"] == 3 and r["erros"] == []
+
+    # NCM formatado virou dígitos e a vírgula decimal virou ponto.
+    assert await _aliquotas(sessao_aliq) == {
+        "GERAL": (Decimal("18.00"), Decimal("0.00")),
+        "30049099": (Decimal("12.00"), Decimal("0.00")),
+        "10063021": (Decimal("12.00"), Decimal("0.00")),
+    }
+
+
+async def test_import_por_ncm_nao_sobrescreve_a_linha_do_estado(sessao_aliq):
+    """O risco da chave de upsert: subir a planilha só com o NCM específico não
+    pode mexer na alíquota GERAL — senão TODA a UF passaria a calcular com a
+    alíquota do medicamento."""
+    await importar_csv(sessao_aliq, _ALIQ, _CAB_ALIQ.encode() + b"\n"
+                       + b"MG;GERAL;18.00;0;0;RICMS/MG;2026-01-01;\n")
+
+    r = await importar_csv(sessao_aliq, _ALIQ, _CAB_ALIQ.encode() + b"\n"
+                           + b"MG;30049099;12.00;0;33.33;Medicamento;2026-01-01;\n")
+    assert r["inseridos"] == 1 and r["atualizados"] == 0 and r["erros"] == []
+
+    assert await _aliquotas(sessao_aliq) == {
+        "GERAL": (Decimal("18.00"), Decimal("0.00")),        # intocada
+        "30049099": (Decimal("12.00"), Decimal("33.33")),
+    }
+
+    # Reimportar o MESMO NCM atualiza a linha dele — e só ela.
+    r2 = await importar_csv(sessao_aliq, _ALIQ, _CAB_ALIQ.encode() + b"\n"
+                            + b"MG;30049099;12.00;0;30.00;Medicamento (rev.);2026-01-01;\n")
+    assert r2["inseridos"] == 0 and r2["atualizados"] == 1
+    assert (await _aliquotas(sessao_aliq))["GERAL"] == (Decimal("18.00"), Decimal("0.00"))
+
+
+async def test_planilha_antiga_sem_a_coluna_ncm_entra_como_geral(sessao_aliq):
+    """Quem já exportou a matriz no formato anterior (só UF) sobe o arquivo do
+    mesmo jeito: a linha vira a alíquota do estado."""
+    antigo = (b"uf_destino;aliq_modal;aliq_fcp_integrado;base_legal;"
+              b"data_inicio_vigencia;data_fim_vigencia\n"
+              b"MG;18.00;0;RICMS/MG;2026-01-01;\n"
+              b"SP;18.00;0;RICMS/SP;2026-01-01;\n")
+    r = await importar_csv(sessao_aliq, _ALIQ, antigo)
+    assert r["inseridos"] == 2 and r["erros"] == []
+
+    linhas = (await sessao_aliq.execute(select(MatrizAliquota))).scalars().all()
+    assert {x.ncm for x in linhas} == {"GERAL"}
+    assert {x.p_red_bc_st for x in linhas} == {Decimal("0.00")}
+
+    # Coluna presente porém em branco → mesmo resultado (nada de NCM vazio).
+    await importar_csv(sessao_aliq, _ALIQ, _CAB_ALIQ.encode() + b"\n"
+                       + b"RJ;;20.00;2.00;;FECP;2026-01-01;\n")
+    ncms = (await sessao_aliq.execute(select(MatrizAliquota.ncm))).scalars().all()
+    assert set(ncms) == {"GERAL"}
+
+
+async def test_duas_vigencias_do_mesmo_ncm_acusam_conflito(sessao_aliq):
+    """ADR-0002 continua valendo DENTRO do NCM: mudou a alíquota do produto,
+    encerre a vigência antiga antes de abrir a nova."""
+    cab = _CAB_ALIQ.encode() + b"\n"
+    r1 = await importar_csv(sessao_aliq, _ALIQ, cab
+                            + b"MG;30049099;12.00;0;0;Medicamento;2024-01-01;\n")
+    assert r1["inseridos"] == 1
+
+    r2 = await importar_csv(sessao_aliq, _ALIQ, cab
+                            + b"MG;30049099;18.00;0;0;Medicamento;2026-01-01;\n")
+    assert r2["inseridos"] == 0
+    assert len(r2["erros"]) == 1 and "sobrep" in r2["erros"][0]["erro"]
+
+    # A linha do ESTADO na mesma UF e data não é conflito: outra família.
+    r3 = await importar_csv(sessao_aliq, _ALIQ, cab
+                            + b"MG;GERAL;18.00;0;0;RICMS/MG;2026-01-01;\n")
+    assert r3["inseridos"] == 1 and r3["erros"] == []
+
+
+async def test_reducao_de_base_no_geral_e_recusada(sessao_aliq):
+    """Redução de base é de um produto. Aceitá-la no GERAL derrubaria a base do
+    ST do estado inteiro em silêncio — a linha vira erro relatado e fica fora."""
+    r = await importar_csv(sessao_aliq, _ALIQ, _CAB_ALIQ.encode() + b"\n"
+        + b"MG;GERAL;18.00;0;38.89;Reducao indevida;2026-01-01;\n"
+        + b"MG;;18.00;0;38.89;Reducao indevida (ncm vazio);2026-01-01;\n"
+        + b"MG;22030000;18.00;0;38.89;Cerveja (reducao legitima);2026-01-01;\n")
+    assert r["inseridos"] == 1
+    assert len(r["erros"]) == 2
+    assert all("informe o NCM" in e["erro"] for e in r["erros"])
+
+    assert await _aliquotas(sessao_aliq) == {"22030000": (Decimal("18.00"), Decimal("38.89"))}

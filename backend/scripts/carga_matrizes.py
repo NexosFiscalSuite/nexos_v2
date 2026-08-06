@@ -18,6 +18,14 @@ Colunas da MVA (a mesma ordem que o export da tela devolve):
 `uf_origem` é a UF de onde a mercadoria vem; vazia ou `*` = a margem vale para
 QUALQUER origem. Arquivo antigo (sem a coluna) continua carregando — todas as
 linhas entram como `*`, e o script avisa antes de gravar.
+
+Colunas das Alíquotas:
+
+    uf_destino;ncm;aliq_modal;aliq_fcp_integrado;p_red_bc_st;base_legal;data_inicio_vigencia;data_fim_vigencia
+
+`ncm` vazio (ou o próprio texto `GERAL`) = a alíquota do ESTADO, a que vale para
+todo produto sem regra própria; com o NCM preenchido, é a alíquota daquele
+produto (cesta básica, medicamento). As duas convivem na mesma UF e vigência.
 """
 from __future__ import annotations
 
@@ -40,8 +48,8 @@ from app.shared.domain.uf import CURINGA_UF  # noqa: E402
 
 def _avisar_colunas(tipo: str, conteudo: bytes) -> None:
     """Alerta o operador sobre coluna do schema ausente no arquivo — em especial
-    o `uf_origem` da MVA, cuja ausência é silenciosa (vira curinga) e muda o
-    alcance da regra carregada."""
+    o `uf_origem` da MVA e o `ncm` da Alíquota, cuja ausência é silenciosa (vira
+    curinga / GERAL) e muda o alcance da regra carregada."""
     cabecalho = next(
         csv.reader(io.StringIO(conteudo.decode("utf-8-sig", errors="replace")), delimiter=";"),
         [],
@@ -54,6 +62,9 @@ def _avisar_colunas(tipo: str, conteudo: bytes) -> None:
     if tipo == "mva" and "uf_origem" in faltando:
         print(f"  aviso: sem 'uf_origem' toda linha entra como '{CURINGA_UF}' "
               "(vale para qualquer UF de origem).")
+    if tipo == "aliquotas" and "ncm" in faltando:
+        print("  aviso: sem 'ncm' toda linha entra como 'GERAL' "
+              "(a alíquota do estado, para todo produto sem regra própria).")
 
 
 async def _main() -> int:

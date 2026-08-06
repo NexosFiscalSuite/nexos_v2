@@ -73,6 +73,69 @@ const dicaUfOrigem = (v) => {
   return `Regra específica: vale só quando a mercadoria sai de ${v}, e tem preferência sobre a regra geral.`
 }
 
+// ── Alíquota: a do estado (GERAL) × a do produto (NCM) ──
+// Até aqui a alíquota interna era só por UF. Produto com alíquota própria na
+// lei (cesta básica, medicamento) era calculado pela modal do estado e a ST
+// saía maior do que a devida. "GERAL" é a regra do estado — o padrão e o que
+// já existia; um NCM cria a regra do produto, que vence a geral (8→6→4→GERAL).
+const NCM_GERAL = 'GERAL'
+const ehGeral = (v) => String(v ?? '').trim().toUpperCase() === NCM_GERAL
+
+// Na listagem, "GERAL" não é um NCM — vira rótulo, como o "Qualquer" da origem.
+const badgeNcmAliquota = (m) => (ehGeral(m.ncm) ? badge('Geral', 'info') : <span className="mono">{m.ncm}</span>)
+
+const AJUDA_NCM_ALIQUOTA = {
+  titulo: 'Alíquota do estado ou alíquota daquele produto',
+  texto: (
+    <>
+      Quase todo produto paga a alíquota geral do estado — é a linha
+      {' '}<strong>“GERAL”</strong>, o padrão da tela e o que já existia aqui.
+      Só que alguns produtos têm alíquota própria na lei: cesta básica e
+      medicamento, por exemplo, costumam ficar abaixo da geral. Para esses,
+      cadastre uma linha com o <strong>NCM do produto</strong>: ela tem
+      preferência sobre a geral na hora do cálculo (a busca tenta 8 dígitos,
+      depois 6, depois 4 e só então usa a geral). Sem essa linha, o produto é
+      calculado pela alíquota cheia do estado e a ST fica maior do que a devida.
+    </>
+  ),
+}
+
+const dicaNcmAliquota = (v) => {
+  if (ehGeral(v)) return 'Vale para todo produto do estado que não tenha linha própria. É o padrão.'
+  if (!v) return 'Informe o NCM do produto — 4, 6 ou 8 dígitos.'
+  return `Vale só para o NCM ${v} neste estado, e tem preferência sobre a alíquota geral.`
+}
+
+const AJUDA_RED_BC_ST = {
+  titulo: 'Redução da base de cálculo da ST',
+  texto: (
+    <>
+      Alguns produtos têm, por lei do estado de destino, a base da ST reduzida
+      em um percentual. Até agora o sistema enxergava só a redução que veio
+      declarada no XML — ou seja, repetia a conta do fornecedor. Com o
+      percentual da norma cadastrado aqui, a conta passa a ser a da lei: se o
+      que veio na nota for diferente, a diferença aparece como divergência,
+      para mais ou para menos. Em branco = sem redução.
+      <br /><br />
+      A redução é sempre de um produto, então só entra em linha
+      com <strong>NCM</strong>. Numa linha <strong>“GERAL”</strong> ela valeria
+      para todo produto do estado, o que não existe na lei — por isso o campo
+      fica desligado ali.
+    </>
+  ),
+}
+
+const DICA_RED_BC_ST =
+  'Percentual de redução previsto na lei do destino para este NCM. Em branco = sem redução.'
+
+// Motivo do bloqueio (texto curto) ou null quando o campo está liberado.
+const bloqueioRedBcSt = (form) => (
+  ehGeral(form?.ncm)
+    ? 'A alíquota geral do estado não tem redução de base — ela valeria para todo produto daqui. '
+      + 'Em “Vale para”, escolha “Um produto (NCM)” e o campo libera.'
+    : null
+)
+
 // ── Campos comuns de vigência (todas as matrizes herdam) ──
 const VIGENCIA_CAMPOS = [
   { key: 'data_inicio_vigencia', label: 'Início da vigência', type: 'date', required: true },
@@ -160,20 +223,31 @@ const ABAS = [
   {
     id: 'aliquotas', label: 'Alíquotas', icon: 'ti-receipt-tax',
     api: { list: api.matrizesAliquotas, create: api.criarMatrizAliquota, update: api.editarMatrizAliquota, remove: api.removerMatrizAliquota },
-    descricao: 'Alíquota modal do ICMS por UF de destino (com FCP integrado) — vigente na data de emissão da nota',
-    empty: { icon: 'ti-receipt-tax', title: 'Nenhuma alíquota cadastrada', sub: 'Cadastre a alíquota modal de cada UF (com vigência). Sem ela, o motor não audita notas para a UF.' },
+    descricao: 'Alíquota interna do ICMS na UF de destino (com FCP integrado): a geral do estado e as alíquotas próprias por NCM, como cesta básica e medicamento — vigentes na data de emissão da nota',
+    empty: { icon: 'ti-receipt-tax', title: 'Nenhuma alíquota cadastrada', sub: 'Cadastre a alíquota geral de cada UF (linha “GERAL”) e, quando o produto tiver alíquota própria na lei, uma linha com o NCM dele. Sem a geral, o motor não audita notas para a UF.' },
     colunas: [
       { key: 'uf_destino', label: 'UF', render: (m) => badge(m.uf_destino) },
-      { key: 'aliq_modal', label: 'Modal', align: 'right', strong: true, render: (m) => pct(m.aliq_modal) },
+      { key: 'ncm', label: 'NCM', render: badgeNcmAliquota },
+      { key: 'aliq_modal', label: 'Alíquota', align: 'right', strong: true, render: (m) => pct(m.aliq_modal) },
       { key: 'aliq_fcp_integrado', label: 'FCP integrado', align: 'right', muted: true, render: (m) => pct(m.aliq_fcp_integrado) },
+      // Só a linha de NCM pode ter redução — na geral a coluna fica vazia.
+      { key: 'p_red_bc_st', label: 'Redução da base', align: 'right', muted: true,
+        render: (m) => (Number(m.p_red_bc_st) > 0 ? pct(m.p_red_bc_st) : '—') },
       { key: 'base_legal', label: 'Base Legal', muted: true },
       { key: 'vigencia', label: 'Vigência', muted: true, small: true, render: vigencia },
       { key: 'created_at', label: 'Cadastro', muted: true, small: true, render: dataCadastro },
     ],
     campos: [
       { key: 'uf_destino', label: 'UF destino', uf: true, required: true },
-      { key: 'aliq_modal', label: 'Alíquota modal (%)', type: 'number', required: true, placeholder: '18.00' },
+      // Nasce em GERAL: a regra do estado é o padrão e o que já existia.
+      { key: 'ncm', label: 'Vale para', type: 'ncm-geral', required: true,
+        padrao: NCM_GERAL, ajuda: AJUDA_NCM_ALIQUOTA, dica: dicaNcmAliquota },
+      { key: 'aliq_modal', label: 'Alíquota interna (%)', type: 'number', required: true, placeholder: '18.00' },
       { key: 'aliq_fcp_integrado', label: 'FCP integrado (%)', type: 'number', placeholder: '0.00' },
+      // Redução de base é do produto: fica visível sempre (para o usuário saber
+      // que existe), mas desligada com o motivo à vista enquanto for GERAL.
+      { key: 'p_red_bc_st', label: 'Redução da base da ST (%)', type: 'number', placeholder: '0.00',
+        omitirSeVazio: true, bloqueio: bloqueioRedBcSt, ajuda: AJUDA_RED_BC_ST, dica: DICA_RED_BC_ST },
       { key: 'base_legal', label: 'Base Legal', full: true, placeholder: 'Lei 9.776/2025 (AL)' },
       ...VIGENCIA_CAMPOS,
     ],
@@ -393,6 +467,7 @@ const CAMPOS_DIFF = {
   regime: 'Regime', segmento: 'Segmento', mva_original: 'MVA Original',
   aliq_modal: 'Alíquota modal', aliq_fcp_integrado: 'FCP integrado',
   aliq_fcp_st: 'FCP-ST', aliq_fcp_interno: 'FCP interno',
+  p_red_bc_st: 'Redução da base da ST',
   numero_acordo: 'Acordo', situacao: 'Situação', base_legal: 'Base legal',
   data_inicio_vigencia: 'Início da vigência', data_fim_vigencia: 'Fim da vigência',
 }
@@ -1033,17 +1108,53 @@ function vazioDe(campos) {
   ]))
 }
 
-function CampoInput({ campo, value, onChange }) {
+// "GERAL" é palavra mágica: em vez de exigir que o curador a digite (e descubra
+// sozinho que ela existe), a tela oferece a escolha e só mostra a caixa do NCM
+// quando ela faz sentido. O valor gravado continua sendo "GERAL" ou o NCM.
+function CampoNcmGeral({ campo, value, onChange }) {
+  const [especifico, setEspecifico] = useState(() => !ehGeral(value))
+
+  const opcao = (ativo, rotulo, ao) => (
+    <button type="button" onClick={ao} className="btn btn-sm"
+      style={{
+        border: 'none', flex: 1, justifyContent: 'center',
+        background: ativo ? 'var(--surface)' : 'transparent',
+        color: ativo ? 'var(--text-1)' : 'var(--text-3)',
+        boxShadow: ativo ? 'var(--shadow-sm)' : 'none',
+        fontWeight: ativo ? 600 : 500,
+      }}>{rotulo}</button>
+  )
+
+  return (
+    <div>
+      <div style={{ display: 'flex', background: 'var(--surface-2)', borderRadius: 'var(--radius)', padding: 3, gap: 3 }}>
+        {opcao(!especifico, 'Todo o estado', () => { setEspecifico(false); onChange(NCM_GERAL) })}
+        {opcao(especifico, 'Um produto (NCM)', () => { setEspecifico(true); onChange(ehGeral(value) ? '' : value) })}
+      </div>
+      {especifico && (
+        <input value={ehGeral(value) ? '' : (value || '')} maxLength={8} required={campo.required}
+          placeholder="30049099" style={{ marginTop: 8 }}
+          onChange={e => onChange(e.target.value.replace(/\D/g, ''))} />
+      )}
+    </div>
+  )
+}
+
+function CampoInput({ campo, value, onChange, bloqueado }) {
   // UF vira lista fechada em TODAS as abas por este único caminho — nada de
   // texto livre virando "Minas Gerais"/"mg" dentro da matriz.
   if (campo.uf)
     return <SelectUf value={value} onChange={onChange} required={campo.required} coringa={campo.coringa} />
+  if (campo.type === 'ncm-geral')
+    return <CampoNcmGeral campo={campo} value={value} onChange={onChange} />
   if (campo.type === 'select')
     return <Dropdown value={value} onChange={onChange} options={campo.options} placeholder="Selecione…" />
   if (campo.type === 'date')
     return <input type="date" value={value || ''} onChange={e => onChange(e.target.value)} required={campo.required} />
   if (campo.type === 'number')
-    return <input type="number" step="0.01" min="0" value={value} onChange={e => onChange(e.target.value)} placeholder={campo.placeholder} required={campo.required} />
+    return <input type="number" step="0.01" min="0" value={bloqueado ? '' : value} disabled={bloqueado}
+      onChange={e => onChange(e.target.value)} placeholder={bloqueado ? '—' : campo.placeholder}
+      required={campo.required && !bloqueado} />
   return (
     <input value={value} placeholder={campo.placeholder} required={campo.required}
       onChange={e => onChange(e.target.value)} />
@@ -1131,6 +1242,13 @@ function CrudMatriz({ aba, prefill }) {
     setSaving(true)
     try {
       const payload = { ...form, data_fim_vigencia: form.data_fim_vigencia || null }
+      // Campo desligado (redução de base numa linha GERAL) e numérico opcional
+      // em branco saem do corpo — o servidor aplica o padrão dele (0) em vez de
+      // receber "" ou um valor herdado que aquela linha não aceita.
+      for (const c of aba.campos) {
+        const vazio = payload[c.key] === '' || payload[c.key] == null
+        if ((c.bloqueio && c.bloqueio(form)) || (c.omitirSeVazio && vazio)) delete payload[c.key]
+      }
       if (editId) { await aba.api.update(editId, payload); toast('Regra atualizada.', 'ok') }
       else { await aba.api.create(payload); toast('Regra cadastrada.', 'ok') }
       setModal(false); setEditId(null); await carregar()
@@ -1144,7 +1262,16 @@ function CrudMatriz({ aba, prefill }) {
     catch (e) { toast(e.message, 'error') }
   }
 
-  const setCampo = (k) => (v) => setForm(f => ({ ...f, [k]: v }))
+  // Mudar um campo pode desligar outro (voltar o NCM para GERAL desliga a
+  // redução de base). O valor que deixou de valer é limpo na hora — nada de
+  // enviar em silêncio um número que aquela linha não aceita.
+  const setCampo = (k) => (v) => setForm(f => {
+    const prox = { ...f, [k]: v }
+    for (const c of aba.campos) {
+      if (c.bloqueio && c.bloqueio(prox) && prox[c.key] !== '') prox[c.key] = ''
+    }
+    return prox
+  })
 
   return (
     <div>
@@ -1245,22 +1372,31 @@ function CrudMatriz({ aba, prefill }) {
             <form onSubmit={salvar}>
               <div className="modal-body">
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                  {aba.campos.map(campo => (
-                    <div className="field" key={campo.key} style={campo.full ? { gridColumn: '1 / -1' } : undefined}>
-                      <label>
-                        {campo.label}
-                        {campo.ajuda && (
-                          <BalaoAjuda titulo={campo.ajuda.titulo}>{campo.ajuda.texto}</BalaoAjuda>
+                  {aba.campos.map(campo => {
+                    // Campo condicionado (ex.: redução de base, que só vale em
+                    // linha de NCM): fica visível e desligado, com o motivo à
+                    // vista — o usuário não descobre a regra levando um erro.
+                    const motivo = campo.bloqueio ? campo.bloqueio(form) : null
+                    return (
+                      <div className="field" key={campo.key} style={campo.full ? { gridColumn: '1 / -1' } : undefined}>
+                        <label style={motivo ? { color: 'var(--text-4)' } : undefined}>
+                          {campo.label}
+                          {campo.ajuda && (
+                            <BalaoAjuda titulo={campo.ajuda.titulo}>{campo.ajuda.texto}</BalaoAjuda>
+                          )}
+                        </label>
+                        <CampoInput campo={campo} value={form[campo.key]} bloqueado={!!motivo}
+                          onChange={setCampo(campo.key)} />
+                        {(motivo || campo.dica) && (
+                          <div style={{ fontSize: 11.5, color: 'var(--text-4)', marginTop: 4, lineHeight: 1.5 }}>
+                            {motivo || (typeof campo.dica === 'function'
+                              ? campo.dica(form[campo.key], form)
+                              : campo.dica)}
+                          </div>
                         )}
-                      </label>
-                      <CampoInput campo={campo} value={form[campo.key]} onChange={setCampo(campo.key)} />
-                      {campo.dica && (
-                        <div style={{ fontSize: 11.5, color: 'var(--text-4)', marginTop: 4, lineHeight: 1.5 }}>
-                          {typeof campo.dica === 'function' ? campo.dica(form[campo.key]) : campo.dica}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
               <div className="modal-footer">

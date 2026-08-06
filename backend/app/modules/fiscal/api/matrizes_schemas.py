@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, BeforeValidator, Field, field_validator
+from pydantic import BaseModel, BeforeValidator, Field, field_validator, model_validator
 
 from app.core.exceptions import DomainError
 from app.shared.domain.uf import CURINGA_UF, UF_NOMES, normalizar_uf
@@ -219,10 +219,25 @@ class MatrizEnquadramentoResponse(_MatrizEnquadramentoCampos):
     model_config = {"from_attributes": True}
 
 
+# ── NCM 'GERAL': a regra que vale para o estado inteiro ──────────────────────
+# Convenção compartilhada pelo FCP e pela Alíquota: a linha do estado é gravada
+# com o NCM literal "GERAL" e as linhas de produto com os dígitos do NCM. A
+# busca do motor desce 8→6→4 dígitos e só então cai na GERAL, então o que está
+# em branco na planilha PRECISA virar "GERAL" (e não ""): NCM vazio seria uma
+# linha que nenhuma busca encontra.
+NCM_GERAL = "GERAL"
+
+
+def _ncm_ou_geral(valor: str | None) -> str:
+    """"" ou "geral" → "GERAL"; qualquer outra coisa → só os dígitos do NCM."""
+    ncm = (valor or "").strip().upper()
+    return NCM_GERAL if ncm in ("", NCM_GERAL) else only_digits(valor or "")
+
+
 # ── FCP (Fundo de Combate à Pobreza) por UF + NCM ────────────────────────────
 class _MatrizFcpCampos(BaseModel):
     uf_destino: Uf = Field(..., examples=["MG"], description="UF de destino da mercadoria")
-    ncm: str = Field(default="GERAL", examples=["GERAL", "22030000"],
+    ncm: str = Field(default=NCM_GERAL, examples=[NCM_GERAL, "22030000"],
                      description="'GERAL' aplica a alíquota a toda a UF")
     aliq_fcp_st: Decimal = Field(..., ge=0, le=100, examples=["2.00"],
                                  description="FCP-ST que o motor consome")
@@ -233,8 +248,7 @@ class _MatrizFcpCampos(BaseModel):
 
     def normalizado(self) -> dict:
         d = self.model_dump()
-        ncm = (self.ncm or "").strip().upper()
-        d["ncm"] = "GERAL" if ncm in ("", "GERAL") else only_digits(self.ncm)
+        d["ncm"] = _ncm_ou_geral(self.ncm)
         return d
 
 
@@ -254,28 +268,79 @@ class MatrizFcpResponse(_MatrizFcpCampos):
     model_config = {"from_attributes": True}
 
 
-# ── Alíquota modal do ICMS por UF de destino (com FCP integrado à modal) ─────
+# ── Alíquota do ICMS na UF de destino: a do estado e a do produto ────────────
 class _MatrizAliquotaCampos(BaseModel):
     uf_destino: Uf = Field(..., examples=["MG"], description="UF de destino da mercadoria")
+    ncm: str = Field(
+        default=NCM_GERAL, examples=[NCM_GERAL, "30049099"],
+        description="Deixe 'GERAL' para a alíquota do estado, a que vale para "
+                    "todo produto sem regra própria. Preencha o NCM só quando o "
+                    "produto tiver alíquota própria em lei (cesta básica, "
+                    "medicamento, etc.): o cálculo procura o NCM de 8, depois 6, "
+                    "depois 4 dígitos e, se não achar nenhum, usa a linha GERAL.",
+    )
+    # gt=0 (e não ge=0): alíquota zero não é "produto isento" — isso é
+    # enquadramento/exceção de item, não alíquota. Uma linha 0% aqui zeraria o
+    # débito do ST em silêncio para a UF (ou para o NCM) inteira.
     aliq_modal: Decimal = Field(..., gt=0, le=100, examples=["18.00"],
-                                description="Alíquota modal — débito do ST (sem FCP)")
+                                description="Alíquota do ICMS no destino — débito "
+                                            "do ST (sem FCP)")
     aliq_fcp_integrado: Decimal = Field(
         default=Decimal("0"), ge=0, le=100, examples=["2.00"],
         description="FCP integrado à modal — só na carga efetiva do ajuste de MVA",
+    )
+    p_red_bc_st: Decimal = Field(
+        default=Decimal("0"), ge=0, lt=100, examples=["0", "38.89"],
+        description="Redução da base de cálculo do ST prevista na lei do destino, "
+                    "em % (ex.: 38,89 = a base cai para 61,11% do valor). Deixe 0 "
+                    "quando não houver redução. Vale por produto: só faz sentido "
+                    "junto com o NCM.",
     )
     base_legal: str | None = Field(default=None, examples=["Lei 9.776/2025 (AL)"])
     data_inicio_vigencia: date
     data_fim_vigencia: date | None = None
 
     def normalizado(self) -> dict:
-        return self.model_dump()
+        d = self.model_dump()
+        d["ncm"] = _ncm_ou_geral(self.ncm)
+        return d
 
 
-class MatrizAliquotaCreate(_MatrizAliquotaCampos):
+class _RecusaReducaoNoEstadoInteiro(BaseModel):
+    """Guarda de ESCRITA: redução de base sem NCM é recusada.
+
+    A linha GERAL é a alíquota do estado — ela responde por TODO produto que
+    não tem regra própria. Redução de base, ao contrário, é sempre de um
+    produto específico (a lei reduz a base daquela mercadoria). Salvar redução
+    na linha GERAL aplicaria o desconto ao estado inteiro sem ninguém perceber,
+    e o ST sairia a menor em toda a carteira. Fail-closed: recusa na hora, com
+    o motivo, em vez de calcular por palpite.
+
+    Só Create/Update herdam. A LEITURA não valida — se uma linha torta chegou
+    ao banco por outro caminho, ela precisa APARECER na tela para o curador
+    poder corrigir (mesma razão do _UF_NA_RESPOSTA).
+    """
+
+    @model_validator(mode="after")
+    def _reducao_de_base_exige_ncm(self):
+        if self.p_red_bc_st > 0 and _ncm_ou_geral(self.ncm) == NCM_GERAL:
+            raise ValueError(
+                "A redução de base é de um produto, não do estado: informe o NCM "
+                "do item que a lei manda reduzir. A linha 'GERAL' vale para todos "
+                "os produtos da UF — com redução nela, todo o estado calcularia o "
+                "ST a menor. Para cadastrar só a alíquota do estado, deixe a "
+                "redução em 0."
+            )
+        return self
+
+
+class MatrizAliquotaCreate(_MatrizAliquotaCampos, _RecusaReducaoNoEstadoInteiro):
     pass
 
 
-class MatrizAliquotaUpdate(_MatrizAliquotaCampos):
+# Update = Create (mesmos campos, MESMA guarda): editar uma linha não pode ser
+# a porta de entrada do que a criação recusa.
+class MatrizAliquotaUpdate(MatrizAliquotaCreate):
     pass
 
 

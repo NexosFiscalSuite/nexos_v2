@@ -26,6 +26,7 @@ from app.modules.audit.application.service import AuditService
 from app.modules.companies.infrastructure.models import Empresa
 from app.modules.fiscal.api.curadoria import require_curador
 from app.modules.fiscal.api.matrizes_schemas import (
+    NCM_GERAL,
     ExcecaoProdutoCreate,
     ExcecaoProdutoResponse,
     ExcecaoProdutoUpdate,
@@ -443,11 +444,27 @@ _registrar_crud(
 
 
 def _filtrar_aliquota(stmt, uf, ncm, cest, uf_origem=None):
-    """Alíquota não tem NCM nem origem (a chave é só a UF de destino) — o filtro
-    genérico não serve."""
+    """Alíquota não tem CEST nem UF de origem, mas TEM NCM: 'GERAL' é a alíquota
+    do estado e convive com as linhas de produto (cesta básica, medicamento).
+
+    Filtrar por NCM mantém a linha GERAL na lista — mesma razão do Protocolo: é
+    ela que o cálculo usa quando o produto não tem regra própria, e escondê-la
+    faria a tela responder "não tem alíquota" para um produto que tem."""
     if uf:
         stmt = stmt.where(MatrizAliquota.uf_destino == _sigla_do_filtro(uf))
-    return stmt.order_by(MatrizAliquota.uf_destino, MatrizAliquota.data_inicio_vigencia.desc())
+    if ncm:
+        # Cuidado: só os dígitos de "GERAL" (ou de qualquer texto) é "", e
+        # like("%") casaria a matriz inteira. Sem dígitos, o pedido é a regra do
+        # estado — devolve só ela.
+        digitos = only_digits(ncm)
+        stmt = stmt.where(
+            or_(MatrizAliquota.ncm == NCM_GERAL, MatrizAliquota.ncm.like(f"{digitos}%"))
+            if digitos else MatrizAliquota.ncm == NCM_GERAL
+        )
+    return stmt.order_by(
+        MatrizAliquota.uf_destino, MatrizAliquota.ncm,
+        MatrizAliquota.data_inicio_vigencia.desc(),
+    )
 
 
 @router.get("/ufs", response_model=list[UfOpcao])
@@ -592,6 +609,7 @@ _registrar_crud(
     "aliquotas", MatrizAliquota, MatrizAliquotaCreate, MatrizAliquotaUpdate,
     MatrizAliquotaResponse,
     entidade="matriz_aliquota",
-    detalhe=lambda m: {"uf": m.uf_destino, "modal": str(m.aliq_modal)},
+    detalhe=lambda m: {"uf": m.uf_destino, "ncm": m.ncm, "modal": str(m.aliq_modal),
+                       "p_red_bc_st": str(m.p_red_bc_st)},
     filtrar=_filtrar_aliquota,
 )

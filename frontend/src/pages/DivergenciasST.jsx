@@ -1082,7 +1082,9 @@ function MemoriaModal({ d, onClose }) {
                   <LinhaAliquota
                     nome={`Alíquota interna de ${d.uf_destino || 'destino'}`}
                     valor={pct(m.alq_intra)}
-                    desc="usada no passo 4 para calcular o imposto cheio da cadeia — vem da matriz de alíquotas vigente na data da nota" />
+                    desc={m.aliquota_ncm_casado && m.aliquota_ncm_casado !== 'GERAL'
+                      ? `alíquota própria do NCM ${m.aliquota_ncm_casado}, e não a geral do estado — é ela que entra no passo 4`
+                      : 'usada no passo 4 para calcular o imposto cheio da cadeia — vem da matriz de alíquotas vigente na data da nota'} />
                   <LinhaAliquota
                     nome="Alíquota interestadual"
                     valor={pct(m.alq_inter)}
@@ -1113,7 +1115,10 @@ function MemoriaModal({ d, onClose }) {
                   : (custoAprox != null
                     ? `Valor da compra (produto + frete e encargos ≈ ${brl(custoAprox)}) acrescido da margem de ${pct(m.mva_aplicada)} — o preço presumido de venda ao consumidor`
                     : 'Valor da compra (produto + frete e encargos) acrescido da margem — o preço presumido de venda ao consumidor')}
-                valor={brl(m.base_st_calculada)} />
+                valor={brl(m.base_st_calculada)}
+                badge={Number(m.reducao_base_st) > 0
+                  ? { txt: `Base reduzida ${pct(m.reducao_base_st)}`, cls: 'badge-info' }
+                  : null} />
               <Passo n="4" titulo="Imposto cheio sobre a base"
                 sub={`${brl(m.base_st_calculada)} × ${pct(m.alq_intra)} — o ICMS total da cadeia até o consumidor, que o ST antecipa de uma vez`}
                 valor={brl(m.icms_st_debito)} />
@@ -1161,6 +1166,13 @@ function MemoriaModal({ d, onClose }) {
             alíquota da matriz {m.aliquota_matriz_id ? `#${m.aliquota_matriz_id}` : '—'}{m.aliquota_base_legal ? ` (${m.aliquota_base_legal})` : ''} ·
             protocolo: {m.tem_protocolo == null ? 'operação interna (não se aplica)' : m.tem_protocolo ? 'com acordo' : 'sem acordo'}
             {m.protocolo_fonte ? ` (fonte: ${m.protocolo_fonte})` : ''}
+            {/* De onde saiu a redução: regra curada do produto ou o que a nota
+                declarou. Sem isto o percentual apareceria sem dono. */}
+            {m.reducao_fonte === 'matriz'
+              ? ` · redução da base ${pct(m.reducao_base_st)} pela matriz do NCM`
+              : Number(m.reducao_base_st_xml) > 0
+                ? ` · redução da base ${pct(m.reducao_base_st_xml)} conforme a nota (produto sem redução cadastrada na matriz)`
+                : ''}
           </div>
         </div>
         <div className="modal-footer"><button className="btn btn-ghost" onClick={onClose}>Fechar</button></div>

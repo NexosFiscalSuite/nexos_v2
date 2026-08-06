@@ -24,6 +24,7 @@ from .money import ZERO, aplicar_percentual, centavos
 from .mva import calcular_mva
 from .ports import (
     AliquotaRepository,
+    AliquotaUf,
     EnquadramentoRepository,
     FcpRepository,
     MvaRepository,
@@ -39,7 +40,9 @@ from .strategies import (
 
 # Gravada em cada memória de cálculo: permite responder "qual regra o sistema
 # aplicou na época" (defensibilidade). Bump a cada mudança de regra de cálculo.
-ENGINE_VERSION = "2.1.0"
+# 2.2.0: alíquota interna resolvida por NCM (8→6→4→GERAL) e redução de base do
+# ST decidida pela matriz quando a linha é do produto (antes vinha só do XML).
+ENGINE_VERSION = "2.2.0"
 
 
 class _AssumeProtocolo:
@@ -58,6 +61,14 @@ TOLERANCIA_ITEM = Decimal("0.02")
 TOLERANCIA_NOTA = Decimal("0.05")
 # Tolerância de percentual para acusar ajuste indevido de MVA (pontos).
 TOLERANCIA_MVA_PCT = Decimal("0.01")
+# Mesma régua para os demais percentuais comparados contra a matriz (redução de
+# base): abaixo disso é arredondamento do emissor, não divergência de norma.
+TOLERANCIA_PCT = TOLERANCIA_MVA_PCT
+
+
+def _pct(valor: Decimal) -> str:
+    """Percentual no formato brasileiro para os textos da tela/carta (33,33%)."""
+    return f"{centavos(valor)}".replace(".", ",") + "%"
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,9 +168,11 @@ class StAuditEngine:
             )
 
         # 3. Alíquotas. A interestadual é lei em fórmula (código); a interna vem
-        #    da matriz VIGENTE NA DATA — sem alíquota cadastrada, o motor não
-        #    assume a taxa atual (fail-closed, ADR-0002).
-        aliq_uf = self.aliquota_repo.buscar(operacao.uf_dest, operacao.data)
+        #    da matriz VIGENTE NA DATA para O PRODUTO (busca 8→6→4→GERAL) — sem
+        #    alíquota cadastrada, o motor não assume a taxa atual (fail-closed,
+        #    ADR-0002). Usar sempre a modal do estado cobrava 18% num produto de
+        #    12% (cesta básica, medicamento): ST a maior, direto no custo.
+        aliq_uf = self.aliquota_repo.buscar(item.ncm, operacao.uf_dest, operacao.data)
         if aliq_uf is None:
             return self._nao_auditavel(item, ErroST.ALIQUOTA_NAO_ENCONTRADA)
         alq_inter = self.aliquotas.alq_inter(
@@ -232,8 +245,32 @@ class StAuditEngine:
             if item.p_mva_st > ZERO:
                 erros.append(ErroST.MVA_AJUSTADA_INDEVIDA)
 
-        # 5. Base do ST (com redução, Método A).
-        base_st_calc = aplicar_reducao_base(base_integral, item.p_red_bc_st)
+        # 5. Base do ST com a redução legal (Método A). REGRA DE OURO, a mesma
+        #    da MVA: quando existe linha DO PRODUTO na matriz de alíquotas, quem
+        #    manda é ela — inclusive quando traz 0,00, que é a decisão curada de
+        #    que aquele produto NÃO tem redução. Divergir do XML aí é achado:
+        #    reduzir mais que a norma derruba a base (ST a menos) e reduzir
+        #    menos a infla (ST a mais) — antes, repetindo o pRedBCST do XML,
+        #    nenhum dos dois aparecia.
+        #    Só a GERAL casando = redução não curada (o caso comum): seguimos o
+        #    XML, sem erro, e a memória registra que a fonte foi o documento.
+        obs_reducao: str | None = None
+        if aliq_uf.especifica:
+            reducao_fonte = "matriz"
+            p_red_aplicada = aliq_uf.p_red_bc_st
+            divergencia_red = item.p_red_bc_st - p_red_aplicada
+            if abs(divergencia_red) > TOLERANCIA_PCT:
+                erros.append(
+                    ErroST.REDUCAO_BASE_ST_MAIOR_QUE_NORMA if divergencia_red > ZERO
+                    else ErroST.REDUCAO_BASE_ST_MENOR_QUE_NORMA
+                )
+                obs_reducao = self._observacao_reducao(
+                    item.p_red_bc_st, p_red_aplicada, aliq_uf, operacao
+                )
+        else:
+            reducao_fonte = "xml"
+            p_red_aplicada = item.p_red_bc_st
+        base_st_calc = aplicar_reducao_base(base_integral, p_red_aplicada)
 
         # 6. Débito do ST pela carga interna modal do destino.
         icms_st_debito = aplicar_percentual(base_st_calc, alq_intra_modal)
@@ -298,6 +335,10 @@ class StAuditEngine:
             mva_base_legal=(mva_info.base_legal if tem_linha_mva else None),
             mva_uf_origem=(mva_info.uf_origem_casada if tem_linha_mva else None),
             aliquota_base_legal=getattr(aliq_uf, "base_legal", None),
+            aliquota_ncm_casado=aliq_uf.ncm_casado,
+            reducao_base_st=p_red_aplicada,
+            reducao_base_st_xml=item.p_red_bc_st,
+            reducao_fonte=reducao_fonte,
             custo_produto=centavos(item.v_prod),
             custo_frete=centavos(item.v_frete),
             custo_frete_cte=centavos(item.v_frete_cte),
@@ -310,7 +351,9 @@ class StAuditEngine:
         # 11. Sem acordo vigente origem→destino, o remetente NÃO é o substituto:
         #     a ST vira antecipação do destinatário (recolhe via guia local).
         if tem_protocolo is False:
-            return self._resultado_antecipacao(item, icms_st_calc, fcp_st_calc, memoria, erros)
+            return self._resultado_antecipacao(
+                item, icms_st_calc, fcp_st_calc, memoria, erros, obs_reducao
+            )
 
         # 12. Com protocolo (ou operação interna): a ST é do REMETENTE — auditamos
         #     o que veio destacado no XML contra o cálculo.
@@ -334,6 +377,7 @@ class StAuditEngine:
             divergencia_icms_st=div_icms_st,
             divergencia_fcp_st=div_fcp,
             memoria=memoria,
+            observacao=obs_reducao,
         )
 
     def _resultado_antecipacao(
@@ -343,6 +387,7 @@ class StAuditEngine:
         fcp_st_calc: Decimal,
         memoria: MemoriaCalculo,
         erros_calc: list[ErroST],
+        observacao_extra: str | None = None,
     ) -> ResultadoAuditoria:
         """Interestadual SEM protocolo: o remetente corretamente NÃO retém a ST.
         A obrigação é do destinatário (nosso cliente) por antecipação, recolhida
@@ -362,6 +407,8 @@ class StAuditEngine:
             if tem_obrigacao else
             "Interestadual sem protocolo e sem ST a recolher — nada a antecipar."
         )
+        if observacao_extra:
+            obs = f"{obs} {observacao_extra}"
         status = StatusAuditoria.DIVERGENTE if erros else StatusAuditoria.OK
         return ResultadoAuditoria(
             numero_item=item.numero_item,
@@ -456,6 +503,34 @@ class StAuditEngine:
         return ResultadoAuditoria(
             numero_item=item.numero_item, status=StatusAuditoria.OK,
             memoria=memoria, observacao=obs,
+        )
+
+    @staticmethod
+    def _observacao_reducao(
+        p_red_xml: Decimal,
+        p_red_matriz: Decimal,
+        aliq_uf: AliquotaUf,
+        operacao: Operacao,
+    ) -> str:
+        """Explica a divergência de redução em português de leigo: os DOIS
+        percentuais, a direção do efeito e o que isso significa em dinheiro.
+        Sem acusação — a nota "aplicou", a matriz "prevê"."""
+        norma = f" ({aliq_uf.base_legal})" if aliq_uf.base_legal else ""
+        if p_red_xml > p_red_matriz:
+            efeito = (
+                "Reduzir mais deixa a base MENOR do que a devida, então o ST "
+                "retido na nota ficou abaixo do correto — há complemento a recolher."
+            )
+        else:
+            efeito = (
+                "Reduzir menos deixa a base MAIOR do que a devida, então o ST "
+                "retido na nota ficou acima do correto — é custo indevido, cabe "
+                "pedir a correção."
+            )
+        return (
+            f"Redução da base do ST: a nota aplicou {_pct(p_red_xml)} e a matriz "
+            f"prevê {_pct(p_red_matriz)} para o NCM {aliq_uf.ncm_casado} em "
+            f"{(operacao.uf_dest or '—').upper()}{norma}. {efeito}"
         )
 
     @staticmethod

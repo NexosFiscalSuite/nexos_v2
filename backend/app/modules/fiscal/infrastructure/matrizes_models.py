@@ -121,25 +121,42 @@ class MatrizProtocoloSt(Base, VigenciaTemporal, CriadoEm, UltimaVerificacao):
 
 
 class MatrizAliquota(Base, VigenciaTemporal, CriadoEm, UltimaVerificacao):
-    """Alíquota modal do ICMS por UF de destino (alimenta o AliquotaRepository).
+    """Tributação interna do produto na UF de destino (alimenta o AliquotaRepository).
 
     `aliq_modal` é o débito do ST (sem FCP); `aliq_fcp_integrado` só compõe a
     carga efetiva no denominador do ajuste de MVA (R-07). Antes vivia fixa em
     código (aliquotas.py) e ignorava a data — dupla vigência como AL 19%→20,5%
     em 01/04/2026 (Lei 9.776/2025) exige a matriz temporal.
+
+    A alíquota NÃO é só da UF: cesta básica, medicamento e afins têm alíquota
+    própria por NCM, e usar a modal neles cobra ST a maior. `ncm` = 'GERAL' é a
+    regra do estado (o que existia até aqui) e a busca desce 8→6→4→GERAL, mesma
+    convenção do FCP.
+
+    `p_red_bc_st` é a redução de base LEGAL do produto no destino. Até aqui a
+    redução vinha só do XML (`pRedBCST`), ou seja, o motor repetia a conta do
+    fornecedor: redução esquecida virava ST a maior, redução indevida virava ST
+    a menor, e nenhum dos dois aparecia. Com a norma cadastrada a matriz decide
+    e a diferença vira divergência — mesma regra de ouro já aplicada à MVA.
     """
 
     __tablename__ = "matriz_aliquota"
     __table_args__ = (
-        UniqueConstraint("uf_destino", "data_inicio_vigencia", name="uq_aliquota_vigencia"),
-        Index("ix_aliquota_busca", "uf_destino"),
+        UniqueConstraint(
+            "uf_destino", "ncm", "data_inicio_vigencia", name="uq_aliquota_vigencia"
+        ),
+        Index("ix_aliquota_busca", "uf_destino", "ncm"),
     )
-    CHAVE_VIGENCIA: ClassVar[tuple[str, ...]] = ("uf_destino",)
+    CHAVE_VIGENCIA: ClassVar[tuple[str, ...]] = ("uf_destino", "ncm")
 
     id: Mapped[int] = mapped_column(primary_key=True)
     uf_destino: Mapped[str] = mapped_column(String(2))
+    ncm: Mapped[str] = mapped_column(String(8), default="GERAL", server_default="GERAL")
     aliq_modal: Mapped[Decimal] = mapped_column(_PCT)
     aliq_fcp_integrado: Mapped[Decimal] = mapped_column(_PCT, default=Decimal("0"))
+    p_red_bc_st: Mapped[Decimal] = mapped_column(
+        _PCT, default=Decimal("0"), server_default="0"
+    )
     base_legal: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
 

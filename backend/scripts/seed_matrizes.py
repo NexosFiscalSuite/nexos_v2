@@ -47,22 +47,29 @@ _ALIQUOTAS_BASELINE: dict[str, tuple[str, str]] = {
 
 def linhas_aliquotas() -> list:
     """Alíquotas das 27 UFs. AL tem dupla vigência (Lei 9.776/2025):
-    19% até 31/03/2026 e 20,5% a partir de 01/04/2026 — a prova viva do ADR-0002."""
+    19% até 31/03/2026 e 20,5% a partir de 01/04/2026 — a prova viva do ADR-0002.
+
+    Todas com `ncm="GERAL"`: é a alíquota do ESTADO. Produto com alíquota
+    própria em lei (cesta básica, medicamento) é linha por NCM e entra pela
+    curadoria — o seed não chuta número normativo."""
     linhas = [
         MatrizAliquota(
-            uf_destino=uf, aliq_modal=Decimal(modal), aliq_fcp_integrado=Decimal(fcp),
+            uf_destino=uf, ncm="GERAL",
+            aliq_modal=Decimal(modal), aliq_fcp_integrado=Decimal(fcp),
             base_legal="Baseline 12/06/2026",
             data_inicio_vigencia=_INICIO, data_fim_vigencia=_FIM,
         )
         for uf, (modal, fcp) in sorted(_ALIQUOTAS_BASELINE.items())
     ]
     linhas.append(MatrizAliquota(
-        uf_destino="AL", aliq_modal=Decimal("19"), aliq_fcp_integrado=Decimal("1"),
+        uf_destino="AL", ncm="GERAL",
+        aliq_modal=Decimal("19"), aliq_fcp_integrado=Decimal("1"),
         base_legal="Modal AL até 31/03/2026",
         data_inicio_vigencia=_INICIO, data_fim_vigencia=date(2026, 3, 31),
     ))
     linhas.append(MatrizAliquota(
-        uf_destino="AL", aliq_modal=Decimal("20.5"), aliq_fcp_integrado=Decimal("1"),
+        uf_destino="AL", ncm="GERAL",
+        aliq_modal=Decimal("20.5"), aliq_fcp_integrado=Decimal("1"),
         base_legal="Lei 9.776/2025 (AL)",
         data_inicio_vigencia=date(2026, 4, 1), data_fim_vigencia=_FIM,
     ))

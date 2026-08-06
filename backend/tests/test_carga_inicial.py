@@ -53,6 +53,21 @@ async def test_seed_preenche_e_e_idempotente(sessao):
 
 
 @pytest.mark.asyncio
+async def test_seed_semeia_a_aliquota_do_estado_sem_reducao(sessao):
+    """A carga é a regra do ESTADO: todas as linhas entram como NCM 'GERAL' e
+    sem redução de base. Alíquota reduzida por produto é dado normativo e entra
+    só pela curadoria — o robô não chuta número de lei.
+
+    O 'GERAL' também é o que faz a checagem de sobreposição funcionar: a família
+    de vigência é (uf_destino, ncm)."""
+    await aplicar_seed_aliquotas_fcp(sessao)
+
+    linhas = (await sessao.execute(select(MatrizAliquota))).scalars().all()
+    assert {x.ncm for x in linhas} == {"GERAL"}
+    assert {x.p_red_bc_st for x in linhas} == {Decimal("0.00")}
+
+
+@pytest.mark.asyncio
 async def test_seed_nunca_sobrescreve_linha_existente(sessao):
     """O escritório já tinha MG cadastrada (valor próprio): a carga pula MG e
     preenche só o que falta — linha existente tem sempre prioridade."""

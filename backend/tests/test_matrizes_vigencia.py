@@ -142,8 +142,12 @@ async def test_loader_aliquota_respeita_vigencia(sessao_async):
     op_antes = Operacao(uf_emit="SP", uf_dest="AL", crt=Crt.NORMAL, data=date(2026, 3, 1))
     op_depois = Operacao(uf_emit="SP", uf_dest="AL", crt=Crt.NORMAL, data=date(2026, 5, 1))
 
-    antes = (await loader.hidratar([], op_antes)).aliquota.buscar("AL", op_antes.data)
-    depois = (await loader.hidratar([], op_depois)).aliquota.buscar("AL", op_depois.data)
+    antes = (await loader.hidratar([], op_antes)).aliquota.buscar(
+        "85122011", "AL", op_antes.data
+    )
+    depois = (await loader.hidratar([], op_depois)).aliquota.buscar(
+        "85122011", "AL", op_depois.data
+    )
 
     assert antes.modal == Decimal("19.00")
     assert antes.efetiva == Decimal("20.00")            # modal + FCP integrado
@@ -152,7 +156,9 @@ async def test_loader_aliquota_respeita_vigencia(sessao_async):
 
     # UF sem linha vigente: snapshot vazio → motor classifica como não auditável.
     op_2022 = Operacao(uf_emit="SP", uf_dest="AL", crt=Crt.NORMAL, data=date(2022, 1, 1))
-    assert (await loader.hidratar([], op_2022)).aliquota.buscar("AL", op_2022.data) is None
+    assert (await loader.hidratar([], op_2022)).aliquota.buscar(
+        "85122011", "AL", op_2022.data
+    ) is None
 
 
 async def test_sobreposicao_de_vigencia_e_erro_de_carga(sessao_async):
@@ -165,7 +171,9 @@ async def test_sobreposicao_de_vigencia_e_erro_de_carga(sessao_async):
     sessao_async.add(linha)
     await sessao_async.flush()
 
-    nova = {"uf_destino": "MG", "data_inicio_vigencia": date(2026, 1, 1),
+    # A chave de identidade da alíquota inclui o NCM ('GERAL' = regra do estado):
+    # duas linhas só conflitam se forem do MESMO produto na mesma UF.
+    nova = {"uf_destino": "MG", "ncm": "GERAL", "data_inicio_vigencia": date(2026, 1, 1),
             "data_fim_vigencia": None}
 
     # Vigência aberta existente × nova aberta a partir de 2026 → conflito.
@@ -177,6 +185,12 @@ async def test_sobreposicao_de_vigencia_e_erro_de_carga(sessao_async):
         sessao_async, MatrizAliquota, {**nova, "uf_destino": "SP"}
     ) is None
 
+    # Nem NCM diferente: a alíquota própria do produto (cesta básica a 12% num
+    # estado de 18%) convive com a regra geral do estado na mesma vigência.
+    assert await sobreposicao_existente(
+        sessao_async, MatrizAliquota, {**nova, "ncm": "19053100"}
+    ) is None
+
     # Fluxo correto: encerra a antiga → a nova passa a ser válida.
     linha.data_fim_vigencia = date(2025, 12, 31)
     await sessao_async.flush()
@@ -185,7 +199,7 @@ async def test_sobreposicao_de_vigencia_e_erro_de_carga(sessao_async):
     # Editar a própria linha não conflita consigo mesma (excluir_id).
     assert await sobreposicao_existente(
         sessao_async, MatrizAliquota,
-        {"uf_destino": "MG", "data_inicio_vigencia": date(2024, 1, 1),
+        {"uf_destino": "MG", "ncm": "GERAL", "data_inicio_vigencia": date(2024, 1, 1),
          "data_fim_vigencia": date(2025, 12, 31)},
         excluir_id=linha.id,
     ) is None

@@ -21,29 +21,44 @@ from app.modules.fiscal.infrastructure.vigencia import sobreposicao_existente
 REVISOR_CARGA = "carga inicial automática (robô)"
 
 # Alíquotas modais das 7 UFs com clientes (verificadas em 04/08/2026).
+#
+# Todas entram como `ncm = "GERAL"`: é a alíquota do ESTADO, a que vale para
+# todo produto sem regra própria. Produto com alíquota reduzida em lei (cesta
+# básica, medicamento) é linha à parte, por NCM, e NÃO é semeada aqui — número
+# de alíquota é dado normativo, tem de vir da fonte oficial pela curadoria; um
+# palpite viraria carta fiscal errada. `p_red_bc_st` idem: 0 = sem redução, e
+# redução de base só existe por produto (o schema recusa no GERAL).
 _SEED_ALIQUOTAS = [
-    {"uf_destino": "MG", "aliq_modal": "18.00", "aliq_fcp_integrado": "0",
+    {"uf_destino": "MG", "ncm": "GERAL", "aliq_modal": "18.00",
+     "aliq_fcp_integrado": "0", "p_red_bc_st": "0",
      "base_legal": "Lei 6.763/1975, art. 12 (RICMS/MG 2023)",
      "data_inicio_vigencia": date(2024, 1, 1), "data_fim_vigencia": None},
-    {"uf_destino": "SP", "aliq_modal": "18.00", "aliq_fcp_integrado": "0",
+    {"uf_destino": "SP", "ncm": "GERAL", "aliq_modal": "18.00",
+     "aliq_fcp_integrado": "0", "p_red_bc_st": "0",
      "base_legal": "Lei 6.374/1989, art. 34 (RICMS/SP art. 52, I)",
      "data_inicio_vigencia": date(2024, 1, 1), "data_fim_vigencia": None},
-    {"uf_destino": "PR", "aliq_modal": "19.50", "aliq_fcp_integrado": "0",
+    {"uf_destino": "PR", "ncm": "GERAL", "aliq_modal": "19.50",
+     "aliq_fcp_integrado": "0", "p_red_bc_st": "0",
      "base_legal": "Lei 21.850/2023 (efeitos 18/03/2024)",
      "data_inicio_vigencia": date(2024, 3, 18), "data_fim_vigencia": None},
-    {"uf_destino": "RJ", "aliq_modal": "18.00", "aliq_fcp_integrado": "2.00",
+    {"uf_destino": "RJ", "ncm": "GERAL", "aliq_modal": "18.00",
+     "aliq_fcp_integrado": "2.00", "p_red_bc_st": "0",
      "base_legal": "Lei 2.657/1996 + FECP Lei 4.056/2002",
      "data_inicio_vigencia": date(2024, 1, 1), "data_fim_vigencia": date(2024, 3, 19)},
-    {"uf_destino": "RJ", "aliq_modal": "20.00", "aliq_fcp_integrado": "2.00",
+    {"uf_destino": "RJ", "ncm": "GERAL", "aliq_modal": "20.00",
+     "aliq_fcp_integrado": "2.00", "p_red_bc_st": "0",
      "base_legal": "Lei 10.253/2023 + FECP LC 210/2023 (efeitos 20/03/2024)",
      "data_inicio_vigencia": date(2024, 3, 20), "data_fim_vigencia": None},
-    {"uf_destino": "RS", "aliq_modal": "17.00", "aliq_fcp_integrado": "0",
+    {"uf_destino": "RS", "ncm": "GERAL", "aliq_modal": "17.00",
+     "aliq_fcp_integrado": "0", "p_red_bc_st": "0",
      "base_legal": "Lei 8.820/1989 (RICMS/RS art. 27, I)",
      "data_inicio_vigencia": date(2024, 1, 1), "data_fim_vigencia": None},
-    {"uf_destino": "GO", "aliq_modal": "19.00", "aliq_fcp_integrado": "0",
+    {"uf_destino": "GO", "ncm": "GERAL", "aliq_modal": "19.00",
+     "aliq_fcp_integrado": "0", "p_red_bc_st": "0",
      "base_legal": "Lei 22.460/2023 (RCTE/GO, efeitos 01/04/2024)",
      "data_inicio_vigencia": date(2024, 4, 1), "data_fim_vigencia": None},
-    {"uf_destino": "DF", "aliq_modal": "20.00", "aliq_fcp_integrado": "0",
+    {"uf_destino": "DF", "ncm": "GERAL", "aliq_modal": "20.00",
+     "aliq_fcp_integrado": "0", "p_red_bc_st": "0",
      "base_legal": "Lei 7.326/2023 (efeitos 21/01/2024)",
      "data_inicio_vigencia": date(2024, 1, 21), "data_fim_vigencia": None},
 ]
@@ -58,9 +73,13 @@ _SEED_FCP = [
 ]
 
 
+# Colunas percentuais do seed (escritas como texto para o diff ficar legível).
+_PREFIXOS_DECIMAIS = ("aliq", "p_red")
+
+
 def _decimais(dados: dict) -> dict:
     return {
-        k: (Decimal(v) if isinstance(v, str) and k.startswith("aliq") else v)
+        k: (Decimal(v) if isinstance(v, str) and k.startswith(_PREFIXOS_DECIMAIS) else v)
         for k, v in dados.items()
     }
 
@@ -68,7 +87,11 @@ def _decimais(dados: dict) -> dict:
 async def aplicar_seed_aliquotas_fcp(session: AsyncSession) -> dict:
     """Insere as alíquotas/FCP verificadas onde a família de vigência está
     VAZIA — qualquer linha existente (manual ou não) tem prioridade e nada é
-    sobrescrito. Idempotente: rodar de novo não duplica."""
+    sobrescrito. Idempotente: rodar de novo não duplica.
+
+    A família das duas matrizes é (uf_destino, ncm), então cada dict traz o seu
+    `ncm` explícito: sem ele a checagem de sobreposição procuraria `ncm IS NULL`,
+    não acharia nada e a carga duplicaria as linhas a cada execução."""
     resumo = {"aliquotas_inseridas": 0, "fcp_inseridos": 0, "ja_existiam": 0}
     for modelo, linhas, chave in (
         (MatrizAliquota, _SEED_ALIQUOTAS, "aliquotas_inseridas"),

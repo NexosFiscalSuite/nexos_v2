@@ -138,6 +138,31 @@ Protocolos e estava sendo descartado); o hash de proposta mudou, então rejeiç�
 antigas de MVA voltam uma vez à fila. Cobertura real: **só MG tem MVA de fonte
 oficial automatizada** — ver docs/estado_base_matrizes_st.md.
 
+**Alíquota por NCM + redução de base pela matriz (06/08).** Terceiro furo da
+mesma família da MVA, e o último grande de assertividade de VALOR: a alíquota
+interna era só por UF (produto de cesta básica calculava a 18% em MG — ST a
+maior) e a redução de base vinha SÓ do `pRedBCST` do XML, ou seja, o motor
+repetia a conta do fornecedor. `MatrizAliquota` ganhou `ncm` (`"GERAL"` = regra
+do estado, todo o legado virou isso) e `p_red_bc_st`; migração 0035; busca
+8→6→4→GERAL (convenção do FCP). `AliquotaRepository.buscar` agora recebe o NCM;
+`AliquotaUf` tem `ncm_casado` e `especifica`. **Regra de ouro na redução, com
+limite deliberado:** linha ESPECÍFICA manda (inclusive `0,00` — é a decisão
+curada de que não há redução) e divergência vira `ERRO_112` (reduziu mais →
+base menor → ST a MENOS, cobrar complemento) ou `ERRO_113` (reduziu menos/nada
+→ ST a MAIS, custo indevido); só GERAL casando → usa o XML SEM erro, com
+`reducao_fonte="xml"` na memória. Ausência de redução curada é o caso NORMAL
+(≠ MVA), por isso não é fail-closed. Schema RECUSA `p_red_bc_st > 0` em linha
+GERAL (aplicaria redução ao estado inteiro em silêncio). Chave de upsert das
+alíquotas passou a incluir `ncm`, e os `_SEED_ALIQUOTAS` da carga inicial
+precisam de `ncm: "GERAL"` explícito — sem isso `sobreposicao_existente`
+compara `ncm IS NULL` e a carga DUPLICA a cada execução. Filtro por NCM mantém
+as linhas GERAL (senão a tela esconde a alíquota que está sendo aplicada).
+ENGINE_VERSION 2.2.0. A tela de Divergências mostra alíquota própria do NCM,
+badge de base reduzida e a fonte da redução na rastreabilidade.
+**Limite conhecido:** não há como avisar "falta cadastrar a alíquota deste
+produto" — sem linha por NCM é indistinguível de "usa mesmo a do estado", que
+é o caso da maioria. Cadastrar cesta básica/medicamentos é ação do escritório.
+
 **Exceção do Item por FORNECEDOR + envio em lote (06/08).** O cProd é do
 fornecedor: dois fornecedores usam o MESMO código para produtos diferentes, e a
 exceção casava só pelo código dentro da empresa — vazava de um fornecedor para
@@ -177,8 +202,8 @@ propostas UF→MG escopadas por NCM nos dados reais, base legal no estilo
 "Protocolo ICMS 103/12 — Anexo VII, âmbito 2.1"; CHAVE_VIGENCIA do
 protocolo agora inclui ncm — vários escopos por acordo; FCP de MG segue
 manual, fonte própria Lei 6.763/75 art. 12-A). Paginação em
-todas as listas (15–50/página; componente Paginacao). Migrações até 0034.
-Suite: 332 passed, 4 skipped. Deploys de 04-06/08 AGUARDANDO o João
+todas as listas (15–50/página; componente Paginacao). Migrações até 0035.
+Suite: 362 passed, 4 skipped. Deploys de 04-06/08 AGUARDANDO o João
 (sem acesso ao servidor no momento) — um git pull + build + compose aplica
 tudo, migrações rodam sozinhas. Falta da proposta: Fase 6 (pauta/PMPF — com
 MG fora do PMPF, relevância caiu; avaliar por UF).
@@ -205,6 +230,14 @@ MG fora do PMPF, relevância caiu; avaliar por UF).
   desempate (a UNIQUE só barra a mesma data de início) — é anterior a
   06/08. `ReprocessService.reprocessar_produto` reaudita por código sem
   olhar o fornecedor: abrangente demais, nunca de menos.
+- **Extrator de alíquota reduzida** (avaliado em 06/08, não aprovado): dá para
+  automatizar PARCIALMENTE. Melhor candidato é o Anexo IV do RICMS/MG (mesma
+  infra latin-1 do Anexo VII), restrito aos itens que citam NCM — a maioria
+  descreve por texto ("arroz, feijão, fubá") e vai para curadoria manual com o
+  texto anexado. 2ª fase: Convênio ICMS 52/91 (nacional, CONFAZ, lista NCM a
+  NCM), que publica CARGA EFETIVA e não redução — exige derivar o percentual da
+  alíquota da UF. Cesta básica das demais UFs: NÃO automatizar (cada estado com
+  sua lista, quase tudo por descrição, alto risco de casar NCM errado).
 - **MVA aprendida das notas** (proposta em 06/08, não aprovada): juntar o
   `pMVAST` que os fornecedores já mandam, agrupar por NCM/CEST/origem→destino
   e propor na fila quando vários convergirem, com a contagem de notas que

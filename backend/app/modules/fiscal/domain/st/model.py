@@ -130,6 +130,17 @@ class MemoriaCalculo:
     # carta diria só "MVA 42%", sem revelar que a margem veio da regra de SP —
     # e é justamente a origem que diferencia duas MVAs do mesmo NCM.
     mva_uf_origem: str | None = None
+    # Nível do NCM que casou na matriz de alíquotas ("GERAL" = regra do estado).
+    # Sem ele a carta não explicaria por que aquele produto foi calculado a 12%
+    # num estado de 18% — a alíquota é do PRODUTO, não só da UF.
+    aliquota_ncm_casado: str | None = None
+    # Redução de base do ST: a que ENTROU no cálculo, a que veio no XML e de
+    # onde saiu a decisão — "matriz" (linha curada do NCM manda, regra de ouro)
+    # ou "xml" (produto sem redução curada; seguimos o pRedBCST do documento).
+    # Mesmo idioma do `protocolo_fonte`: nunca silencioso sobre a origem do dado.
+    reducao_base_st: Decimal = ZERO
+    reducao_base_st_xml: Decimal = ZERO
+    reducao_fonte: str | None = None
 
     # Composição do CUSTO que formou a base (Seção 4.1): a resposta do "como
     # verificar o rateio de frete/IPI" fica NA memória — conta aberta na tela.

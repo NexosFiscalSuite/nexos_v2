@@ -21,6 +21,7 @@ from .model import (
     StatusAuditoria,
 )
 from .ports import (
+    NCM_GERAL,
     AliquotaRepository,
     AliquotaUf,
     EnquadramentoRepository,
@@ -30,6 +31,7 @@ from .ports import (
     ProtocoloRepository,
 )
 from .seed import (
+    AliquotaEmMemoria,
     EnquadramentoEmMemoria,
     FcpEmMemoria,
     MvaEmMemoria,
@@ -43,6 +45,8 @@ __all__ = [
     "AliquotasReferencia",
     "AliquotaRepository",
     "AliquotaUf",
+    "AliquotaEmMemoria",
+    "NCM_GERAL",
     "Crt",
     "ModBcSt",
     "MetodoReducao",

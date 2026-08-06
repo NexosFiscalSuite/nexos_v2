@@ -46,8 +46,13 @@ MATRIZES: dict[str, BulkSpec] = {
                     ("uf_destino", "ncm", "data_inicio_vigencia"), _NORM),
     "protocolos": BulkSpec(MatrizProtocoloSt, MatrizProtocoloCreate,
                            ("uf_origem", "uf_destino", "numero_acordo", "ncm", "data_inicio_vigencia"), _NORM),
+    # O `ncm` da alíquota é OBRIGATÓRIO na chave: "GERAL" é a alíquota do estado
+    # e as demais são de produtos com alíquota própria (cesta básica, remédio).
+    # Fora da chave, importar a linha do NCM sobrescreveria a GERAL da mesma UF
+    # e vigência — o estado inteiro passaria a calcular com a alíquota do
+    # produto. Vazio na planilha cai no default "GERAL" (schema).
     "aliquotas": BulkSpec(MatrizAliquota, MatrizAliquotaCreate,
-                          ("uf_destino", "data_inicio_vigencia"), _NORM),
+                          ("uf_destino", "ncm", "data_inicio_vigencia"), _NORM),
 }
 
 

@@ -116,6 +116,27 @@ class ErroST(_Erro, Enum):
         "vICMSST > 0 — pagamento indevido / bitributação (a favor do cliente).",
         "Estornar o ST destacado e reemitir com vICMSST = 0 (ST já recolhido na cadeia).",
     )
+    # Redução de base do ST: DOIS códigos porque as duas direções pedem ações
+    # OPOSTAS (recolher complemento × pedir devolução). Um código só deixaria a
+    # coluna de automação do relatório ambígua justo no ponto que o usuário
+    # precisa decidir. A observação do item traz os dois percentuais.
+    REDUCAO_BASE_ST_MAIOR_QUE_NORMA = (
+        "ERRO_112_REDUCAO_BASE_ST_MAIOR_QUE_NORMA",
+        "A nota reduziu a base do ST em percentual MAIOR que o previsto na "
+        "matriz para o NCM na UF de destino. Base menor do que a devida = ST "
+        "retido a MENOS (há complemento a recolher).",
+        "Recolher o complemento do ST (ou pedir NF-e corrigida com a redução "
+        "prevista). Se houver benefício específico que autorize a redução maior, "
+        "cadastre-o na matriz de alíquotas e reauditar.",
+    )
+    REDUCAO_BASE_ST_MENOR_QUE_NORMA = (
+        "ERRO_113_REDUCAO_BASE_ST_MENOR_QUE_NORMA",
+        "A nota reduziu a base do ST em percentual MENOR que o previsto na "
+        "matriz para o NCM na UF de destino (ou não aplicou redução). Base maior "
+        "do que a devida = ST retido a MAIS (custo indevido para a empresa).",
+        "Solicitar NF-e corrigida com a redução de base prevista e pleitear a "
+        "devolução/ressarcimento do ST pago a maior.",
+    )
     ST_ANTECIPACAO_DESTINATARIO = (
         "ERRO_111_ST_ANTECIPACAO_DESTINATARIO",
         "Operação interestadual SEM protocolo/convênio de ST no par origem→destino: "

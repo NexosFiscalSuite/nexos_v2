@@ -14,7 +14,7 @@ from app.shared.domain.uf import CURINGA_UF
 
 from .enums import Regime
 from .money import ZERO, D
-from .ports import MvaInfo
+from .ports import NCM_GERAL, AliquotaUf, MvaInfo
 
 
 def _limpar(codigo: str) -> str:
@@ -120,6 +120,43 @@ class FcpEmMemoria:
             if aliq is not None:
                 return aliq
         return ZERO
+
+
+class AliquotaEmMemoria:
+    """AliquotaRepository seed. Chave (uf, ncm|'GERAL'), fallback 8→6→4→GERAL.
+
+    Cada valor descreve a tributação interna DO PRODUTO na UF:
+    `(modal, fcp_integrado, p_red_bc_st, base_legal)` — só o modal é
+    obrigatório (uma string solta também vale). A linha 'GERAL' é a regra do
+    estado; uma linha por NCM é a curadoria do produto (cesta básica a 12% num
+    estado de 18%) e é ela que autoriza a matriz a mandar na redução de base.
+
+    Sem nenhum dado a busca devolve None — o motor trava com
+    ERRO_ALIQUOTA_NAO_ENCONTRADA, como manda o fail-closed.
+    """
+
+    def __init__(self, dados: dict[tuple[str, str], object] | None = None):
+        self._dados: dict[tuple[str, str], AliquotaUf] = {}
+        for (uf, ncm), valores in (dados or {}).items():
+            if not isinstance(valores, tuple | list):
+                valores = (valores,)
+            modal, *resto = valores
+            fcp = resto[0] if len(resto) > 0 else "0"
+            p_red = resto[1] if len(resto) > 1 else "0"
+            base_legal = resto[2] if len(resto) > 2 else None
+            chave = NCM_GERAL if ncm == NCM_GERAL else _limpar(ncm)
+            self._dados[(uf.upper(), chave)] = AliquotaUf(
+                modal=D(modal), fcp_integrado=D(fcp), p_red_bc_st=D(p_red),
+                ncm_casado=chave, base_legal=base_legal,
+            )
+
+    def buscar(self, ncm: str, uf_dest: str, data: date) -> AliquotaUf | None:
+        uf, n = uf_dest.upper(), _limpar(ncm)
+        for chave in (n, n[:6], n[:4], NCM_GERAL):
+            aliq = self._dados.get((uf, chave))
+            if aliq is not None:
+                return aliq
+        return None
 
 
 class ProtocoloEmMemoria:

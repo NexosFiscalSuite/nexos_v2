@@ -24,7 +24,7 @@ from datetime import date
 from decimal import Decimal
 
 from .money import D
-from .ports import AliquotaUf
+from .ports import NCM_GERAL, AliquotaUf
 
 # UF -> (alíquota modal, FCP integrado à modal). Fonte: Seção 1.
 _MODAL_E_FCP: dict[str, tuple[str, str]] = {
@@ -71,12 +71,18 @@ class AliquotaResolver:
 class AliquotasReferencia:
     """`AliquotaRepository` de referência: tabela em código, para testes e dev.
 
+    Só conhece a regra GERAL do estado — alíquota específica por produto e
+    redução de base legal são curadoria, e curadoria vive na matriz do banco
+    (ou, em teste, no `AliquotaEmMemoria` do seed). Por isso o `ncm` entra na
+    assinatura (contrato do port) mas não muda a resposta: todo produto casa na
+    GERAL, com `p_red_bc_st` 0 — exatamente o comportamento histórico.
+
     Em produção o motor recebe o snapshot do banco (MatrizesLoader). UF sem
     linha (ex.: 'EX', exterior) devolve None — o motor classifica o item como
     não auditável em vez de estourar o lote.
     """
 
-    def buscar(self, uf_dest: str, data: date) -> AliquotaUf | None:
+    def buscar(self, ncm: str, uf_dest: str, data: date) -> AliquotaUf | None:
         uf = (uf_dest or "").strip().upper()
         par = _MODAL_E_FCP.get(uf)
         if par is None:
@@ -84,4 +90,4 @@ class AliquotasReferencia:
         if uf == "AL" and data < _AL_VIRADA:
             par = _AL_ANTES
         modal, fcp = par
-        return AliquotaUf(modal=D(modal), fcp_integrado=D(fcp))
+        return AliquotaUf(modal=D(modal), fcp_integrado=D(fcp), ncm_casado=NCM_GERAL)
