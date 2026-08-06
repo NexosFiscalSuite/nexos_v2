@@ -45,14 +45,19 @@ BASE_LEGAL_AUTO = "Convênio ICMS 142/2018 (auto/CONFAZ)"
 BASE_LEGAL_AUTO_MVA = "RICMS/MG 2023, Anexo VII"
 
 
-def _base_legal_mva(r: MvaRecord, uf_origem: str = CURINGA_UF) -> str:
-    sufixo = f", âmbito {r.ambitos[0]}" if r.ambitos else ", Parte 2"
+def _base_legal_mva(r: MvaRecord, uf_origem: str = CURINGA_UF, *, geral: bool = False) -> str:
+    # A linha de regra geral (curinga) vale JUSTAMENTE para origens fora do
+    # âmbito do item — citar o código do âmbito nela seria dizer o contrário do
+    # que ela é. Fica a referência da Parte 2, que é onde a margem é publicada.
+    sufixo = f", âmbito {r.ambitos[0]}" if (r.ambitos and not geral) else ", Parte 2"
     origem = "" if uf_origem == CURINGA_UF else f" · origem {uf_origem}"
     return f"{BASE_LEGAL_AUTO_MVA}{sufixo}{origem} (auto/SEFAZ-MG)"[:120]
 
 
-def _origem_legivel(uf_origem: str) -> str:
-    return "qualquer origem" if uf_origem == CURINGA_UF else uf_origem
+def _origem_legivel(uf_origem: str, *, geral: bool = False) -> str:
+    if uf_origem != CURINGA_UF:
+        return uf_origem
+    return "qualquer origem (regra geral)" if geral else "qualquer origem"
 
 
 def hash_proposta(tipo: str, payload: dict) -> str:
@@ -195,6 +200,22 @@ async def propor_mva(
     âmbito legível vira uma proposta com CURINGA_UF ("qualquer origem"),
     o comportamento anterior a esta fase.
 
+    REGRA GERAL (rede de baixo, decisão de 06/08/2026): além das linhas por
+    origem do âmbito, cada par NCM+CEST ganha uma linha CURINGA_UF com a MESMA
+    margem publicada. O âmbito diz quem é o SUBSTITUTO, não se existe margem:
+    entrada de UF sem acordo continua gerando ST — antecipação do destinatário
+    — e a antecipação usa a margem interna do produto. Sem essa linha, item de
+    âmbito curto ficava sem margem para os demais estados e o ST saía a menos.
+    As específicas continuam vencendo (o motor prefere origem exata dentro do
+    nível de NCM); a curinga é só o fundo do poço.
+
+    A TRAVA da regra geral: o anexo pode publicar, para o mesmo par NCM+CEST,
+    margens DIFERENTES em âmbitos diferentes. Nesse caso não existe "a margem
+    geral" — escolher uma seria palpite. A curinga só é proposta quando o par
+    tem UMA ÚNICA margem em todo o anexo; o resto é contado em
+    `curingas_ambiguas` (fail-closed: ausência explícita, nunca chute), e
+    esses produtos seguem com margem só para as origens do âmbito.
+
     Regras (espelham o enquadramento): chave sem linha → INSERIR com a
     vigência-piso; linha do PRÓPRIO robô com MVA diferente → NOVA_VIGENCIA a
     partir de `vigencia_mudanca` (1º do mês da detecção — o anexo não publica
@@ -221,17 +242,41 @@ async def propor_mva(
         )
     )).scalars())
 
-    # Dedup da fonte com detecção de conflito: mesma chave com MVAs distintas
-    # (capítulos/âmbitos diferentes) é ambígua — não vira proposta. Com a
-    # origem na chave, duas margens de ORIGENS diferentes deixam de brigar:
-    # deixam de ser "conflito" e viram duas linhas legítimas.
+    # 1) O que o anexo publica linha a linha. Dedup da fonte com detecção de
+    # conflito: mesma chave com MVAs distintas (capítulos/âmbitos diferentes) é
+    # ambígua — não vira proposta. Com a origem na chave, duas margens de
+    # ORIGENS diferentes deixam de brigar: viram duas linhas legítimas.
     por_chave: dict[tuple[str, str, str], set[Decimal]] = {}
     exemplo: dict[tuple[str, str, str], MvaRecord] = {}
+    mvas_do_par: dict[tuple[str, str], set[Decimal]] = {}
+    com_ambito: dict[tuple[str, str], MvaRecord] = {}
     for r in registros:
-        for uf_origem in r.origens():
-            chave = (r.ncm, r.cest, uf_origem)
+        par = (r.ncm, r.cest)
+        mvas_do_par.setdefault(par, set()).add(r.mva)
+        origens = r.origens()
+        if CURINGA_UF not in origens:
+            com_ambito.setdefault(par, r)
+        for uf_origem in origens:
+            chave = (*par, uf_origem)
             por_chave.setdefault(chave, set()).add(r.mva)
             exemplo.setdefault(chave, r)
+
+    # 2) A rede de baixo: par que só tem linhas de origem específica ganha a
+    # linha CURINGA_UF com a mesma margem (ver docstring). Só quando o par tem
+    # margem ÚNICA no anexo inteiro — daí a agregação por par acima, que a
+    # `resolver_origens` não teria como fazer (ela vê um registro por vez).
+    gerais: set[tuple[str, str, str]] = set()
+    curingas_ambiguas = 0
+    for par, r in com_ambito.items():
+        chave = (*par, CURINGA_UF)
+        if chave in por_chave:
+            continue                             # o próprio anexo já deu a geral
+        if len(mvas_do_par[par]) > 1:
+            curingas_ambiguas += 1               # duas margens: sem palpite
+            continue
+        por_chave[chave] = {r.mva}
+        exemplo[chave] = r
+        gerais.add(chave)
 
     criadas = suprimidas = inalteradas = ambiguos = 0
     for chave, mvas in por_chave.items():
@@ -240,12 +285,14 @@ async def propor_mva(
             continue
         r = exemplo[chave]
         uf_origem = chave[2]
+        eh_geral = chave in gerais
         atual = atuais.get(chave)
         eh_auto = bool(atual is not None and (atual.base_legal or "").startswith(BASE_LEGAL_AUTO_MVA))
         base = {
             "ncm": r.ncm, "cest": r.cest,
             "uf_origem": uf_origem, "uf_destino": uf,
-            "mva_original": str(r.mva), "base_legal": _base_legal_mva(r, uf_origem),
+            "mva_original": str(r.mva),
+            "base_legal": _base_legal_mva(r, uf_origem, geral=eh_geral),
             "data_fim_vigencia": None,
         }
         if atual is None:
@@ -266,7 +313,8 @@ async def propor_mva(
         session.add(MatrizProposta(
             tipo_matriz="mva", acao=acao,
             chave_resumo=(
-                f"{_origem_legivel(uf_origem)} → {uf} · NCM {r.ncm} · CEST {r.cest}"
+                f"{_origem_legivel(uf_origem, geral=eh_geral)} → {uf} · "
+                f"NCM {r.ncm} · CEST {r.cest}"
             )[:200],
             payload=payload, linha_atual_id=linha_id, linha_atual=congelada,
             fonte=fonte, fonte_snapshot_id=snapshot_id, hash_proposta=h,
@@ -277,6 +325,9 @@ async def propor_mva(
     return {
         "uf": uf, "lidos": len(registros), "pares": len(por_chave),
         "com_origem": sum(1 for c in por_chave if c[2] != CURINGA_UF),
+        # Linhas de regra geral criadas e produtos que ficaram SEM essa rede
+        # porque o anexo publica margens divergentes para o mesmo NCM+CEST.
+        "curingas_gerais": len(gerais), "curingas_ambiguas": curingas_ambiguas,
         "propostas": criadas, "suprimidas": suprimidas,
         "sem_mudanca": inalteradas, "ambiguos": ambiguos,
     }

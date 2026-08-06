@@ -108,6 +108,16 @@ async def _sync_mva() -> dict:
             fonte=extrator.fonte, snapshot_id=snapshot_id,
         )
     logger.info("MVA/SEFAZ-MG propostas: %s", resumo)
+    if resumo.get("curingas_ambiguas"):
+        # Par NCM+CEST com margens divergentes no anexo: não dá para eleger "a
+        # margem geral" (seria palpite), então esses produtos ficam SEM a linha
+        # de qualquer origem — fornecedor fora do âmbito segue sem margem até
+        # alguém cadastrar na mão. Fica visível em vez de silencioso.
+        logger.warning(
+            "MVA/SEFAZ-MG: %d pares NCM+CEST sem linha de regra geral "
+            "(margens divergentes no anexo) — exigem curadoria manual.",
+            resumo["curingas_ambiguas"],
+        )
 
     # Protocolos da legenda de âmbito (mesma fonte, mesma rodada): cada UF do
     # âmbito vira acordo UF→MG escopado pelo NCM do item.

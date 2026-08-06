@@ -78,7 +78,13 @@ class MvaRecord:
     ufs_origem: tuple[str, ...] = ()
 
     def origens(self) -> tuple[str, ...]:
-        """Origens da proposta: as resolvidas, ou o curinga quando não deu."""
+        """Origens EXPLÍCITAS da linha: as resolvidas pelo âmbito, ou o curinga
+        quando o âmbito não foi legível.
+
+        A linha "regra geral" (curinga com a mesma margem, para entradas de UF
+        fora do âmbito) NÃO sai daqui: ela depende de olhar o anexo inteiro
+        (o par NCM+CEST pode ter mais de uma margem publicada) e por isso é
+        montada em `propor.propor_mva`."""
         return self.ufs_origem or (CURINGA_UF,)
 
 
@@ -212,14 +218,27 @@ def resolver_origens(
     *,
     uf_destino: str = UF_ANEXO,
 ) -> list[MvaRecord]:
-    """Carimba em cada linha as UFs de ORIGEM em que a margem publicada vale.
+    """Carimba em cada linha as UFs de ORIGEM que o âmbito cita explicitamente.
 
-    A coluna "Âmbito de Aplicação" é o que o anexo diz sobre O ALCANCE da ST do
-    item: "Interno e nas seguintes unidades da Federação: …". Traduzindo para a
-    matriz: a MVA daquela linha vale na operação interna (origem = MG) e nas
-    entradas vindas das UFs listadas — e em mais nenhuma. É por isso que o
-    âmbito é a UF de origem: não estamos criando margem nova, estamos dizendo
-    em que operações a margem PUBLICADA se aplica.
+    A coluna "Âmbito de Aplicação" é o que o anexo diz sobre o ALCANCE do
+    acordo do item: "Interno e nas seguintes unidades da Federação: …".
+    Traduzindo para a matriz: a MVA daquela linha vale na operação interna
+    (origem = MG) e nas entradas vindas das UFs listadas.
+
+    ATENÇÃO — leitura revista em 06/08/2026: até então este docstring dizia
+    "e em mais nenhuma", e o crawler passou a propor SÓ as linhas por origem.
+    Efeito em produção: item com âmbito curto (ex.: SP/RJ/PR) ficava sem
+    margem nenhuma para fornecedor de outro estado, e o motor caía na base
+    "valor da operação" — ST a menos. O âmbito diz quem é o SUBSTITUTO (com
+    que estados MG tem acordo), não se EXISTE margem: entrada de UF sem
+    acordo continua gerando ST como antecipação do destinatário, e a
+    antecipação usa a margem interna do produto, que é a mesma publicada.
+    Por isso `propor_mva` acrescenta, além destas linhas específicas, uma
+    linha CURINGA_UF com a mesma margem (a rede de baixo; a origem exata
+    continua vencendo no motor). Aqui nada muda: esta função segue
+    respondendo apenas "quem o âmbito cita" — a decisão de estender é do
+    `propor_mva`, que enxerga o anexo inteiro e precisa dessa visão para não
+    inventar uma "margem geral" quando o par tem margens divergentes.
 
     Sem inventar nada:
     - código de âmbito desconhecido (legenda não lida) → origem fica vazia e a

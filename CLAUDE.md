@@ -138,6 +138,27 @@ Protocolos e estava sendo descartado); o hash de proposta mudou, então rejeiç�
 antigas de MVA voltam uma vez à fila. Cobertura real: **só MG tem MVA de fonte
 oficial automatizada** — ver docs/estado_base_matrizes_st.md.
 
+**REGRESSÃO do dia, corrigida (06/08).** Ao quebrar a MVA por UF de origem, o
+crawler passou a carimbar em cada linha do Anexo VII SÓ as UFs do âmbito, sem
+criar a curinga — e um fornecedor de estado fora do âmbito perdeu a margem que
+tinha ontem (a matriz não tinha origem, uma linha servia a todos). Sintoma: a
+regra aparece certa na tela, nada pendente na fila, e o motor calcula com
+margem 0,00% em várias notas. **Decisão do João:** o âmbito diz quem é o
+SUBSTITUTO, não se existe margem — fornecedor sem acordo gera antecipação do
+destinatário, que usa a margem interna do produto. Então `propor_mva` passou a
+propor TAMBÉM a linha `uf_origem = "*"` com a mesma margem publicada, além das
+específicas (que continuam vencendo). Trava obrigatória: a curinga só nasce
+quando o par NCM+CEST tem UMA ÚNICA margem no anexo — margens divergentes
+seriam palpite sobre qual é "a geral" (fail-closed), e o resumo devolve
+`curingas_ambiguas` para o curador. Medido contra a fonte ao vivo: 1.080 pares,
+943 curingas criadas, **0 ambíguos** — cobertura de "qualquer origem" volta a
+1.080/1.080. Aplicar em produção = reexecutar a carga inicial (idempotente; as
+específicas caem em `sem_mudanca` e as curingas entram como INSERIR).
+**Lição:** as migrações 0033/0034/0035 deram curinga ao legado (`"*"`, `""`,
+`GERAL`) e por isso NÃO perderam cobertura; quem estreitou foi o crawler, ao
+criar linhas novas sem rede. Ao dividir uma chave de busca, garanta a linha
+geral — e teste com a base CHEIA, não vazia.
+
 **Diagnóstico "por que não achamos a MVA" + reprocesso resiliente (06/08).**
 Depois do deploy e da carga do Anexo VII (milhares de linhas), uma nota seguia
 calculando sem margem — e a mensagem só dizia "não há MVA cadastrada", sem
@@ -264,7 +285,7 @@ propostas UF→MG escopadas por NCM nos dados reais, base legal no estilo
 protocolo agora inclui ncm — vários escopos por acordo; FCP de MG segue
 manual, fonte própria Lei 6.763/75 art. 12-A). Paginação em
 todas as listas (15–50/página; componente Paginacao). Migrações até 0036.
-Suite: 407 passed, 4 skipped. O João VOLTOU a ter acesso ao servidor: em
+Suite: 416 passed, 4 skipped. O João VOLTOU a ter acesso ao servidor: em
 06/08 ele deployou e rodou o botão da carga do Anexo VII (milhares de linhas
 de MVA entraram, "99+ páginas"). Falta da proposta: Fase 6 (pauta/PMPF — com
 MG fora do PMPF, relevância caiu; avaliar por UF).

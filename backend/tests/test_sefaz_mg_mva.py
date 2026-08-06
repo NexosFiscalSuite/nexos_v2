@@ -136,27 +136,94 @@ async def test_par_novo_vira_inserir_com_piso(sessao):
 @pytest.mark.asyncio
 async def test_uma_proposta_por_uf_de_origem_do_ambito(sessao):
     """Cada origem do âmbito vira uma linha própria de MVA (mesmo padrão dos
-    protocolos): a margem publicada deixa de valer para o Brasil inteiro."""
+    protocolos) — MAIS a linha de regra geral (curinga) com a mesma margem,
+    para o fornecedor de estado fora do acordo."""
     regs = [MvaRecord("1600100", "40111000", Decimal("42"),
                       ambitos=("16.1",), ufs_origem=("MG", "SP"))]
     r = await _propor(sessao, regs)
-    assert r["propostas"] == 2 and r["com_origem"] == 2
+    assert r["propostas"] == 3 and r["com_origem"] == 2
+    assert r["curingas_gerais"] == 1 and r["curingas_ambiguas"] == 0
 
     props = (await sessao.execute(
         select(MatrizProposta).order_by(MatrizProposta.id)
     )).scalars().all()
-    assert {p.payload["uf_origem"] for p in props} == {"MG", "SP"}
+    assert {p.payload["uf_origem"] for p in props} == {"MG", "SP", CURINGA_UF}
     assert all(p.payload["uf_destino"] == "MG" for p in props)
 
-    # As duas aprovam sem conflito de vigência: uf_origem está na CHAVE_VIGENCIA.
+    # As três aprovam sem conflito de vigência: uf_origem está na CHAVE_VIGENCIA.
     for p in props:
         await PropostasService(sessao).aprovar(p.id, revisor="ana@sol.com")
     linhas = (await sessao.execute(select(MatrizMva))).scalars().all()
-    assert {(x.uf_origem, x.uf_destino) for x in linhas} == {("MG", "MG"), ("SP", "MG")}
+    assert {(x.uf_origem, x.uf_destino) for x in linhas} == {
+        ("MG", "MG"), ("SP", "MG"), (CURINGA_UF, "MG"),
+    }
+    # Todas com a MESMA margem publicada — a curinga não inventa número.
+    assert {x.mva_original for x in linhas} == {Decimal("42.00")}
 
-    # Rodada seguinte: já curado, nada volta para a fila.
+    # Rodada seguinte: já curado, nada volta para a fila (idempotente).
     r2 = await _propor(sessao, regs)
-    assert r2["propostas"] == 0 and r2["sem_mudanca"] == 2
+    assert r2["propostas"] == 0 and r2["sem_mudanca"] == 3
+
+
+@pytest.mark.asyncio
+async def test_regra_geral_cobre_fornecedor_de_fora_do_ambito(sessao):
+    """A regressão de 06/08: item com âmbito curto (SP) ficava SEM margem para
+    nota vinda de outro estado e o ST saía a menos. Agora sai também a linha
+    curinga com a margem publicada — a específica continua vencendo no motor."""
+    regs = [MvaRecord("1600100", "40111000", Decimal("42"),
+                      ambitos=("16.1",), ufs_origem=("SP",))]
+    r = await _propor(sessao, regs)
+    assert r["curingas_gerais"] == 1
+
+    props = (await sessao.execute(select(MatrizProposta))).scalars().all()
+    por_origem = {p.payload["uf_origem"]: p for p in props}
+    geral = por_origem[CURINGA_UF]
+    assert geral.payload["mva_original"] == "42"
+    assert geral.chave_resumo.startswith("qualquer origem (regra geral) → MG ·")
+    # Base legal do anexo, sem citar o âmbito (a geral vale FORA dele).
+    assert geral.payload["base_legal"].startswith(BASE_LEGAL_AUTO_MVA)
+    assert "âmbito" not in geral.payload["base_legal"]
+    # Hash diferente do da linha específica: não colide nem é suprimida.
+    assert geral.hash_proposta != por_origem["SP"].hash_proposta
+
+
+@pytest.mark.asyncio
+async def test_par_com_margens_divergentes_nao_ganha_regra_geral(sessao):
+    """Trava da regra geral: o mesmo NCM+CEST com duas margens publicadas em
+    âmbitos diferentes não tem 'a margem geral' — eleger uma seria palpite.
+    Fail-closed: nenhuma curinga, e o caso é CONTADO para o curador."""
+    regs = [
+        MvaRecord("1600100", "40111000", Decimal("42"),
+                  ambitos=("16.1",), ufs_origem=("SP",)),
+        MvaRecord("1600100", "40111000", Decimal("53"),
+                  ambitos=("16.3",), ufs_origem=("RJ",)),
+    ]
+    r = await _propor(sessao, regs)
+    assert r["curingas_gerais"] == 0 and r["curingas_ambiguas"] == 1
+    assert r["propostas"] == 2 and r["ambiguos"] == 0
+
+    origens = {
+        p.payload["uf_origem"]
+        for p in (await sessao.execute(select(MatrizProposta))).scalars()
+    }
+    assert origens == {"SP", "RJ"}, "não pode existir linha de qualquer origem"
+
+
+@pytest.mark.asyncio
+async def test_curinga_do_anexo_nao_e_duplicada_pela_regra_geral(sessao):
+    """Par que já tem linha sem origem (âmbito ilegível) não ganha uma segunda
+    curinga — senão a mesma chave brigaria consigo mesma na aprovação."""
+    regs = [
+        MvaRecord("1600100", "40111000", Decimal("42"), ufs_origem=("SP",)),
+        MvaRecord("1600100", "40111000", Decimal("42")),          # sem âmbito legível
+    ]
+    r = await _propor(sessao, regs)
+    assert r["curingas_gerais"] == 0 and r["propostas"] == 2
+
+    props = (await sessao.execute(select(MatrizProposta))).scalars().all()
+    assert sorted(p.payload["uf_origem"] for p in props) == ["*", "SP"]
+    for p in props:
+        await PropostasService(sessao).aprovar(p.id, revisor="ana@sol.com")
 
 
 @pytest.mark.asyncio
@@ -167,7 +234,9 @@ async def test_margens_diferentes_por_origem_deixam_de_ser_ambiguas(sessao):
         MvaRecord("1600100", "40111000", Decimal("42"), ufs_origem=("MG",)),
         MvaRecord("1600100", "40111000", Decimal("45"), ufs_origem=("SP",)),
     ])
+    # Duas margens no mesmo par: nenhuma regra geral (não há "a" margem).
     assert r["ambiguos"] == 0 and r["propostas"] == 2
+    assert r["curingas_gerais"] == 0 and r["curingas_ambiguas"] == 1
 
     # …mas o conflito DENTRO da mesma origem continua fail-closed.
     r2 = await _propor(sessao, [
