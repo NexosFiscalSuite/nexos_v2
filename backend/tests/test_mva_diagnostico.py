@@ -24,6 +24,7 @@ from app.modules.fiscal.infrastructure.matrizes_loaders import (
     stmt_mva_do_motor,
 )
 from app.modules.fiscal.infrastructure.matrizes_models import MatrizMva
+from app.modules.fiscal.infrastructure.propostas_models import MatrizProposta
 
 D = Decimal
 NCM, CEST = "85444900", "1200700"          # o item da nota 350735
@@ -36,7 +37,13 @@ DEPOIS = date(2026, 6, 20)
 async def sessao():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all, tables=[MatrizMva.__table__])
+        # A fila entra junto: o diagnóstico também conta as propostas ainda
+        # PENDENTES do produto — é o que separa "não existe regra" de "a regra
+        # está esperando aprovação na aba Revisão".
+        await conn.run_sync(
+            Base.metadata.create_all,
+            tables=[MatrizMva.__table__, MatrizProposta.__table__],
+        )
     async with async_sessionmaker(engine, class_=AsyncSession)() as s:
         yield s
     await engine.dispose()

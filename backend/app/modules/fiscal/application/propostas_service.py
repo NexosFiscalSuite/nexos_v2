@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, DomainError, NotFoundError
@@ -72,8 +72,17 @@ class PropostasService:
         if ids:
             stmt = stmt.where(MatrizProposta.id.in_(ids))
         if uf:
-            # chave_resumo começa com a UF ("MG · …") — filtro portátil.
-            stmt = stmt.where(MatrizProposta.chave_resumo.like(f"{uf.upper()} ·%"))
+            # O filtro é sempre pela UF de DESTINO (é ela que define a regra).
+            # `chave_resumo` tem dois formatos: "MG · NCM …" nas matrizes só de
+            # destino e "SP → MG · NCM …" desde que MVA e Protocolos passaram a
+            # ter UF de origem (06/08). Casar só o prefixo deixaria de fora TODA
+            # proposta com origem — silenciosamente, que é o pior jeito de
+            # falhar num "aprovar tudo".
+            alvo = uf.upper()
+            stmt = stmt.where(or_(
+                MatrizProposta.chave_resumo.like(f"{alvo} ·%"),
+                MatrizProposta.chave_resumo.like(f"%→ {alvo} ·%"),
+            ))
         pendentes = (await self.session.execute(stmt.order_by(MatrizProposta.id))).scalars().all()
 
         aprovadas, falhas = 0, []

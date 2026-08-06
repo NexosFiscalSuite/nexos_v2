@@ -25,7 +25,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import DomainError
@@ -36,6 +36,10 @@ from app.modules.fiscal.infrastructure.matrizes_loaders import (
     stmt_mva_do_motor,
 )
 from app.modules.fiscal.infrastructure.matrizes_models import MatrizMva
+from app.modules.fiscal.infrastructure.propostas_models import (
+    STATUS_PENDENTE,
+    MatrizProposta,
+)
 from app.shared.domain.uf import CURINGA_UF, normalizar_uf
 from app.shared.domain.value_objects import only_digits
 
@@ -211,6 +215,23 @@ async def diagnosticar_mva(
         info=info, todas=todas, snapshot=snapshot,
         ncm=ncm_l, cest=cest_l, orig=orig, dest=dest, dia=dia, niveis=niveis,
     )
+
+    # 3. Propostas AINDA NA FILA para este produto. Sem isto o diagnóstico diz
+    #    "não há linha cadastrada" para quem acabou de rodar a carga e viu
+    #    milhares de propostas entrarem — a pessoa conclui que a carga falhou,
+    #    quando na verdade o lote está esperando aprovação na aba Revisão.
+    pendentes = await _propostas_na_fila(session, niveis, dest)
+    if pendentes and veredicto != "ENCONTRADA":
+        explicacao += (
+            f" Atenção: há {pendentes} proposta(s) para este produto AGUARDANDO "
+            "aprovação na aba Revisão — enquanto não forem aprovadas, elas não "
+            "entram na matriz e o motor não as enxerga."
+        )
+        acao = (
+            "Abra a aba Revisão, confira e aprove as propostas deste produto. "
+            f"Só depois disso o cálculo passa a usar a margem. ({acao})"
+        )
+
     return {
         "consulta": consulta,
         "veredicto": veredicto,
@@ -218,7 +239,28 @@ async def diagnosticar_mva(
         "acao_sugerida": acao,
         "aplicada": aplicada,
         "candidatas": candidatas,
+        "propostas_na_fila": pendentes,
     }
+
+
+async def _propostas_na_fila(session: AsyncSession, niveis: list[str], dest: str) -> int:
+    """Quantas propostas de MVA pendentes citam este NCM e este destino.
+
+    A chave de busca é o `chave_resumo` da proposta (o payload é JSON e não dá
+    para indexar de forma portátil): ele traz "… → MG · NCM 85444900 · CEST …".
+    """
+    condicoes = [MatrizProposta.chave_resumo.like(f"%NCM {n}%") for n in niveis]
+    return int(await session.scalar(
+        select(func.count()).select_from(MatrizProposta).where(
+            MatrizProposta.tipo_matriz == "mva",
+            MatrizProposta.status == STATUS_PENDENTE,
+            or_(
+                MatrizProposta.chave_resumo.like(f"{dest} ·%"),
+                MatrizProposta.chave_resumo.like(f"%→ {dest} ·%"),
+            ),
+            or_(*condicoes),
+        )
+    ) or 0)
 
 
 def _veredicto(*, info, todas, snapshot, ncm, cest, orig, dest, dia, niveis):

@@ -154,9 +154,17 @@ def stmt_mva_do_motor(uf_orig: str, uf_dest: str, ncms, data: date):
 
 
 def montar_mva_snapshot(rows) -> _MvaSnapshot:
-    """Hidrata o repositório síncrono a partir das linhas de `stmt_mva_do_motor`."""
+    """Hidrata o repositório síncrono a partir das linhas de `stmt_mva_do_motor`.
+
+    A chave é normalizada AQUI, e não só no lado da busca: `buscar` procura por
+    dígitos limpos (`only_digits`), então uma linha gravada como "8544.49.00" ou
+    "12.007.00" existiria no banco, apareceria certinha na tela e NUNCA seria
+    encontrada pelo motor — a pior falha possível, porque parece cadastro feito.
+    O CRUD e a aprovação de proposta já normalizam na escrita; isto blinda o que
+    entra por fora do ORM (carga direta, script, migração).
+    """
     return _MvaSnapshot({
-        (r.ncm, r.cest, _uf(r.uf_origem), r.uf_destino):
+        (only_digits(r.ncm), only_digits(r.cest), _uf(r.uf_origem), _uf(r.uf_destino)):
             (r.mva_original, r.id, r.base_legal)
         for r in rows
     })
